@@ -1,0 +1,14 @@
+
+type Query {
+  # An act of communication in which human beings intentionally make their presence known to each other
+  greeting: Greeting
+}
+
+# type Mutation {
+#
+# }
+
+type Greeting {
+  say: String
+  exclaim(name: String): String
+}
