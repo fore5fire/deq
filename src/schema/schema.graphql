@@ -11,4 +11,5 @@ type Query {
 type Greeting {
   say: String
   exclaim(name: String): String
+  response(name: String!): Greeting
 }

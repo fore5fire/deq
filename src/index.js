@@ -2,17 +2,12 @@
 import Koa from 'koa';
 import Router from 'koa-router';
 import bodyparser from 'koa-bodyparser';
-import { graphqlKoa, graphiqlKoa } from 'graphql-server-koa';
+import { graphqlKoa } from 'apollo-server-koa';
 import schema from './schema/index';
 const router = new Router();
 
 router.get('/graphql', graphqlKoa({ schema }));
 router.post('/graphql', bodyparser(), graphqlKoa({ schema }));
-
-if (process.env.DEBUG !== 'true') {
-  console.log('Debug mode: graphiql enabled');
-  router.get('/graphiql', graphiqlKoa({ endpointURL: '/graphql' }));
-}
 
 const app = new Koa()
   .use(router.routes())
