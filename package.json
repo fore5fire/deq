@@ -1,7 +1,7 @@
 {
   "name": "node-service-boilerplate",
   "version": "1.0.0",
-  "main": "index.js",
+  "main": "dist/bundle.js",
   "repository": "https://gitlab.com/katcheCode/webpack-server-boilerplate.git",
   "author": "Landon Smith <ls@katchecode.com>",
   "license": "UNLICENSED",
@@ -10,11 +10,17 @@
     "babel-eslint": "^8.0.1",
     "babel-loader": "^7.1.2",
     "babel-plugin-transform-class-properties": "^6.24.1",
+    "babel-plugin-transform-es2015-modules-commonjs": "^6.26.0",
     "babel-plugin-transform-object-rest-spread": "^6.26.0",
     "babel-webpack": "^1.0.0",
+    "chai": "^4.1.2",
     "eslint": "^4.7.2",
     "eslint-plugin-class-property": "^1.0.6",
+    "mocha": "^3.5.3",
+    "mocha-webpack": "^0.7.0",
+    "node-fetch": "^1.7.3",
     "raw-loader": "^0.5.1",
+    "require-self": "^0.2.1",
     "source-map-support": "^0.4.18",
     "webpack": "^3.6.0"
   },
@@ -26,9 +32,10 @@
     "koa-router": "^7.2.1"
   },
   "scripts": {
-    "start": "node dist/authenticator.js",
+    "start": "node dist/bundle.js",
     "watch": "webpack --watch",
     "build": "webpack",
-    "build-production": "webpack"
+    "build-production": "webpack",
+    "test": "mocha tests/ --require babel-core/register --require chai --recursive"
   }
 }

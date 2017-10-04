@@ -1,18 +1,10 @@
+import { Koa } from './koa';
 
-import Koa from 'koa';
-import Router from 'koa-router';
-import bodyparser from 'koa-bodyparser';
-import { graphqlKoa } from 'apollo-server-koa';
-import schema from './schema/index';
-const router = new Router();
+const config = {
+  port: process.env.PORT || 3000,
+};
 
-router.get('/graphql', graphqlKoa({ schema }));
-router.post('/graphql', bodyparser(), graphqlKoa({ schema }));
+const app = Koa.create();
 
-const app = new Koa()
-  .use(router.routes())
-  .use(router.allowedMethods());
-
-const port = process.env.PORT || 3000;
-app.listen(port);
-console.log(`Listening on port ${port}`);
+app.listen(config.port);
+console.log(`Listening on port ${config.port}`);

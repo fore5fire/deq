@@ -4,7 +4,7 @@ COPY package.json /build/package.json
 RUN cd /build && npm install -q
 
 COPY . /build/
-RUN cd /build && npm run build-production -q
+RUN cd /build && npm run build-production -q && npm run test
 
 FROM node:alpine AS package
 

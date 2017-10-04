@@ -1,27 +1,16 @@
 var webpack = require('webpack');
 const path = require('path');
-const fs = require('fs');
-
-const target = 'authenticator.js';
-
-
-const nodeModules = {};
-fs.readdirSync('node_modules')
-  .filter(function(x) {
-    return ['.bin'].indexOf(x) === -1;
-  })
-  .forEach(function(mod) {
-    nodeModules[mod] = 'commonjs ' + mod;
-  });
+//const nodeExternals = require('webpack-node-externals');
 
 module.exports = {
   entry: './src/index.js',
   target: 'node',
   output: {
-    filename: target,
-    path: path.resolve('dist')
+    filename: 'bundle.js',
+    path: path.resolve('dist'),
+    libraryTarget: 'commonjs2',
   },
-  externals: nodeModules,
+  //externals: [nodeExternals()],
   module: {
     rules: [
       { test: /\.(txt|graphql)$/, use: 'raw-loader', },
