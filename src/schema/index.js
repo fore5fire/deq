@@ -5,8 +5,8 @@ import Greeting from './greeting';
 
 const resolvers = {
   Query: {
-    greeting(obj, args, context, info) {
-      return new Greeting();
+    greeting(obj, { name = "Jimmy" }, context, info) {
+      return new Greeting(name);
     }
   },
   // Mutation: {

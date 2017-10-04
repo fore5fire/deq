@@ -1,8 +1,8 @@
-
+env:
+  es6: true
+  node: true
+  mocha: true
 globals:
-  describe: true
-  it: true
-  expect: true
-  before: true
-  after: true
   request: true
+  config: true
+  expect: true

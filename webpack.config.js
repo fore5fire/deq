@@ -1,6 +1,6 @@
 var webpack = require('webpack');
 const path = require('path');
-//const nodeExternals = require('webpack-node-externals');
+const nodeExternals = require('webpack-node-externals');
 
 module.exports = {
   entry: './src/index.js',
@@ -10,7 +10,7 @@ module.exports = {
     path: path.resolve('dist'),
     libraryTarget: 'commonjs2',
   },
-  //externals: [nodeExternals()],
+  externals: [nodeExternals()],
   module: {
     rules: [
       { test: /\.(txt|graphql)$/, use: 'raw-loader', },

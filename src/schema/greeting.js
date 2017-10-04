@@ -3,7 +3,7 @@
 export default class Greeting {
 
   constructor(name) {
-    this.name = name || "Jimmy";
+    this.name = name;
   }
 
   say() {
