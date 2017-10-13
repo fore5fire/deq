@@ -18,6 +18,8 @@
     "eslint-plugin-class-property": "^1.0.6",
     "mocha": "^3.5.3",
     "node-fetch": "^1.7.3",
+    "nodemon": "^1.12.1",
+    "npm-run-all": "^4.1.1",
     "raw-loader": "^0.5.1",
     "require-self": "^0.2.1",
     "source-map-support": "^0.4.18",
@@ -33,10 +35,12 @@
   },
   "scripts": {
     "start": "node dist/bundle.js",
-    "watch": "webpack --watch",
     "build": "webpack",
+    "start:watch": "nodemon --inspect --watch dist/bundle.js",
+    "build:watch": "webpack --watch",
     "build-production": "webpack",
     "test": "node dist/bundle.js npm run mocha",
+    "dev": "npm-run-all --parallel start:watch build:watch",
     "mocha": "mocha tests/ --require babel-core/register --recursive"
   }
 }

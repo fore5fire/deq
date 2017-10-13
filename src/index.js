@@ -1,11 +1,19 @@
-import Koa from './koa';
+import { Server } from './server';
+import { Health } from './health';
 import { spawn } from 'child_process';
 
 const config = {
   port: process.env.PORT || 3000,
+  healthPort: process.env.HEALTH_PORT || 3333
 };
 
-const app = Koa();
+const health = new Health({
+  alive: () => true,
+  ready: () => true,
+}).listen(config.healthPort);
+
+
+const app = new Server();
 
 const server = app.listen(config.port);
 console.log(`Listening on port ${config.port}`);
@@ -17,6 +25,7 @@ if (process.argv[2]) {
   });
 
   subProcess.on('exit', () => {
+    health.close();
     server.close();
   });
 }
