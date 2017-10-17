@@ -38,9 +38,9 @@
     "build": "webpack",
     "start:watch": "nodemon --inspect --watch dist/bundle.js",
     "build:watch": "webpack --watch",
+    "watch": "npm-run-all --parallel start:watch build:watch",
     "build-production": "webpack",
     "test": "node dist/bundle.js npm run mocha",
-    "dev": "npm-run-all --parallel start:watch build:watch",
     "mocha": "mocha tests/ --require babel-core/register --recursive"
   }
 }
