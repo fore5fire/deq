@@ -1,22 +1,26 @@
 FROM node:alpine AS build
 
-ENV NODE_ENV=build test
+ENV NODE_ENV=build
 
-COPY package.json /build/package.json
-RUN cd /build && npm install -q
+RUN apk update && apk add python make g++
+
+COPY package.json yarn.lock /build/
+RUN cd /build && yarn install
 
 COPY . /build/
-RUN cd /build && npm run build-production -q && npm run test
+RUN cd /build && yarn build
 
-FROM node:alpine AS package
+FROM node:alpine
 
 ENV NODE_ENV=production
 
-COPY --from=build /build/dist/* /app/dist/
-COPY package.json ./package.json
-RUN npm install --production
+RUN apk update && apk add python make g++
 
-ENV port=8080
-EXPOSE 8080
+COPY package.json yarn.lock /app/
+WORKDIR /app
+RUN yarn install --production
+
+COPY tests /app/tests
+COPY --from=build /build/dist /app/dist
 
 CMD ["npm","start"]
