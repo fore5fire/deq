@@ -1,7 +1,15 @@
 {
+  "presets": [
+    ["@babel/preset-env", {
+      "targets": {
+        "node": "current"
+      }
+    }]
+  ],
   "plugins": [
     "transform-object-rest-spread",
-    "babel-plugin-transform-class-properties",
-    "transform-es2015-modules-commonjs"
+    "transform-class-properties",
+    "transform-es2015-modules-commonjs",
+    "@babel/plugin-proposal-optional-chaining"
   ]
 }

@@ -1,6 +1,8 @@
 env:
   es6: true
   node: true
+globals:
+  log: true
 parser: babel-eslint
 parserOptions:
   sourceType: module

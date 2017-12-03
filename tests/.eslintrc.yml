@@ -3,6 +3,5 @@ env:
   node: true
   mocha: true
 globals:
-  request: true
-  config: true
-  expect: true
+  Server: true
+  publicKey: true

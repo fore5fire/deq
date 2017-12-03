@@ -1,0 +1,75 @@
+
+type Query {
+  account(id: ID): Account
+}
+
+type Mutation {
+  # createToken(accountId: ID!): AuthGrant
+  createUserToken(email: Email!, password: String!): AuthGrant
+  createRefreshedToken(refreshToken: RefreshToken!): QueryToken
+
+  revokeRefreshToken(id: ID!): Boolean
+
+  createUserAccount(input: UserAccountInput!): AuthGrant
+  account(id: ID): MutableAccount
+}
+
+interface Account {
+  id: ID!
+  name: String!
+  permissions(domain: String): [Permission]
+}
+
+interface MutableAccount {
+  query: Account
+}
+
+type UserAccount implements Account {
+  id: ID!
+  email: Email!
+  name: String!
+  permissions(domain: String): [Permission]
+}
+
+type MutableUserAccount {
+  query: UserAccount
+
+  grant(permission: PermissionInput!): Boolean
+  revoke(permission: PermissionInput!): Boolean
+
+  edit(input: UserAccountInput!): UserAccount
+  delete: Boolean
+}
+
+input UserAccountInput {
+  email: Email!
+  name: String!
+  password: String!
+}
+
+type ServiceAccount implements Account {
+  id: ID!
+  name: String!
+  permissions(domain: String): [Permission]
+}
+
+type AuthGrant {
+  account: Account
+  refreshToken(expiration: Date): RefreshToken
+  queryToken: QueryToken
+}
+
+type Permission {
+  domain: String!
+  value: String!
+}
+
+input PermissionInput {
+  domain: String!
+  value: String!
+}
+
+scalar QueryToken
+scalar RefreshToken
+scalar Date
+scalar Email
