@@ -6,9 +6,9 @@
   "author": "Landon Smith <ls@katchecode.com>",
   "license": "UNLICENSED",
   "devDependencies": {
-    "@babel/core": "^7.0.0-beta.32",
-    "@babel/plugin-proposal-optional-chaining": "^7.0.0-beta.32",
-    "@babel/preset-env": "^7.0.0-beta.32",
+    "@babel/core": "^7.0.0-beta.34",
+    "@babel/plugin-proposal-optional-chaining": "^7.0.0-beta.34",
+    "@babel/preset-env": "^7.0.0-beta.34",
     "babel-eslint": "^8.0.2",
     "babel-loader": "8.0.0-beta.0",
     "babel-plugin-transform-class-properties": "^6.24.1",
