@@ -62,7 +62,8 @@ ready().then(async schema => {
       schema,
       context: { secretKeyPath: JWT_PRIVATE_KEY_PATH, user: ctx.user },
       logFunction: arg => log.debug(arg),
-      formatError
+      formatError,
+      debug: LOG_LEVEL === 'debug',
     })));
 
   server.listen(PORT);
