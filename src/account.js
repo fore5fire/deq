@@ -3,6 +3,8 @@ import { AuthGrant } from './auth-grant';
 import bcrypt from 'bcrypt';
 import groupBy from 'lodash.groupby';
 import zxcvbn from 'zxcvbn';
+import { AuthError } from 'graphql-error-codes';
+import { ServerSetting } from './server-setting';
 
 const saltRounds = 10;
 
@@ -26,6 +28,40 @@ class AccountClass {
 
   get pems() {
     return groupBy(this._permissions, pem => pem.domain);
+  }
+
+  async grant({ permission }, context) {
+    if (!context.user.pems.auth.editPems) {
+      throw new AuthError("Permission Denied");
+    }
+    const existing = this._permissions.find(pem =>
+      pem.domain === permission.domain && pem.value === permission.value
+    );
+
+    if (existing) {
+      return false;
+    }
+
+    this._permissions.push(permission);
+    await this.save();
+    return true;
+  }
+
+  async revoke({ permission }, context) {
+    if (!context.user.pems.auth.editPems) {
+      throw new Error("Permission Denied");
+    }
+    const index = this._permissions.findIndex(pem =>
+      pem.domain === permission.domain && pem.value === permission.value
+    );
+
+    if (index === -1) {
+      return false;
+    }
+
+    this._permissions.splice(index, 1);
+    await this.save();
+    return true;
   }
 
   async delete() {
@@ -70,36 +106,44 @@ class UserAccountClass {
   authenticate(password) {
     return bcrypt.compare(password, this.password);
   }
-
-  async grant({ permission }) {
-    const existing = this._permissions.find(pem =>
-      pem.domain === permission.domain && pem.value === permission.value
-    );
-
-    if (existing) {
-      return false;
-    }
-
-    this._permissions.push(permission);
-    await this.save();
-    return true;
-  }
-
-  async revoke({ permission }) {
-    const index = this._permissions.findIndex(pem =>
-      pem.domain === permission.domain && pem.value === permission.value
-    );
-
-    if (index === -1) {
-      return false;
-    }
-
-    this._permissions.splice(index, 1);
-    await this.save();
-    return true;
-  }
 }
 
 userAccountSchema.loadClass(UserAccountClass);
 
 export const UserAccount = Account.discriminator('UserAccount', userAccountSchema);
+
+
+
+
+export async function bootstrapAdmin(email, password) {
+
+  log.info('Creating bootstrap admin');
+
+  const locked = await ServerSetting.findOne({ AccountAdmin: { locked: true } });
+  if (locked) {
+    log.warn('Could not bootstrap admin because the functionality is locked');
+    return;
+  }
+
+  const account = new UserAccount({
+    name: 'Bootstrap Admin',
+    email,
+    password,
+    _permissions: [{
+      domain: 'auth',
+      value: 'editAcct',
+    },
+    {
+      domain: 'auth',
+      value: 'viewAcct',
+    },
+    {
+      domain: 'auth',
+      value: 'editPems',
+    }]
+  });
+  await account.save();
+
+  const setting = new ServerSetting({ AccountAdmin: { locked: true }});
+  await setting.save();
+}

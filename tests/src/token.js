@@ -29,7 +29,6 @@ describe('Tokens', function () {
   before(async function () {
     this.timeout(10000);
     const port = await portfinder.getPortPromise();
-    log.debug({ mongoPort: port });
     this.mongo = new Mongo(port);
     await this.mongo.start();
   });
@@ -40,14 +39,14 @@ describe('Tokens', function () {
 
   beforeEach(async function () {
     this.timeout(10000);
-    this.server = new Server({
+    this.server = await Server({
       mongodbEndpoint: this.mongo.getMongouri(uuidv4()),
     });
     await this.server.ready();
   });
 
-  afterEach(function () {
-    this.server.stop();
+  afterEach(async function () {
+    await this.server.stop();
   });
 
   it('should return tokens only when using correct email and password', async function () {

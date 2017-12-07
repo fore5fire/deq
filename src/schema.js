@@ -15,7 +15,7 @@ const resolvers = {
         return Account.findById(context.user?.aid);
       }
 
-      if (id !== context.user?.aid && !(context.user?.pem?.auth?.admin)) {
+      if (id !== context.user?.aid && !(context.user?.pems?.auth?.viewAcct)) {
         throw new Error("Access Denied");
       }
 
@@ -45,19 +45,21 @@ const resolvers = {
         return Account.findById(context.user?.aid);
       }
 
-      if (id !== context.user?.aid && !(context.user?.pem?.auth?.admin)) {
-        throw new Error("Access Denied");
+      if (id !== context.user?.aid && !(context.user?.pems?.auth?.editAcct)) {
+        throw new Error("Permission Denied");
       }
 
       return Account.findById(id);
     },
 
     async createUserToken(obj, { email, password }, { secretKeyPath }) {
-
+      log.debug('CreateUserToken');
       const account = await UserAccount.findOne({ email });
+      log.debug({ account });
       if (!account || !await account.authenticate(password)) {
         throw new Error("Invalid credentials");
       }
+      log.debug('Getting Auth Grant');
       return account.authGrant({ secretKeyPath });
     },
 

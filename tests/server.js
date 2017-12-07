@@ -3,30 +3,50 @@ import { spawn } from 'child_process';
 import path from 'path';
 import fs from 'fs';
 import moment from 'moment';
+import portfinder from 'portfinder';
+import pickBy from 'lodash.pickby';
 
-global.Server = class Server extends Harness {
+global.Server = async args => {
+  const port = await portfinder.getPortPromise();
+  portfinder.basePort = port + 1;
+  const healthPort = await portfinder.getPortPromise();
 
-  constructor({ port = 3000, healthPort = 4000, mongodbEndpoint }) {
+  return new Server({ port, healthPort, ...args });
+};
+
+
+class Server extends Harness {
+
+  constructor({ port, healthPort, mongodbEndpoint, bootstrapAdminEmail, bootstrapAdminPassword }) {
     super({
       endpoint: `http://localhost:${port}/graphql`,
       healthEndpoint: `http://localhost:${healthPort}/ready`,
 
       async start() {
+
         return spawn('npm', ['start'], {
           stdio: 'inherit',
-          env: {
-            PORT: port,
-            HEALTH_PORT: healthPort,
+          env: pickBy({
+            ...process.env,
+            PORT: port.toString(),
+            HEALTH_PORT: healthPort.toString(),
             MONGODB_ENDPOINT: mongodbEndpoint,
-            // LOG_LEVEL: 'info',
+            LOG_LEVEL: 'warn',
             JWT_PRIVATE_KEY_PATH: path.resolve(__dirname, 'test-keys/private.pem'),
-            ...process.env
-          }
+            BOOTSTRAP_ADMIN_EMAIL: bootstrapAdminEmail,
+            BOOTSTRAP_ADMIN_PASSWORD: bootstrapAdminPassword,
+          }, x => x)
         });
       },
 
-      async stop(subprocess) {
-        subprocess.kill();
+      stop(subprocess) {
+        const ret = new Promise(accept => {
+          subprocess?.on('exit', function () {
+            accept();
+          });
+        });
+        subprocess?.kill();
+        return ret;
       }
     });
 
@@ -56,20 +76,24 @@ global.Server = class Server extends Harness {
     return authGrant;
   }
 
-  async id({ queryToken, id }) {
+  async getAccount({ queryToken, id }) {
     const { account } = await this.request({
       headers: { Authorization: `Bearer ${queryToken}` },
       query: `
-        query GetId($id: ID) {
+        query GetAccount($id: ID) {
           account(id: $id) {
             id
+            name
+            ...on UserAccount {
+              email
+            }
           }
         }
       `,
       variables: { id }
     });
 
-    return account.id;
+    return account;
   }
 
   async createUserToken({ email, password }) {

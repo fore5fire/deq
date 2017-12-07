@@ -1,9 +1,9 @@
-import mongoose, { Schema } from 'mongoose';
+import mongoose from 'mongoose';
 import uuidv4 from 'uuid/v4';
 import jwt from 'jsonwebtoken';
 import fs from 'fs-extra';
 
-const refreshTokenSchema = Schema({
+const refreshTokenSchema = mongoose.Schema({
   refreshToken: {
     value: { type: String, unique: true, default: uuidv4 },
     lastUsed: Date,

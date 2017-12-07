@@ -6,13 +6,17 @@ import jwt from 'jsonwebtoken';
 import { ready } from './schema';
 import { graphqlKoa } from 'apollo-server-koa';
 import pino from 'pino';
+import { formatError } from 'graphql-error-codes';
+import { bootstrapAdmin } from './account';
 
 const {
-  PORT = 3000,
+  PORT = '8001',
   HEALTH_PORT,
   MONGODB_ENDPOINT = 'mongodb://localhost/users',
   LOG_LEVEL = 'info',
-  JWT_PRIVATE_KEY_PATH,
+  JWT_PRIVATE_KEY_PATH = '',
+  BOOTSTRAP_ADMIN_EMAIL,
+  BOOTSTRAP_ADMIN_PASSWORD
 } = process.env;
 
 global.log = pino({ level: LOG_LEVEL, name: 'auth-service' });
@@ -21,18 +25,24 @@ global.log = pino({ level: LOG_LEVEL, name: 'auth-service' });
 mongoose.Promise = global.Promise;
 mongoose.connect(MONGODB_ENDPOINT, { useMongoClient: true });
 
-let isReady = false;
-
 let health;
 if (HEALTH_PORT) {
-  health = new Health({
-    ready: () => isReady
-  }).listen(HEALTH_PORT);
+  health = new Health();
+  health.listen(HEALTH_PORT);
   log.info(`Health listening on port ${HEALTH_PORT}`);
 }
 
 let server;
-ready().then(schema => {
+ready().then(async schema => {
+
+  mongoose.connection.on('error', error => {
+    throw error;
+  });
+
+  if (BOOTSTRAP_ADMIN_EMAIL && BOOTSTRAP_ADMIN_PASSWORD) {
+    await bootstrapAdmin(process.env.BOOTSTRAP_ADMIN_EMAIL, process.env.BOOTSTRAP_ADMIN_PASSWORD);
+  }
+
   server = new Koa()
     .use((ctx, next) => {
       log.debug("recieved request", { headers: ctx.headers });
@@ -48,18 +58,19 @@ ready().then(schema => {
     .use(graphqlKoa(ctx => ({
       schema,
       context: { secretKeyPath: JWT_PRIVATE_KEY_PATH, user: ctx.user },
-      logFunction: arg => log.debug(arg)
+      logFunction: arg => log.debug(arg),
+      formatError
     })));
 
   server.listen(PORT);
   log.info(`Listening on port ${PORT}`);
 
-  isReady = true;
+  health.ready = () => mongoose.connection.readyState == 1;
 
 }).catch(error => {
   log.fatal(error);
-  server?.stop();
-  health?.stop();
+  server?.close();
+  health?.close();
   process.exit(1);
 });
 

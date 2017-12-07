@@ -41,14 +41,15 @@ describe('Account', function () {
 
   beforeEach(async function () {
     this.timeout(10000);
-    this.server = new Server({
+    this.server = await Server({
       mongodbEndpoint: this.mongo.getMongouri(uuidv4()),
     });
     await this.server.ready();
   });
 
-  afterEach(function () {
-    this.server.stop();
+  afterEach(async function () {
+    this.timeout(10000);
+    await this.server.stop();
   });
 
   describe('User Account', function () {
@@ -89,11 +90,11 @@ describe('Account', function () {
 
       const { account, queryToken } = await this.server.createUserAccount(exampleUser);
 
-      const noId = await this.server.id({ queryToken });
-      const withId = await this.server.id({ queryToken, id: account.id });
+      const noId = await this.server.getAccount({ queryToken });
+      const withId = await this.server.getAccount({ queryToken, id: account.id });
 
-      expect(noId).to.equal(account.id);
-      expect(withId).to.equal(account.id);
+      expect(noId.id).to.equal(account.id);
+      expect(withId.id).to.equal(account.id);
     });
 
     it("should not allow non-auth-admins access to other user's accounts");
@@ -105,5 +106,51 @@ describe('Account', function () {
     it('should query permissions, optionally filtered by scope');
     it('should not allow non-auth-admins to add or remove permissions');
     it('should allow auth admins to add and remove permissions');
+  });
+});
+
+describe('Bootstrap Admin', function () {
+
+  before(async function () {
+    this.timeout(10000);
+    const port = await portfinder.getPortPromise();
+    log.debug({ mongoPort: port });
+    this.mongo = new Mongo(port);
+    await this.mongo.start();
+  });
+
+  it('should create only one bootstrap admin', async function () {
+
+    this.timeout(10000);
+
+    const email = 'testAdmin@example.com';
+    const password = 'This is a really secure password';
+    const db = uuidv4();
+    const email2 = 'test2@admin.com';
+
+    this.server = await Server({
+      mongodbEndpoint: this.mongo.getMongouri(db),
+      bootstrapAdminEmail: email,
+      bootstrapAdminPassword: password,
+    });
+    await this.server.ready();
+
+    const token = await this.server.createUserToken({ email, password });
+    expect(token).to.be.ok;
+
+    await this.server.stop();
+    this.server = await Server({
+      mongodbEndpoint: this.mongo.getMongouri(db),
+      bootstrapAdminEmail: email2,
+      bootstrapAdminPassword: password,
+    });
+
+    expect(this.server.createUserToken({ email2, password })).to.be.rejected;
+
+  });
+
+  after(async function () {
+    await this.server?.stop();
+    await this.mongo.stop();
   });
 });

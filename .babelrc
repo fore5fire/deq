@@ -7,9 +7,8 @@
     }]
   ],
   "plugins": [
-    "transform-object-rest-spread",
-    "transform-class-properties",
-    "transform-es2015-modules-commonjs",
-    "@babel/plugin-proposal-optional-chaining"
+    "@babel/proposal-object-rest-spread",
+    "@babel/proposal-class-properties",
+    "@babel/proposal-optional-chaining"
   ]
 }
