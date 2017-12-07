@@ -82,7 +82,7 @@ const resolvers = {
     }
   },
   Date: GraphQLDateTime,
-  Email: GraphQLEmailAddress,
+  EmailAddress: GraphQLEmailAddress,
   QueryToken: GraphQLString,
   RefreshToken: GraphQLString,
 };
