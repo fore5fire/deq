@@ -21,6 +21,7 @@ const {
 
 global.log = pino({ level: LOG_LEVEL, name: 'auth-service' });
 
+log.debug("Starting up", { env: process.env });
 
 mongoose.Promise = global.Promise;
 mongoose.connect(MONGODB_ENDPOINT, { useMongoClient: true });
@@ -34,6 +35,8 @@ if (HEALTH_PORT) {
 
 let server;
 ready().then(async schema => {
+
+  log.debug("Schema is ready", { schema });
 
   mongoose.connection.on('error', error => {
     throw error;
