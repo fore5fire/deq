@@ -4,11 +4,12 @@ import fs from 'fs-extra';
 
 export class AuthGrant {
 
-  constructor({ account, pems, validFor, secretKeyPath }) {
+  constructor({ account, pems, validFor, secretKeyPath, type }) {
     this.account = account;
-    this.payload = { aid: account.id, pems };
+    this.payload = { aid: account?.id, pems };
     this.validFor = validFor;
     this.secretKeyPath = secretKeyPath;
+    this.type = type;
   }
 
   async queryToken() {
@@ -25,7 +26,8 @@ export class AuthGrant {
       queryToken: {
         payload: this.payload,
         validFor: this.validFor
-      }
+      },
+      type: this.type,
     });
     await refreshToken.save();
     return refreshToken.refreshToken.value;

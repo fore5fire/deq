@@ -56,7 +56,7 @@ describe('Account', function () {
 
     it('should create a user account', async function () {
 
-      const { account, queryToken, refreshToken } = await this.server.createUserAccount(exampleUser);
+      const { account, queryToken, refreshToken } = await this.server.createUserAccount({ input: exampleUser });
 
       expect(account).to.have.property('id');
       expect(account).to.deep.equal({ email: exampleUser.email, name: exampleUser.name, id: account.id });
@@ -70,13 +70,13 @@ describe('Account', function () {
     });
 
     it('should require user emails to be unique', async function () {
-      await this.server.createUserAccount(exampleUser);
-      await expect(this.server.createUserAccount(exampleUser)).to.be.rejected;
-      await this.server.createUserAccount(exampleUser2);
-      await this.server.createUserAccount(exampleUser3);
-      await expect(this.server.createUserAccount(exampleUser2)).to.be.rejected;
-      await expect(this.server.createUserAccount(exampleUser2)).to.be.rejected;
-      await expect(this.server.createUserAccount(exampleUser3)).to.be.rejected;
+      await this.server.createUserAccount({ input: exampleUser });
+      await expect(this.server.createUserAccount({ input: exampleUser })).to.be.rejected;
+      await this.server.createUserAccount({ input: exampleUser2 });
+      await this.server.createUserAccount({ input: exampleUser3 });
+      await expect(this.server.createUserAccount({ input: exampleUser2 })).to.be.rejected;
+      await expect(this.server.createUserAccount({ input: exampleUser2 })).to.be.rejected;
+      await expect(this.server.createUserAccount({ input: exampleUser3 })).to.be.rejected;
     });
 
     it('should require password strength to score at least 3 using zxcvbn');
@@ -88,7 +88,7 @@ describe('Account', function () {
 
     it("should allow access to user's own account", async function () {
 
-      const { account, queryToken } = await this.server.createUserAccount(exampleUser);
+      const { account, queryToken } = await this.server.createUserAccount({ input: exampleUser });
 
       const noId = await this.server.getAccount({ queryToken });
       const withId = await this.server.getAccount({ queryToken, id: account.id });

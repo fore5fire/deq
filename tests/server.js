@@ -53,7 +53,7 @@ class Server extends Harness {
     this.mongodbEndpoint = mongodbEndpoint;
   }
 
-  async createUserAccount(input) {
+  async createUserAccount({ input, tokenExpiration = moment().add(1, 'day').format() }) {
     const { authGrant } = await this.request({
       query: `
         mutation CreateUserAccount($input: UserAccountInput!, $expiration: Date!) {
@@ -70,7 +70,7 @@ class Server extends Harness {
           }
         }
       `,
-      variables: { input, expiration: moment().add(1, 'day').format() },
+      variables: { input, expiration: tokenExpiration },
     });
 
     return authGrant;
@@ -98,9 +98,8 @@ class Server extends Harness {
 
   async createUserToken({ email, password }) {
     const { createUserToken } = await this.request({
-      headers: { Authorization: `Bearer ${this.queryToken}` },
       query: `
-        mutation CreateToken($expiration: Date!, $email: Email!, $password: String!) {
+        mutation CreateToken($expiration: Date!, $email: EmailAddress!, $password: String!) {
           createUserToken(email: $email, password: $password) {
             queryToken
             refreshToken(expiration: $expiration)
@@ -118,7 +117,6 @@ class Server extends Harness {
 
   async createRefreshedToken({ refreshToken }) {
     const { queryToken } = await this.request({
-      headers: { Authorization: `Bearer ${this.queryToken}` },
       query: `
         mutation CreateToken($refreshToken: RefreshToken!) {
           queryToken: createRefreshedToken(refreshToken: $refreshToken)
@@ -127,6 +125,22 @@ class Server extends Harness {
       variables: { refreshToken }
     });
     return queryToken;
+  }
+
+  async createServiceToken({ queryToken, input }) {
+    const { authGrant } = await this.request({
+      headers: { Authorization: `Bearer ${queryToken}` },
+      query: `
+        mutation CreateServiceToken($input: ServiceTokenInput!, $expiration: Date!) {
+          authGrant: createServiceToken(input: $input) {
+            queryToken
+            refreshToken(expiration: $expiration)
+          }
+        }
+      `,
+      variables: { input, expiration: moment().add(1, 'hour').format() }
+    });
+    return authGrant;
   }
 };
 

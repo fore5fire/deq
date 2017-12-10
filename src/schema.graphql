@@ -4,11 +4,13 @@ type Query {
 }
 
 type Mutation {
-  # createToken(accountId: ID!): AuthGrant
+  createServiceToken(input: ServiceTokenInput!): AuthGrant
   createUserToken(email: EmailAddress!, password: String!): AuthGrant
-  createRefreshedToken(refreshToken: RefreshToken!): QueryToken
 
-  revokeRefreshToken(id: ID!): Boolean
+  revokeUserToken(id: ID!): Boolean
+  revokeServiceToken(id: ID!): Boolean
+
+  createRefreshedToken(refreshToken: RefreshToken!): QueryToken
 
   createUserAccount(input: UserAccountInput!): AuthGrant
   account(id: ID): MutableAccount
@@ -34,8 +36,9 @@ type UserAccount implements Account {
 type MutableUserAccount {
   query: UserAccount
 
-  grant(permission: PermissionInput!): Boolean
-  revoke(permission: PermissionInput!): Boolean
+  setPermission(input: PermissionInput!): Permission
+  addPermission(input: PermissionInput!): Permission
+  removePermissionPaths(domain: String!, paths: [String]!): Permission
 
   edit(input: UserAccountInput!): UserAccount
   delete: Boolean
@@ -61,15 +64,20 @@ type AuthGrant {
 
 type Permission {
   domain: String!
-  value: String!
+  value: Json!
 }
 
 input PermissionInput {
   domain: String!
-  value: String!
+  value: Json!
+}
+
+input ServiceTokenInput {
+  permissions: [PermissionInput]!
 }
 
 scalar QueryToken
 scalar RefreshToken
 scalar Date
 scalar EmailAddress
+scalar Json

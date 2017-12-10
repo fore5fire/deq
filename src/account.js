@@ -1,10 +1,9 @@
 import mongoose from 'mongoose';
-import { AuthGrant } from './auth-grant';
 import bcrypt from 'bcrypt';
-import groupBy from 'lodash.groupby';
 import zxcvbn from 'zxcvbn';
-import { AuthError } from 'graphql-error-codes';
 import { ServerSetting } from './server-setting';
+import merge from 'lodash.merge';
+import omit from 'lodash.omit';
 
 const saltRounds = 10;
 
@@ -12,11 +11,7 @@ const saltRounds = 10;
 
 const accountSchema = mongoose.Schema({
   name: String,
-  _permissions: [{
-    domain: String,
-    value: String,
-    default: [],
-  }],
+  _permissions: { type: {}, default: {} },
 }, { discriminatorKey: 'type' });
 
 class AccountClass {
@@ -26,40 +21,38 @@ class AccountClass {
     return Object.assign(this, input).save();
   }
 
-  get pems() {
-    return groupBy(this._permissions, pem => pem.domain);
+  async permissions({ domain }, { user }) {
+    user.mustBeAbleTo('view account permissions', { domain, aid: this.aid });
+
+    if (domain) {
+      return this._permissions[domain];
+    }
+    return this._permissions;
   }
 
-  async grant({ permission }, context) {
-    if (!context.user.pems.auth.editPems) {
-      throw new AuthError("Permission Denied");
-    }
-    const existing = this._permissions.find(pem =>
-      pem.domain === permission.domain && pem.value === permission.value
-    );
+  async setPermission({ permission }, { user }) {
+    await user.mustBeAbleTo('set account permissions', permission.domain);
 
-    if (existing) {
-      return false;
-    }
+    this._permissions[permission.domain] = permission.value;
 
-    this._permissions.push(permission);
     await this.save();
     return true;
   }
 
-  async revoke({ permission }, context) {
-    if (!context.user.pems.auth.editPems) {
-      throw new Error("Permission Denied");
-    }
-    const index = this._permissions.findIndex(pem =>
-      pem.domain === permission.domain && pem.value === permission.value
-    );
+  async addPermission({ permission }, { user }) {
+    await user.mustBeAbleTo('set account permissions', permission.domain);
 
-    if (index === -1) {
-      return false;
-    }
+    merge(this._permissions[permission.domain], permission.value);
 
-    this._permissions.splice(index, 1);
+    await this.save();
+    return true;
+  }
+
+  async removePermissionPaths({ domain, paths }, { user }) {
+    await user.mustBeAbleTo('set account permissions', domain);
+
+    this._permissions[domain] = omit(this._permissions[domain], paths);
+
     await this.save();
     return true;
   }
@@ -99,9 +92,6 @@ class UserAccountClass {
     return this._permissions;
   }
 
-  async authGrant({ secretKeyPath }) {
-    return new AuthGrant({ account: this, pems: this.pems, validFor: '1h', secretKeyPath });
-  }
 
   authenticate(password) {
     return bcrypt.compare(password, this.password);
@@ -129,19 +119,35 @@ export async function bootstrapAdmin(email, password) {
     name: 'Bootstrap Admin',
     email,
     password,
-    _permissions: [{
-      domain: 'auth',
-      value: 'editAcct',
-    },
-    {
-      domain: 'auth',
-      value: 'viewAcct',
-    },
-    {
-      domain: 'auth',
-      value: 'editPems',
-    }]
+    _permissions: {
+      auth: {
+        uacct: {
+          create: true,
+          edit: true,
+          view: true,
+          delete: true
+        },
+        sacct: {
+          create: true,
+          edit: true,
+          view: true,
+          delete: true,
+        },
+        utoken: {
+          revoke: true,
+        },
+        stoken: {
+          create: true,
+          revoke: true
+        },
+        pems: {
+          view: true,
+          set: true,
+        }
+      }
+    }
   });
+  
   await account.save();
 
   const setting = new ServerSetting({ AccountAdmin: { locked: true }});
