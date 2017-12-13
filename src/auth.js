@@ -21,7 +21,7 @@ export const auth = token => new User({
     'create service token': () => token?.pems?.auth?.stoken?.create,
     'revoke service token': () => token?.pems?.auth?.stoken?.revoke,
 
-    'refresh token': refreshToken => refreshToken,
+    'refresh token': refreshToken => refreshToken && (!refreshToken.refreshToken.expiration || new Date() < refreshToken.refreshToken.expiration),
     'within token refresh period': expiration => new Date() >= expiration - refreshGracePeriod,
 
     'set account permissions': domain => token?.pems?.auth?.pems?.set === true || (token?.pems?.auth?.pems?.set/* */instanceof Array && token.pems.auth.pems.set.includes(domain)),

@@ -110,7 +110,7 @@ const resolvers = {
 
       await user.mustBeAbleTo('refresh token', token);
 
-      if (await user.isnt('within token refresh period', token?.refreshToken.expiration)) {
+      if (await user.isnt('within token refresh period', token?.queryToken.validFor)) {
         log.warn("Client attempted to refresh token earlier than grace period before expiration! Possible sign of unathorized access to refresh token");
         throw new AuthError("To early to refresh token! It's possible someone else is using your refresh token - consider revoking it.");
       }
