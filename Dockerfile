@@ -18,7 +18,7 @@ RUN apk update && apk add python make g++
 
 COPY package.json yarn.lock /app/
 WORKDIR /app
-RUN yarn install --production
+RUN yarn install --production && npm rebuild bcrypt --build-from-source
 
 COPY tests /app/tests
 COPY --from=build /build/dist /app/dist

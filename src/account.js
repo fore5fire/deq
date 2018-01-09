@@ -4,13 +4,13 @@ import zxcvbn from 'zxcvbn';
 import { ServerSetting } from './server-setting';
 import merge from 'lodash.merge';
 import omit from 'lodash.omit';
+import map from 'lodash.map';
 
 const saltRounds = 10;
 
 
 
 const accountSchema = mongoose.Schema({
-  name: String,
   _permissions: { type: {}, default: {} },
 }, { discriminatorKey: 'type' });
 
@@ -25,36 +25,52 @@ class AccountClass {
     user.mustBeAbleTo('view account permissions', { domain, aid: this.aid });
 
     if (domain) {
-      return this._permissions[domain];
+      return [{ domain, value: this._permissions[domain] }];
     }
-    return this._permissions;
+    return map(this._permissions, (value, domain) => ({ value, domain }));
   }
 
-  async setPermission({ permission }, { user }) {
-    await user.mustBeAbleTo('set account permissions', permission.domain);
+  async setPermission({ input }, { user }) {
+    await user.mustBeAbleTo('set account permissions', input.domain);
 
-    this._permissions[permission.domain] = permission.value;
+    const value = this._permissions[input.domain] = input.value;
+    this.markModified('_permissions');
 
     await this.save();
-    return true;
+    return {
+      domain: input.domain,
+      value,
+    };
   }
 
-  async addPermission({ permission }, { user }) {
-    await user.mustBeAbleTo('set account permissions', permission.domain);
+  async addPermission({ input }, { user }) {
+    await user.mustBeAbleTo('set account permissions', input.domain);
 
-    merge(this._permissions[permission.domain], permission.value);
+    if (!this._permissions[input.domain]) {
+      this._permissions[input.domain] = {};
+    }
+
+    const value = merge(this._permissions[input.domain], input.value);
+    this.markModified('_permissions');
 
     await this.save();
-    return true;
+    return {
+      domain: input.domain,
+      value,
+    };
   }
 
   async removePermissionPaths({ domain, paths }, { user }) {
     await user.mustBeAbleTo('set account permissions', domain);
 
     this._permissions[domain] = omit(this._permissions[domain], paths);
+    this.markModified('_permissions');
 
     await this.save();
-    return true;
+    return {
+      domain,
+      value: this._permissions[domain],
+    };
   }
 
   async delete() {
@@ -68,6 +84,10 @@ accountSchema.loadClass(AccountClass);
 export const Account = mongoose.model('Account', accountSchema);
 
 const userAccountSchema = mongoose.Schema({
+  names: {
+    first: String,
+    last: String,
+  },
   email: { type: String, unique: true, sparse: true },
   password: {
     type: String,
@@ -79,19 +99,14 @@ const userAccountSchema = mongoose.Schema({
       // TODO: fix for async. Mongoose doesn't like promises here
       return bcrypt.hashSync(password, saltRounds);
     },
-  }
+  },
 });
 
 class UserAccountClass {
 
-  permissions({ domain }) {
-
-    if (domain) {
-      return this._permissions.filter(pem => pem.domain === domain);
-    }
-    return this._permissions;
+  get name() {
+    return `${this.names.first} ${this.names.last}`;
   }
-
 
   authenticate(password) {
     return bcrypt.compare(password, this.password);
@@ -116,38 +131,45 @@ export async function bootstrapAdmin(email, password) {
   }
 
   const account = new UserAccount({
-    name: 'Bootstrap Admin',
+    names: {
+      first: 'Bootstrap',
+      last: 'Admin'
+    },
     email,
     password,
     _permissions: {
       auth: {
-        uacct: {
-          create: true,
-          edit: true,
-          view: true,
-          delete: true
+        acct: {
+          usr: {
+            create: true,
+            edit: true,
+            view: true,
+            delete: true
+          },
+          svc: {
+            create: true,
+            edit: true,
+            view: true,
+            delete: true,
+          },
+          pem: {
+            view: true,
+            edit: true
+          }
         },
-        sacct: {
-          create: true,
-          edit: true,
-          view: true,
-          delete: true,
+        tkn: {
+          usr: {
+            revoke: true,
+          },
+          svc: {
+            create: true,
+            revoke: true
+          }
         },
-        utoken: {
-          revoke: true,
-        },
-        stoken: {
-          create: true,
-          revoke: true
-        },
-        pems: {
-          view: true,
-          set: true,
-        }
       }
     }
   });
-  
+
   await account.save();
 
   const setting = new ServerSetting({ AccountAdmin: { locked: true }});

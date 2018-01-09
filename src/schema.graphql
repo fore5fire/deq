@@ -5,14 +5,17 @@ type Query {
 
 type Mutation {
   createServiceToken(input: ServiceTokenInput!): AuthGrant
-  createUserToken(email: EmailAddress!, password: String!): AuthGrant
+  createUserToken(email: EmailAddress!, password: String!): UserAuthGrant
 
   revokeUserToken(id: ID!): Boolean
   revokeServiceToken(id: ID!): Boolean
 
-  createRefreshedToken(refreshToken: RefreshToken!): QueryToken
+  createRefreshedToken(refreshToken: String!): String
+  createPasswordResetToken(email: EmailAddress!): PasswordResetToken
+  changePassword(email: EmailAddress!, resetToken: String!, newPassword: String!): UserAuthGrant
+  updateUserToken: String
 
-  createUserAccount(input: UserAccountInput!): AuthGrant
+  createUserAccount(input: UserAccountInput!): UserAuthGrant
   account(id: ID): MutableAccount
 }
 
@@ -30,23 +33,29 @@ type UserAccount implements Account {
   id: ID!
   email: EmailAddress!
   name: String!
+  names: Names!
   permissions(domain: String): [Permission]
 }
 
-type MutableUserAccount {
+type MutableUserAccount implements MutableAccount {
   query: UserAccount
 
   setPermission(input: PermissionInput!): Permission
   addPermission(input: PermissionInput!): Permission
   removePermissionPaths(domain: String!, paths: [String]!): Permission
 
-  edit(input: UserAccountInput!): UserAccount
+  edit(input: EditUserAccountInput!): UserAccount
   delete: Boolean
+}
+
+input EditUserAccountInput {
+  email: EmailAddress!
+  names: NamesInput!
 }
 
 input UserAccountInput {
   email: EmailAddress!
-  name: String!
+  names: NamesInput!
   password: String!
 }
 
@@ -57,9 +66,15 @@ type ServiceAccount implements Account {
 }
 
 type AuthGrant {
-  account: Account
-  refreshToken(expiration: Date): RefreshToken
-  queryToken: QueryToken
+  refreshToken(expiration: DateTime): String
+  queryToken: String
+}
+
+type UserAuthGrant {
+  account: UserAccount
+  mutableAccount: MutableUserAccount
+  refreshToken(expiration: DateTime): String
+  queryToken: String
 }
 
 type Permission {
@@ -76,8 +91,22 @@ input ServiceTokenInput {
   permissions: [PermissionInput]!
 }
 
-scalar QueryToken
-scalar RefreshToken
-scalar Date
+type PasswordResetToken {
+  resetToken: String!
+  expiration: DateTime
+}
+
+type Names {
+  first: String
+  last: String
+}
+
+input NamesInput {
+  first: String!
+  last: String!
+}
+
+
+scalar DateTime
 scalar EmailAddress
 scalar Json

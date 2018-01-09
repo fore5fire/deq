@@ -56,14 +56,17 @@ class Server extends Harness {
   async createUserAccount({ input, tokenExpiration = moment().add(1, 'day').format() }) {
     const { authGrant } = await this.request({
       query: `
-        mutation CreateUserAccount($input: UserAccountInput!, $expiration: Date!) {
+        mutation CreateUserAccount($input: UserAccountInput!, $expiration: DateTime!) {
           authGrant: createUserAccount(input: $input) {
             refreshToken(expiration: $expiration)
             queryToken
             account {
               id
-              name
               ...on UserAccount {
+                names {
+                  first
+                  last
+                }
                 email
               }
             }
@@ -83,8 +86,11 @@ class Server extends Harness {
         query GetAccount($id: ID) {
           account(id: $id) {
             id
-            name
             ...on UserAccount {
+              names {
+                first
+                last
+              }
               email
             }
           }
@@ -99,7 +105,7 @@ class Server extends Harness {
   async createUserToken({ email, password }) {
     const { createUserToken } = await this.request({
       query: `
-        mutation CreateToken($expiration: Date!, $email: EmailAddress!, $password: String!) {
+        mutation CreateToken($expiration: DateTime!, $email: EmailAddress!, $password: String!) {
           createUserToken(email: $email, password: $password) {
             queryToken
             refreshToken(expiration: $expiration)
@@ -118,7 +124,7 @@ class Server extends Harness {
   async createRefreshedToken({ refreshToken }) {
     const { queryToken } = await this.request({
       query: `
-        mutation CreateToken($refreshToken: RefreshToken!) {
+        mutation CreateToken($refreshToken: String!) {
           queryToken: createRefreshedToken(refreshToken: $refreshToken)
         }
       `,
@@ -131,7 +137,7 @@ class Server extends Harness {
     const { authGrant } = await this.request({
       headers: { Authorization: `Bearer ${queryToken}` },
       query: `
-        mutation CreateServiceToken($input: ServiceTokenInput!, $expiration: Date!) {
+        mutation CreateServiceToken($input: ServiceTokenInput!, $expiration: DateTime!) {
           authGrant: createServiceToken(input: $input) {
             queryToken
             refreshToken(expiration: $expiration)

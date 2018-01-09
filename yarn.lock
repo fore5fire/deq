@@ -646,24 +646,24 @@ apollo-link@^1.0.0, apollo-link@^1.0.4, apollo-link@^1.0.6:
     apollo-utilities "^1.0.0"
     zen-observable "^0.6.0"
 
-apollo-server-core@^1.2.0:
-  version "1.2.0"
-  resolved "https://registry.yarnpkg.com/apollo-server-core/-/apollo-server-core-1.2.0.tgz#e851c47444991b6f89f88529237076b83e01e8ee"
+apollo-server-core@^1.3.0:
+  version "1.3.0"
+  resolved "https://registry.yarnpkg.com/apollo-server-core/-/apollo-server-core-1.3.0.tgz#a79d29a70e8150aa8a0143234e11594ba41ccc8d"
   dependencies:
     apollo-cache-control "^0.0.x"
     apollo-tracing "^0.1.0"
     graphql-extensions "^0.0.x"
 
-apollo-server-koa@^1.2.0:
-  version "1.2.0"
-  resolved "https://registry.yarnpkg.com/apollo-server-koa/-/apollo-server-koa-1.2.0.tgz#6225accde83294ee37407962358d148e2705fb84"
+apollo-server-koa@^1.3.0:
+  version "1.3.0"
+  resolved "https://registry.yarnpkg.com/apollo-server-koa/-/apollo-server-koa-1.3.0.tgz#94b3eb8b4fce7c3c92b6477aad738c19faca50f9"
   dependencies:
-    apollo-server-core "^1.2.0"
-    apollo-server-module-graphiql "^1.2.0"
+    apollo-server-core "^1.3.0"
+    apollo-server-module-graphiql "^1.3.0"
 
-apollo-server-module-graphiql@^1.2.0:
-  version "1.2.0"
-  resolved "https://registry.yarnpkg.com/apollo-server-module-graphiql/-/apollo-server-module-graphiql-1.2.0.tgz#899d84f3b747795dbbfc8354aa51622ef038151c"
+apollo-server-module-graphiql@^1.3.0:
+  version "1.3.0"
+  resolved "https://registry.yarnpkg.com/apollo-server-module-graphiql/-/apollo-server-module-graphiql-1.3.0.tgz#077bb8c7bf292f6128c6c96d59c2096445b084ef"
 
 apollo-tracing@^0.1.0:
   version "0.1.1"
@@ -942,6 +942,10 @@ babylon@7.0.0-beta.34:
 balanced-match@^1.0.0:
   version "1.0.0"
   resolved "https://registry.yarnpkg.com/balanced-match/-/balanced-match-1.0.0.tgz#89b4d199ab2bee49de164ea02b89ce462d71b767"
+
+base32.js@^0.1.0:
+  version "0.1.0"
+  resolved "https://registry.yarnpkg.com/base32.js/-/base32.js-0.1.0.tgz#b582dec693c2f11e893cf064ee6ac5b6131a2202"
 
 base64-js@^1.0.2:
   version "1.2.1"
@@ -2459,8 +2463,8 @@ graceful-fs@^4.0.0, graceful-fs@^4.1.11, graceful-fs@^4.1.2, graceful-fs@^4.1.6:
   resolved "https://registry.yarnpkg.com/graceful-readlink/-/graceful-readlink-1.0.1.tgz#4cafad76bc62f02fa039b2f94e9a3dd3a391a725"
 
 graphql-error-codes@^2.1.2:
-  version "2.1.2"
-  resolved "https://registry.yarnpkg.com/graphql-error-codes/-/graphql-error-codes-2.1.2.tgz#e360e99481bf4a4a8c5a7ab445d19a8aaa90cc4a"
+  version "2.2.0"
+  resolved "https://registry.yarnpkg.com/graphql-error-codes/-/graphql-error-codes-2.2.0.tgz#88c84f51436384ff8c544b4896564bb15ce44eba"
   dependencies:
     source-map-support "^0.5.0"
 
@@ -2499,7 +2503,15 @@ graphql-stitch@^1.0.3:
     graphql-tools "^2.7.2"
     node-fetch "^1.7.3"
 
-graphql-tools@^2.10.0, graphql-tools@^2.7.2:
+graphql-tools@^2.13.0:
+  version "2.13.0"
+  resolved "https://registry.yarnpkg.com/graphql-tools/-/graphql-tools-2.13.0.tgz#3c7aad3bb1284a651dd80b385e06b3d13ac2a6f2"
+  dependencies:
+    apollo-utilities "^1.0.1"
+    deprecated-decorator "^0.1.6"
+    uuid "^3.1.0"
+
+graphql-tools@^2.7.2:
   version "2.12.0"
   resolved "https://registry.yarnpkg.com/graphql-tools/-/graphql-tools-2.12.0.tgz#6286902650537bf7f20ac87159ab5c8b2e9741f8"
   dependencies:
@@ -2784,6 +2796,10 @@ invariant@^2.2.0, invariant@^2.2.2:
 invert-kv@^1.0.0:
   version "1.0.0"
   resolved "https://registry.yarnpkg.com/invert-kv/-/invert-kv-1.0.0.tgz#104a8e4aaca6d3d8cd157a8ef8bfab2d7a3ffdb6"
+
+ipv6-normalize@^1.0.1:
+  version "1.0.1"
+  resolved "https://registry.yarnpkg.com/ipv6-normalize/-/ipv6-normalize-1.0.1.tgz#1b3258290d365fa83239e89907dde4592e7620a8"
 
 is-able@^1.3.4:
   version "1.3.4"
@@ -3405,6 +3421,10 @@ lodash.keys@^3.0.0:
     lodash.isarguments "^3.0.0"
     lodash.isarray "^3.0.0"
 
+lodash.map@^4.6.0:
+  version "4.6.0"
+  resolved "https://registry.yarnpkg.com/lodash.map/-/lodash.map-4.6.0.tgz#771ec7839e3473d9c4cde28b19394c3562f4f6d3"
+
 lodash.merge@^4.6.0:
   version "4.6.0"
   resolved "https://registry.yarnpkg.com/lodash.merge/-/lodash.merge-4.6.0.tgz#69884ba144ac33fe699737a6086deffadd0f89c5"
@@ -3425,7 +3445,7 @@ lodash.restparam@^3.0.0:
   version "3.6.1"
   resolved "https://registry.yarnpkg.com/lodash.restparam/-/lodash.restparam-3.6.1.tgz#936a4e309ef330a7645ed4145986c85ae5b20805"
 
-lodash@^4.0.0, lodash@^4.14.0, lodash@^4.17.4, lodash@^4.2.0, lodash@^4.3.0:
+lodash@^4.0.0, lodash@^4.14.0, lodash@^4.17.2, lodash@^4.17.4, lodash@^4.2.0, lodash@^4.3.0:
   version "4.17.4"
   resolved "https://registry.yarnpkg.com/lodash/-/lodash-4.17.4.tgz#78203a4d1c328ae1d86dca6460e369b57f4055ae"
 
@@ -3578,9 +3598,9 @@ mocha@^3.5.3:
     mkdirp "0.5.1"
     supports-color "3.1.2"
 
-moment@^2.19.3:
-  version "2.19.3"
-  resolved "https://registry.yarnpkg.com/moment/-/moment-2.19.3.tgz#bdb99d270d6d7fda78cc0fbace855e27fe7da69f"
+moment@^2.19.4:
+  version "2.19.4"
+  resolved "https://registry.yarnpkg.com/moment/-/moment-2.19.4.tgz#17e5e2c6ead8819c8ecfad83a0acccb312e94682"
 
 mongo-in-memory@^0.0.5:
   version "0.0.5"
@@ -3770,6 +3790,16 @@ nodeify@1.0.0:
   dependencies:
     is-promise "~1.0.0"
     promise "~1.3.0"
+
+nodemailer-sparkpost-transport@^2.0.0:
+  version "2.0.0"
+  resolved "https://registry.yarnpkg.com/nodemailer-sparkpost-transport/-/nodemailer-sparkpost-transport-2.0.0.tgz#5b234b303d3a3acd14cdd045bdfeede112917f8c"
+  dependencies:
+    sparkpost "^2.1.0"
+
+nodemailer@^4.4.0, nodemailer@^4.4.1:
+  version "4.4.1"
+  resolved "https://registry.yarnpkg.com/nodemailer/-/nodemailer-4.4.1.tgz#ce480eb3db7b949b3366e301b8f0af1c1248025e"
 
 nodemon@^1.12.1:
   version "1.12.5"
@@ -4477,7 +4507,7 @@ request@2.81.0:
     tunnel-agent "^0.6.0"
     uuid "^3.0.0"
 
-request@^2.81.0:
+request@^2.79.0, request@^2.81.0:
   version "2.83.0"
   resolved "https://registry.yarnpkg.com/request/-/request-2.83.0.tgz#ca0b65da02ed62935887808e6f510381034e3356"
   dependencies:
@@ -4695,6 +4725,14 @@ sliced@1.0.1:
   version "1.0.1"
   resolved "https://registry.yarnpkg.com/sliced/-/sliced-1.0.1.tgz#0b3a662b5d04c3177b1926bea82b03f837a2ef41"
 
+smtp-server@^3.4.1:
+  version "3.4.1"
+  resolved "https://registry.yarnpkg.com/smtp-server/-/smtp-server-3.4.1.tgz#26f1731836916c2b6294bcded853ebcba604ff39"
+  dependencies:
+    base32.js "^0.1.0"
+    ipv6-normalize "^1.0.1"
+    nodemailer "^4.4.0"
+
 sntp@1.x.x:
   version "1.0.9"
   resolved "https://registry.yarnpkg.com/sntp/-/sntp-1.0.9.tgz#6541184cc90aeea6c6e7b35e2659082443c66198"
@@ -4730,6 +4768,13 @@ source-map@^0.5.0, source-map@^0.5.3, source-map@^0.5.6, source-map@~0.5.1:
 source-map@^0.6.0, source-map@~0.6.1:
   version "0.6.1"
   resolved "https://registry.yarnpkg.com/source-map/-/source-map-0.6.1.tgz#74722af32e9614e9c287a8d0bbde48b5e2f1a263"
+
+sparkpost@^2.1.0:
+  version "2.1.2"
+  resolved "https://registry.yarnpkg.com/sparkpost/-/sparkpost-2.1.2.tgz#efeee98fa091598b4d6d72b32e487d7a86c7e95c"
+  dependencies:
+    lodash "^4.17.2"
+    request "^2.79.0"
 
 spdx-correct@~1.0.0:
   version "1.0.2"

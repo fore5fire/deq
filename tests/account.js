@@ -9,17 +9,26 @@ chai.use(chaiAsPromised);
 
 const exampleUser = {
   email: 'example@example.com',
-  name: 'Example User',
+  names: {
+    first: 'Example',
+    last: 'User'
+  },
   password: 'This is actually a secure password',
 };
 const exampleUser2 = {
   email: 'example2@gmail.com',
-  name: 'Another User',
+  names: {
+    first: 'Another',
+    last: 'User',
+  },
   password: 'This is a different secure password',
 };
 const exampleUser3 = {
   email: 'numba3@yahoo.com',
-  name: 'Example User',
+  names: {
+    first: 'Example',
+    last: 'User'
+  },
   password: 'This is a different secure password',
 };
 
@@ -59,7 +68,7 @@ describe('Account', function () {
       const { account, queryToken, refreshToken } = await this.server.createUserAccount({ input: exampleUser });
 
       expect(account).to.have.property('id');
-      expect(account).to.deep.equal({ email: exampleUser.email, name: exampleUser.name, id: account.id });
+      expect(account).to.deep.equal({ email: exampleUser.email, names: exampleUser.names, id: account.id });
       jwt.verify(queryToken, global.publicKey);
     });
 
@@ -92,7 +101,8 @@ describe('Account', function () {
 
       const noId = await this.server.getAccount({ queryToken });
       const withId = await this.server.getAccount({ queryToken, id: account.id });
-
+      console.log(noId);
+      console.log(withId);
       expect(noId.id).to.equal(account.id);
       expect(withId.id).to.equal(account.id);
     });

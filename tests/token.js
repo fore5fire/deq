@@ -4,23 +4,32 @@ import portfinder from 'portfinder';
 import jwt from 'jsonwebtoken';
 import chaiAsPromised from 'chai-as-promised';
 import uuidv4 from 'uuid/v4';
-
+import SMTPServer from 'smtp-server';
 
 chai.use(chaiAsPromised);
 
 const exampleUser = {
   email: 'example@example.com',
-  name: 'Example User',
+  names: {
+    first: 'Example',
+    last: 'User'
+  },
   password: 'This is actually a secure password',
 };
 const exampleUser2 = {
   email: 'example2@gmail.com',
-  name: 'Another User',
+  names: {
+    first: 'Another',
+    last: 'User',
+  },
   password: 'This is a different secure password',
 };
 const exampleUser3 = {
   email: 'numba3@yahoo.com',
-  name: 'Example User',
+  names: {
+    first: 'Example',
+    last: 'User'
+  },
   password: 'This is a different secure password',
 };
 
@@ -66,7 +75,7 @@ describe('User Token', function () {
   });
 
   it('should return a query token when authenticating with a valid refresh token', async function () {
-    const { refreshToken } = await this.server.createUserAccount({ input: exampleUser, tokenExpiration: new Date().toISOString() });
+    const { refreshToken } = await this.server.createUserAccount({ input: exampleUser });
 
     await expect(this.server.createRefreshedToken({ refreshToken: "abc123" })).to.be.rejected;
 

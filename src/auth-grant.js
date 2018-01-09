@@ -12,6 +12,10 @@ export class AuthGrant {
     this.type = type;
   }
 
+  mutableAccount() {
+    return this.account;
+  }
+
   async queryToken() {
     const secretKey = await fs.readFile(this.secretKeyPath);
     return jwt.sign(this.payload, secretKey, { expiresIn: this.validFor, algorithm: 'ES384' });

@@ -17,7 +17,7 @@ const {
   LOG_LEVEL = 'info',
   JWT_PRIVATE_KEY_PATH = '',
   BOOTSTRAP_ADMIN_EMAIL,
-  BOOTSTRAP_ADMIN_PASSWORD
+  BOOTSTRAP_ADMIN_PASSWORD,
 } = process.env;
 
 global.log = pino({ level: LOG_LEVEL, name: 'auth-service' });
@@ -35,6 +35,7 @@ if (HEALTH_PORT) {
   log.info(`Health listening on port ${HEALTH_PORT}`);
 }
 
+
 ready().then(async schema => {
 
   log.debug({ msg: "Schema is ready", schema });
@@ -49,25 +50,21 @@ ready().then(async schema => {
       if (ctx.headers.authorization) {
         const authHeader = ctx.headers.authorization.split(/\s+/).filter(x => x);
         if (authHeader.length === 2 && authHeader[0].toLowerCase() === 'bearer') {
-          ctx.userToken = authHeader[1];
-          ctx.user = jwt.decode(ctx.userToken);
+          ctx.userToken = jwt.decode(authHeader[1]);
         }
       }
       return next();
     })
     .use((ctx, next) => {
-      ctx.aid = ctx.user?.aid;
-      ctx.user = auth(ctx.user);
+      ctx.user = auth(ctx.userToken);
       return next();
     })
     .use(bodyparser())
     .use(graphqlKoa(ctx => ({
       schema,
-      context: { secretKeyPath: JWT_PRIVATE_KEY_PATH, user: ctx.user, aid: ctx.aid },
+      context: { secretKeyPath: JWT_PRIVATE_KEY_PATH, user: ctx.user, userToken: ctx.userToken },
       logFunction: arg => log.debug(arg),
-      formatError: e => {
-        return formatError({ logger: e => log.error(e), });
-      },
+      formatError: formatError({ logger: e => log.error(e) }),
       debug: LOG_LEVEL === 'debug',
     })));
 
