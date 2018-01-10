@@ -31,6 +31,8 @@ const resolvers = {
     async createUserAccount(obj, { input }, { secretKeyPath, user }) {
       await user.mustBeAbleTo('create user account');
 
+      input.email = input.email.toLowerCase();
+
       try {
         const account = new UserAccount(input);
         await account.save();
@@ -60,7 +62,7 @@ const resolvers = {
 
     async createUserToken(obj, { email, password }, { secretKeyPath, user }) {
 
-      const account = await UserAccount.findOne({ email });
+      const account = await UserAccount.findOne({ email: email.toLowerCase() });
 
       await user.mustBeAbleTo('create user token', account, password);
 
@@ -151,7 +153,7 @@ const resolvers = {
 
     async changePassword(obj, { email, newPassword }, { user, secretKeyPath }) {
 
-      const account = await UserAccount.findOne({ email });
+      const account = await UserAccount.findOne({ email: email.toLowerCase() });
 
       user.mustBeAbleTo('reset user password', account.id);
 
@@ -164,7 +166,7 @@ const resolvers = {
     async createPasswordResetToken(obj, { email }, { user, secretKeyPath }) {
 
       user.mustBeAbleTo('create user password reset token');
-      const account = await Account.findOne({ email });
+      const account = await Account.findOne({ email: email.toLowerCase() });
 
       if (!account) {
         return;
