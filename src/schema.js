@@ -130,7 +130,7 @@ const resolvers = {
       }
 
       const account = await UserAccount.findById(userToken.aid);
-      user.mustBeAbleTo('update user token', account);
+      await user.mustBeAbleTo('update user token', account);
 
       const secretKeyPromise = fs.readFile(secretKeyPath);
 
@@ -155,7 +155,7 @@ const resolvers = {
 
       const account = await UserAccount.findOne({ email: email.toLowerCase() });
 
-      user.mustBeAbleTo('reset user password', account.id);
+      await user.mustBeAbleTo('reset user password', account.id);
 
       account.password = newPassword;
       await account.save();
@@ -165,7 +165,7 @@ const resolvers = {
 
     async createPasswordResetToken(obj, { email }, { user, secretKeyPath }) {
 
-      user.mustBeAbleTo('create user password reset token');
+      await user.mustBeAbleTo('create user password reset token');
       const account = await Account.findOne({ email: email.toLowerCase() });
 
       if (!account) {
