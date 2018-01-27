@@ -172,7 +172,7 @@ const resolvers = {
         return;
       }
 
-      const payload = { pems: { auth: { acct: { usr: { resetPass: account.aid } } } } };
+      const payload = { pems: { auth: { acct: { usr: { resetPass: account._id } } } } };
 
       return {
         resetToken: jwt.sign(payload, await fs.readFile(secretKeyPath), { expiresIn: '1h' }),
