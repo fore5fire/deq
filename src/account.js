@@ -122,7 +122,7 @@ export const UserAccount = Account.discriminator('UserAccount', userAccountSchem
 
 export async function bootstrapAdmin(email, password) {
 
-  log.info('Creating bootstrap admin');
+  log.info('Creating bootstrap admin', email);
 
   const locked = await ServerSetting.findOne({ AccountAdmin: { locked: true } });
   if (locked) {
@@ -135,7 +135,7 @@ export async function bootstrapAdmin(email, password) {
       first: 'Bootstrap',
       last: 'Admin'
     },
-    email,
+    email: email.toLowerCase(),
     password,
     _permissions: {
       auth: {
@@ -171,7 +171,7 @@ export async function bootstrapAdmin(email, password) {
   });
 
   await account.save();
-
+  log.info({ AccountAdmin: { setLocked: true }});
   const setting = new ServerSetting({ AccountAdmin: { locked: true }});
   await setting.save();
 }

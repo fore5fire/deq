@@ -12,6 +12,7 @@ type Mutation {
 
   createRefreshedToken(refreshToken: String!): String
   createPasswordResetToken(email: EmailAddress!): PasswordResetToken
+  # Todo: Move changePassword to be under UserAccount (The client can get the aid when they recieve the reset token, so they don't have to lookup the account by email), and move resetToken to be a regular authorization header token
   changePassword(email: EmailAddress!, resetToken: String!, newPassword: String!): UserAuthGrant
   updateUserToken: String
 

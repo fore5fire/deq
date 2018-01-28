@@ -148,6 +148,40 @@ class Server extends Harness {
     });
     return authGrant;
   }
+
+  async createPasswordResetToken({ queryToken, email }) {
+    const { token } = await this.request({
+      headers: { Authorization: `Bearer ${queryToken}` },
+      query: `
+        mutation CreatePasswordResetToken($email: EmailAddress!) {
+          token: createPasswordResetToken(email: $email) {
+            resetToken
+            expiration
+          }
+        }
+      `,
+      variables: { email }
+    });
+    return token;
+  }
+
+  async changePassword({ resetToken, email, newPassword }) {
+    const { authGrant } = await this.request({
+      query: `
+        mutation ChangePassword($email: EmailAddress!, $newPassword: String!, $resetToken: String!) {
+          authGrant: changePassword(email: $email, resetToken: $resetToken, newPassword: $newPassword) {
+            queryToken
+            refreshToken
+            account {
+              id
+            }
+          }
+        }
+      `,
+      variables: { email, newPassword, resetToken }
+    });
+    return authGrant;
+  }
 };
 
 global.publicKey = fs.readFileSync(path.resolve(__dirname, 'test-keys/public.pem'));

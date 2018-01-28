@@ -32,6 +32,15 @@ const exampleUser3 = {
   password: 'This is a different secure password',
 };
 
+const bootstrapAdmin = {
+  email: 'testAdmin@example.com',
+  password: 'This is a really secure password',
+  names: {
+    first: 'Bootstrap',
+    last: 'Admin',
+  }
+};
+
 
 
 describe('Account', function () {
@@ -52,6 +61,8 @@ describe('Account', function () {
     this.timeout(10000);
     this.server = await Server({
       mongodbEndpoint: this.mongo.getMongouri(uuidv4()),
+      bootstrapAdminEmail: bootstrapAdmin.email,
+      bootstrapAdminPassword: bootstrapAdmin.password,
     });
     await this.server.ready();
   });
@@ -89,9 +100,37 @@ describe('Account', function () {
     });
 
     it('should require password strength to score at least 3 using zxcvbn');
+
+    it('should change user password', async function () {
+
+      const input = {
+        permissions: [{
+          domain: 'auth',
+          value: { "tkn": { "createResetPass": true } }
+        }]
+      };
+
+      const newPassword = 'A new very secure password';
+
+      const adminToken = await this.server.createUserToken({ email: bootstrapAdmin.email, password: bootstrapAdmin.password });
+      const serviceToken = await this.server.createServiceToken({ input, queryToken: adminToken.queryToken });
+
+      await this.server.createUserAccount({ input: exampleUser });
+      const { resetToken } = await this.server.createPasswordResetToken({ email: exampleUser.email, queryToken: serviceToken.queryToken });
+      const { account, queryToken } = await this.server.changePassword({ resetToken, email: exampleUser.email, newPassword });
+
+      expect(queryToken).to.be.ok;
+      expect(account).to.be.ok;
+      const { id } = await this.server.getAccount({ queryToken });
+      expect(id).to.equal(account.id);
+
+      expect(this.server.createUserToken({ email: exampleUser.email, password: exampleUser.password })).to.be.rejected;
+      const newToken = await this.server.createUserToken({ email: exampleUser.email, password: newPassword });
+      expect(newToken.queryToken).to.be.ok;
+    });
   });
 
-  describe("Account Access", function() {
+  describe("Account Access", function () {
 
     it('should not allow unathenticated query to access accounts');
 
@@ -101,8 +140,7 @@ describe('Account', function () {
 
       const noId = await this.server.getAccount({ queryToken });
       const withId = await this.server.getAccount({ queryToken, id: account.id });
-      console.log(noId);
-      console.log(withId);
+
       expect(noId.id).to.equal(account.id);
       expect(withId.id).to.equal(account.id);
     });
@@ -133,31 +171,32 @@ describe('Bootstrap Admin', function () {
 
     this.timeout(10000);
 
-    const email = 'testAdmin@example.com';
-    const password = 'This is a really secure password';
     const db = uuidv4();
-    const email2 = 'test2@admin.com';
+    const email = 'test2@admin.com';
+    const password = 'ftygyunuygntgytfjytfjyt bybuyg';
 
     this.server = await Server({
       mongodbEndpoint: this.mongo.getMongouri(db),
-      bootstrapAdminEmail: email,
-      bootstrapAdminPassword: password,
+      bootstrapAdminEmail: bootstrapAdmin.email,
+      bootstrapAdminPassword: bootstrapAdmin.password,
     });
     await this.server.ready();
 
-    const token = await this.server.createUserToken({ email, password });
+    const token = await this.server.createUserToken({ email: bootstrapAdmin.email, password: bootstrapAdmin.password });
     expect(token).to.be.ok;
 
     await this.server.stop();
     this.server = await Server({
       mongodbEndpoint: this.mongo.getMongouri(db),
-      bootstrapAdminEmail: email2,
+      bootstrapAdminEmail: email,
       bootstrapAdminPassword: password,
     });
 
-    expect(this.server.createUserToken({ email2, password })).to.be.rejected;
+    expect(this.server.createUserToken({ email, password })).to.be.rejected;
 
   });
+
+  it('should not be case sensitive');
 
   after(async function () {
     await this.server?.stop();

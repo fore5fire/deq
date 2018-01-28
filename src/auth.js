@@ -15,7 +15,7 @@ export const auth = token => new User({
     'update user token': account => account,
 
     'create user password reset token': () => token?.pems?.auth?.tkn?.createResetPass,
-    'reset user password': aid => aid && token?.pems?.auth?.acct.usr?.resetPass === aid,
+    'reset user password': (aid, token) => aid && token?.pems?.auth?.acct?.usr?.resetPass == aid,
 
     'create service account': () => token?.pems?.auth?.acct?.svc?.create,
     'edit service account': () => token?.pems?.auth?.acct?.svc?.edit,

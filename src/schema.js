@@ -151,11 +151,13 @@ const resolvers = {
       return jwt.sign({ aid: userToken.aid, exp: userToken.exp, pems: account._permissions }, secretKey, { algorithm: 'ES384' });
     },
 
-    async changePassword(obj, { email, newPassword }, { user, secretKeyPath }) {
+    async changePassword(obj, { email, newPassword, resetToken }, { user, secretKeyPath }) {
+
+      const token = jwt.verify(resetToken, await fs.readFile(secretKeyPath));
 
       const account = await UserAccount.findOne({ email: email.toLowerCase() });
 
-      await user.mustBeAbleTo('reset user password', account.id);
+      await user.mustBeAbleTo('reset user password', account.id, token);
 
       account.password = newPassword;
       await account.save();
