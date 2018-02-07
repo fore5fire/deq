@@ -102,6 +102,44 @@ class Server extends Harness {
     return account;
   }
 
+  async getAccounts({ queryToken, filter }) {
+    const { accounts } = await this.request({
+      headers: { Authorization: `Bearer ${queryToken}` },
+      query: `
+        query GetAccounts($filter: AccountFilter) {
+          accounts(filter: $filter) {
+            id
+            name
+          }
+        }
+      `,
+      variables: { filter }
+    });
+
+    return accounts;
+  }
+
+  async getUserAccounts({ queryToken, filter }) {
+    const { userAccounts } = await this.request({
+      headers: { Authorization: `Bearer ${queryToken}` },
+      query: `
+        query GetUserAccounts($filter: UserAccountFilter) {
+          userAccounts(filter: $filter) {
+            id
+            names {
+              first
+              last
+            }
+            email
+          }
+        }
+      `,
+      variables: { filter }
+    });
+
+    return userAccounts;
+  }
+
   async createUserToken({ email, password }) {
     const { createUserToken } = await this.request({
       query: `

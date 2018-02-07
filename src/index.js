@@ -24,8 +24,7 @@ global.log = pino({ level: LOG_LEVEL, name: 'auth-service' });
 
 log.debug("Starting up", { env: process.env });
 
-mongoose.Promise = global.Promise;
-mongoose.connect(MONGODB_ENDPOINT, { useMongoClient: true });
+mongoose.connect(MONGODB_ENDPOINT);
 mongoose.connection.on('error', error => fail(error));
 
 let health, healthServer, server;

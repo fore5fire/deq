@@ -1,6 +1,9 @@
 
 type Query {
   account(id: ID): Account
+  accounts(filter: AccountFilter): [Account]
+  userAccounts(filter: UserAccountFilter): [UserAccount]
+  # userAccount(email: EmailAddress!): UserAccount
 }
 
 type Mutation {
@@ -50,13 +53,13 @@ type MutableUserAccount implements MutableAccount {
 }
 
 input EditUserAccountInput {
-  email: EmailAddress!
-  names: NamesInput!
+  email: EmailAddress
+  names: NamesInput
 }
 
 input UserAccountInput {
   email: EmailAddress!
-  names: NamesInput!
+  names: RequiredNamesInput!
   password: String!
 }
 
@@ -94,6 +97,7 @@ input ServiceTokenInput {
 
 type PasswordResetToken {
   resetToken: String!
+  accountId: ID!
   expiration: DateTime
 }
 
@@ -102,11 +106,34 @@ type Names {
   last: String
 }
 
+input RequiredNamesInput {
+  first: String!
+  last: String!
+}
+
 input NamesInput {
   first: String!
   last: String!
 }
 
+input AccountFilter {
+  cursor: CursorInput
+  hasPermissions: [PermissionInput]
+  # name: String
+}
+
+input UserAccountFilter {
+  cursor: CursorInput
+  hasPermissions: [PermissionInput]
+  # name: String
+  # names: NamesInput
+}
+
+input CursorInput {
+  start: ID!
+  count: Int
+  reversed: Boolean
+}
 
 scalar DateTime
 scalar EmailAddress

@@ -1,11 +1,13 @@
-import chai, { expect } from 'chai';
+import { expect, use } from 'chai';
 import Mongo from 'mongo-in-memory';
 import portfinder from 'portfinder';
 import jwt from 'jsonwebtoken';
 import chaiAsPromised from 'chai-as-promised';
+import chaiExclude from 'chai-exclude';
 import uuidv4 from 'uuid/v4';
 
-chai.use(chaiAsPromised);
+use(chaiAsPromised);
+use(chaiExclude);
 
 const exampleUser = {
   email: 'example@example.com',
@@ -33,7 +35,7 @@ const exampleUser3 = {
 };
 
 const bootstrapAdmin = {
-  email: 'testAdmin@example.com',
+  email: 'testadmin@example.com',
   password: 'This is a really secure password',
   names: {
     first: 'Bootstrap',
@@ -72,6 +74,30 @@ describe('Account', function () {
     await this.server.stop();
   });
 
+
+  it.only('should list accounts', async function () {
+
+    await this.server.createUserAccount({ input: exampleUser });
+    await this.server.createUserAccount({ input: exampleUser2 });
+    await this.server.createUserAccount({ input: exampleUser3 });
+
+    const { queryToken } = await this.server.createUserToken({ email: bootstrapAdmin.email, password: bootstrapAdmin.password });
+
+    const accounts = await this.server.getAccounts({ queryToken });
+
+    expect(accounts).to.have.length(4); // 4 accounts including the admin account
+
+    expect(accounts).excluding(['password', 'id', 'email', 'names']).to.deep.equal([ bootstrapAdmin, exampleUser, exampleUser2, exampleUser3 ]);
+
+    const filter = {
+      cursor: {
+        limit: 2,
+      }
+    };
+
+    const { data, next, previous } = await this.server.getAccounts({ queryToken, filter });
+  });
+
   describe('User Account', function () {
 
     it('should create a user account', async function () {
@@ -84,6 +110,21 @@ describe('Account', function () {
     });
 
     it('should query user account details');
+
+    it('should list user accounts', async function () {
+
+      await this.server.createUserAccount({ input: exampleUser });
+      await this.server.createUserAccount({ input: exampleUser2 });
+      await this.server.createUserAccount({ input: exampleUser3 });
+
+      const { queryToken } = await this.server.createUserToken({ email: bootstrapAdmin.email, password: bootstrapAdmin.password });
+
+      const accounts = await this.server.getUserAccounts({ queryToken });
+
+      expect(accounts).to.have.length(4); // 4 accounts including the admin account
+      expect(accounts).excluding(['password', 'id']).to.deep.equal([ bootstrapAdmin, exampleUser, exampleUser2, exampleUser3 ]);
+
+    });
 
     it('should edit a user account', function () {
 

@@ -8,6 +8,7 @@ export const auth = token => new User({
     'create user account': () => true,
     'edit user account': id => id && (token?.aid === id || token?.pems?.auth?.acct?.usr?.edit),
     'view user account': id => id && (token?.aid === id || token?.pems?.auth?.acct?.usr?.view),
+    'view user accounts': () => token?.pems?.auth?.acct?.usr?.view,
     'delete user account': id => id && (token?.aid === id || token?.pems?.auth?.acct?.usr?.delete),
 
     'create user token': (account, password) => account?.authenticate(password),
@@ -31,6 +32,6 @@ export const auth = token => new User({
     'set account permissions': domain => token?.pems?.auth?.acct?.pem?.edit === true || (token?.pems?.auth?.acct?.pem?.edit instanceof Array && token.pems.auth.acct.pem.edit.includes(domain)),
     'view account permissions': domain => token?.pems?.auth?.acct?.pem?.view === true || (token?.pems?.auth?.acct?.pem?.view instanceof Array && token.pems.auth.acct.pem.view.includes(domain)),
 
-    'logged in to user account': () => token?.aid,
+    'logged in to account': () => token?.aid,
   },
 });

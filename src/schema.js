@@ -11,6 +11,8 @@ import GraphQLJSON from 'graphql-type-json';
 import moment from 'moment';
 import fs from 'fs-extra';
 import jwt from 'jsonwebtoken';
+import traverse from 'traverse';
+// import escapeStringRegexp from 'escape-string-regexp';
 
 const resolvers = {
   Query: {
@@ -18,7 +20,7 @@ const resolvers = {
 
 
       if (!id) {
-        await user.mustBe('logged in to user account');
+        await user.mustBe('logged in to account');
         return Account.findById(userToken?.aid);
       }
 
@@ -26,6 +28,82 @@ const resolvers = {
 
       return Account.findById(id);
     },
+    async accounts(obj, { filter = {} }, { user }) {
+
+      await user.mustBeAbleTo('view user accounts');
+      // await user.mustBeAbleTo('view service account');
+
+      const args = {
+        ...filter,
+        cursor: { limit: 10, reversed: false, ...filter.cursor },
+      };
+
+      const { cursor, name, hasPermissions } = args;
+
+      if (cursor.limit <= 0) {
+        throw new ValidationError("out of range - must be positive", "cursor.limit");
+      }
+
+      // const escapedName = escapeStringRegexp(name);
+
+      const query = {
+        // name: { '$regex': new RegExp(`^${escapedName}` }
+      };
+
+      if (hasPermissions) {
+        const permissions = hasPermissions.reduce((pems, current) => pems[current.domain] = current.value, {});
+        const traversed = traverse(permissions);
+        traversed.paths().reduce((result, path) => {
+          result[path] = `_permissions.${traversed.get(path)}`;
+        }, query);
+      }
+
+      if (cursor.reversed) {
+        query._id = { '$lt': cursor.start };
+      }
+      else {
+        query._id = { '$gt': cursor.start };
+      }
+
+      return Account.find(query).limit(cursor.limit).exec();
+    },
+    async userAccounts(obj, { filter = {} }, { user, userToken }) {
+
+      await user.mustBeAbleTo('view user accounts');
+
+      const args = {
+        ...filter,
+        cursor: { limit: 10, reversed: false, ...filter.cursor },
+      };
+
+      const { cursor, names, hasPermissions } = args;
+
+      if (cursor.limit <= 0) {
+        throw new ValidationError("out of range - must be positive", "cursor.limit");
+      }
+
+      const query = {
+        type: 'UserAccount',
+      };
+
+      if (hasPermissions) {
+        const permissions = hasPermissions.reduce((pems, current) => pems[current.domain] = current.value, {});
+        const traversed = traverse(permissions);
+        traversed.paths().reduce((result, path) => {
+          result[`_permissions.${path}`] = traversed.get(path);
+        }, query);
+      }
+
+      if (cursor.reversed) {
+        query._id = { $lt: cursor.start };
+      }
+      else {
+        query._id = { $gt: cursor.start };
+      }
+
+      return Account.find(query).limit(cursor.limit).exec();
+    },
+
   },
   Mutation: {
     async createUserAccount(obj, { input }, { secretKeyPath, user }) {
@@ -51,7 +129,7 @@ const resolvers = {
     async account(obj, { id }, { user, userToken }) {
 
       if (!id) {
-        await user.mustBe('logged in to user account');
+        await user.mustBe('logged in to account');
         return Account.findById(userToken?.aid);
       }
 
