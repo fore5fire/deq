@@ -8,9 +8,6 @@ variables:
   CHART_REPO: charts.katchecode.com/$PROJECT_NAME
   DOCKER_DRIVER: overlay2
 
-services:
-  - docker:dind
-
 stages:
   - lint
   - build
@@ -36,6 +33,8 @@ lint_server:
 amd64:
   stage: build
   image: docker
+  services:
+    - docker:dind
   only:
     - tags
   cache:
@@ -50,6 +49,8 @@ amd64:
 arm32v6:
   stage: build
   image: docker
+  services:
+    - docker:dind
   only:
     - tags
   cache:
@@ -62,6 +63,9 @@ arm32v6:
 
 test_service:
   stage: test
+  image: docker
+  services:
+    - docker:dind
   script:
     - docker login -u gitlab-ci-token -p $CI_JOB_TOKEN $CI_REGISTRY
     - docker pull $AMD64_IMAGE_TAG

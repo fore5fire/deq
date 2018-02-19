@@ -130,8 +130,8 @@ input UserAccountFilter {
 }
 
 input CursorInput {
-  start: ID!
-  count: Int
+  start: ID
+  limit: Int
   previous: Boolean
 }
 

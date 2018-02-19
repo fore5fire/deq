@@ -75,7 +75,7 @@ describe('Account', function () {
   });
 
 
-  it.only('should list accounts', async function () {
+  it('should list accounts', async function () {
 
     await this.server.createUserAccount({ input: exampleUser });
     await this.server.createUserAccount({ input: exampleUser2 });
@@ -87,7 +87,9 @@ describe('Account', function () {
 
     expect(accounts).to.have.length(4); // 4 accounts including the admin account
 
-    expect(accounts).excluding(['password', 'id', 'email', 'names']).to.deep.equal([ bootstrapAdmin, exampleUser, exampleUser2, exampleUser3 ]);
+    const expected = [bootstrapAdmin, exampleUser, exampleUser2, exampleUser3].map(user => ({ name: `${user.names.first} ${user.names.last}` }));
+
+    expect(accounts).excluding(['password', 'id', 'email', 'names']).to.deep.equal(expected);
 
     const filter = {
       cursor: {
@@ -111,7 +113,7 @@ describe('Account', function () {
 
     it('should query user account details');
 
-    it('should list user accounts', async function () {
+    it.only('should list user accounts', async function () {
 
       await this.server.createUserAccount({ input: exampleUser });
       await this.server.createUserAccount({ input: exampleUser2 });

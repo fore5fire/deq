@@ -65,8 +65,8 @@
   "scripts": {
     "start": "node dist/bundle.js",
     "build": "webpack --config build/webpack.config.js --env.production",
-    "test": "mocha tests/ --require babel-register --recursive",
-    "debug": "mocha tests/ --require babel-register --recursive --inspect-brk",
+    "test": "mocha tests/ --require babel-register --require source-map-support --recursive",
+    "debug": "mocha tests/ --require babel-register --require source-map-support --recursive --inspect-brk",
     "lint": "eslint src tests"
   }
 }

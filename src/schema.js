@@ -58,17 +58,19 @@ const resolvers = {
         }, query);
       }
 
-      if (cursor.reversed) {
-        query._id = { '$lt': cursor.start };
-      }
-      else {
-        query._id = { '$gt': cursor.start };
+      if (cursor.start) {
+        if (cursor.reversed) {
+          query._id = { '$lt': cursor.start };
+        }
+        else {
+          query._id = { '$gt': cursor.start };
+        }
       }
 
       return Account.find(query).limit(cursor.limit).exec();
     },
     async userAccounts(obj, { filter = {} }, { user, userToken }) {
-
+      console.log("user accounts");
       await user.mustBeAbleTo('view user accounts');
 
       const args = {
@@ -94,11 +96,13 @@ const resolvers = {
         }, query);
       }
 
-      if (cursor.previous) {
-        query._id = { $lt: cursor.start };
-      }
-      else {
-        query._id = { $gt: cursor.start };
+      if (cursor.start) {
+        if (cursor.previous) {
+          query._id = { $lt: cursor.start };
+        }
+        else {
+          query._id = { $gt: cursor.start };
+        }
       }
 
       return Account.find(query).limit(cursor.limit).exec();
