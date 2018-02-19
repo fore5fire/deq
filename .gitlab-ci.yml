@@ -67,13 +67,14 @@ test_service:
     - docker pull $AMD64_IMAGE_TAG
     - docker run $AMD64_IMAGE_TAG yarn test
 
-test_chart:
-  stage: test
-  image: mstrzele/minikube:v0.22.2
-  services:
-    - docker:dind
-  script:
-
+# test_chart:
+#   stage: test
+#   image: mstrzele/minikube:v0.22.2
+#   services:
+#     - docker:dind
+#   script:
+#     - minikube start
+#     - 
 
 deploy_chart:
   stage: deploy
