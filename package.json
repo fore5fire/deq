@@ -1,5 +1,5 @@
 {
-  "name": "node-service-boilerplate",
+  "name": "curatrix",
   "version": "1.0.0",
   "main": "dist/bundle.js",
   "repository": "https://gitlab.com/katcheCode/webpack-server-boilerplate.git",

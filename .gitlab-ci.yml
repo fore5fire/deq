@@ -35,8 +35,6 @@ amd64:
   image: docker
   services:
     - docker:dind
-  only:
-    - tags
   cache:
     paths:
     - node_modules/
@@ -51,8 +49,6 @@ arm32v6:
   image: docker
   services:
     - docker:dind
-  only:
-    - tags
   cache:
     paths:
     - node_modules/
@@ -74,8 +70,6 @@ test_service:
 deploy_chart:
   stage: deploy
   image: katchecode/gcloud-kubernetes-helm
-  only:
-    - tags
   script:
   - echo "$GCLOUD_SERVICE_ACCOUNT_KEY" | gcloud auth activate-service-account --key-file=-
   # - gcloud config set project $GCLOUD_PROJECT
