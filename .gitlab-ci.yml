@@ -1,0 +1,74 @@
+
+variables:
+  PROJECT_NAME: curatrix
+  CHART_PATH: deploy/$PROJECT_NAME
+  AMD64_IMAGE_TAG: $CI_REGISTRY_IMAGE:$CI_COMMIT_REF_NAME
+  ARMv6_IMAGE_TAG: $CI_REGISTRY_IMAGE/arm32v6:$CI_COMMIT_REF_NAME
+  # GCLOUD_PROJECT: katchecode-shared-hosting
+  CHART_REPO: charts.katchecode.com/$PROJECT_NAME
+  DOCKER_DRIVER: overlay2
+
+services:
+  - docker:dind
+
+stages:
+  - lint
+  - build
+  - test
+  - deploy
+
+lint_chart:
+  stage: lint
+  image: katchecode/gcloud-kubernetes-helm
+  script:
+    - helm lint $CHART_PATH
+
+lint_server:
+  stage: lint
+  image: node
+  script:
+    - yarn lint
+
+amd64:
+  stage: build
+  image: docker
+  only:
+    - tags
+  script:
+    - docker login -u gitlab-ci-token -p $CI_JOB_TOKEN $CI_REGISTRY
+    - docker build -t $AMD64_IMAGE_TAG -f build/Dockerfile-amd64 .
+    - docker push $AMD64_IMAGE_TAG
+
+arm32v6:
+  stage: build
+  image: docker
+  only:
+    - tags
+  script:
+    - docker login -u gitlab-ci-token -p $CI_JOB_TOKEN $CI_REGISTRY
+    - docker build -t $ARMv6_IMAGE_TAG -f build/Dockerfile-arm32v6 .
+    - docker push $ARMv6_IMAGE_TAG
+
+test_service:
+  stage: test
+  script:
+    - docker login -u gitlab-ci-token -p $CI_JOB_TOKEN $CI_REGISTRY
+    - docker pull $AMD64_IMAGE_TAG
+    - docker run $AMD64_IMAGE_TAG yarn test
+
+deploy_chart:
+  stage: deploy
+  image: katchecode/gcloud-kubernetes-helm
+  only:
+    - tags
+  script:
+  - echo "$GCLOUD_SERVICE_ACCOUNT_KEY" | gcloud auth activate-service-account --key-file=-
+  # - gcloud config set project $GCLOUD_PROJECT
+  # - helm plugin install https://github.com/nouney/helm-gcs
+  # - helm repo add katchecode gs://$BUCKET_PATH
+  - mkdir chart_package
+  - helm package $CHART_PATH -d chart_package/
+  - gsutil cp gs://$CHART_REPO/index.yaml chart_package/ && MERGE_OPTION=--merge chart_package/index.yaml
+  - helm repo index chart_package/ --url $CHART_REPO $MERGE_OPTION
+  - gsutil cp -n chart_package/* gs://$CHART_REPO/
+  - gsutil acl ch -u AllUsers:R gs://$CHART_REPO/*

@@ -24,15 +24,17 @@
     "eslint-plugin-class-property": "^1.0.6",
     "graphql-service-test-harness": "^1.1.4",
     "lodash.pickby": "^4.6.0",
-    "mocha": "^3.5.3",
-    "mongo-in-memory": "^0.0.5",
-    "nodemon": "^1.12.1",
-    "npm-run-all": "^4.1.1",
     "portfinder": "^1.0.13",
     "raw-loader": "^0.5.1",
     "smtp-server": "^3.4.1",
     "webpack": "^3.9.1",
     "webpack-node-externals": "^1.6.0"
+  },
+  "optionalDependencies": {
+    "mocha": "^3.5.3",
+    "mongo-in-memory": "^0.0.5",
+    "nodemon": "^1.12.1",
+    "npm-run-all": "^4.1.1"
   },
   "dependencies": {
     "alive-and-well": "^1.0.6",
@@ -66,13 +68,9 @@
   },
   "scripts": {
     "start": "node dist/bundle.js",
-    "build": "webpack",
-    "start:watch": "nodemon --inspect --watch dist/bundle.js",
-    "build:watch": "webpack --watch",
-    "watch": "npm-run-all --parallel start:watch build:watch",
-    "build-production": "webpack",
+    "build": "webpack --config build/webpack.config.js --env.production",
     "test": "mocha tests/ --require babel-register --recursive",
-    "test:watch": "npm-run-all --parallel build:watch \"test -- -w\"",
-    "test:debug": "mocha tests/ --require babel-register --recursive --inspect-brk"
+    "watch": "",
+    "debug": "mocha tests/ --require babel-register --recursive --inspect-brk"
   }
 }

@@ -1,0 +1,12 @@
+apiVersion: v1
+entries:
+  curatrix:
+  - apiVersion: v1
+    created: 2018-02-17T15:12:04.00137-07:00
+    description: A cloud-native authentication service
+    digest: c6f97b6dd1a0c4220a5457bf4b0636d63356bc97b7a8651ac109f21832142cd5
+    name: curatrix
+    urls:
+    - charts.katchecode.com/curatrix/curatrix-1.4.2.tgz
+    version: 1.4.2
+generated: 2018-02-17T15:12:03.999941-07:00

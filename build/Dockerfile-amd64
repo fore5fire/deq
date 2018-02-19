@@ -1,0 +1,22 @@
+FROM amd64/node:9.5.0-alpine AS build
+
+ENV NODE_ENV=build
+WORKDIR /build
+
+RUN apk update && apk add python make g++
+
+COPY package.json yarn.lock /build/
+RUN yarn install
+
+COPY . /build/
+RUN yarn build && yarn install --production --no-optional
+
+
+FROM amd64/node:9.5.0-alpine
+
+ENV NODE_ENV=production
+WORKDIR /app
+
+COPY --from=build /build/package.json /build/yarn.lock /build/dist /build/node_modules /build/tests /app/
+
+CMD ["yarn","start"]
