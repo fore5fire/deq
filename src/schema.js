@@ -73,7 +73,7 @@ const resolvers = {
 
       const args = {
         ...filter,
-        cursor: { limit: 10, reversed: false, ...filter.cursor },
+        cursor: { limit: 10, previous: false, ...filter.cursor },
       };
 
       const { cursor, names, hasPermissions } = args;
@@ -94,7 +94,7 @@ const resolvers = {
         }, query);
       }
 
-      if (cursor.reversed) {
+      if (cursor.previous) {
         query._id = { $lt: cursor.start };
       }
       else {

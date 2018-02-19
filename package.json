@@ -14,14 +14,13 @@
     "@babel/plugin-proposal-object-rest-spread": "^7.0.0-beta.34",
     "@babel/plugin-proposal-optional-chaining": "^7.0.0-beta.34",
     "@babel/preset-env": "^7.0.0-beta.34",
-    "babel-eslint": "^8.0.2",
+    "babel-eslint": "^8.1.0",
     "babel-loader": "8.0.0-beta.0",
     "babel-register": "7.0.0-beta.3",
     "chai": "^4.1.2",
     "chai-as-promised": "^7.1.1",
     "chai-exclude": "^1.0.5",
-    "eslint": "^4.12.1",
-    "eslint-plugin-class-property": "^1.0.6",
+    "eslint": "^4.18.0",
     "graphql-service-test-harness": "^1.1.4",
     "lodash.pickby": "^4.6.0",
     "portfinder": "^1.0.13",
@@ -70,7 +69,7 @@
     "start": "node dist/bundle.js",
     "build": "webpack --config build/webpack.config.js --env.production",
     "test": "mocha tests/ --require babel-register --recursive",
-    "watch": "",
-    "debug": "mocha tests/ --require babel-register --recursive --inspect-brk"
+    "debug": "mocha tests/ --require babel-register --recursive --inspect-brk",
+    "lint": "eslint src tests"
   }
 }
