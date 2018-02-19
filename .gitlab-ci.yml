@@ -9,35 +9,15 @@ variables:
   DOCKER_DRIVER: overlay2
 
 stages:
-  - lint
   - build
   - test
   - deploy
-
-lint_chart:
-  stage: lint
-  image: katchecode/gcloud-kubernetes-helm
-  script:
-    - helm lint $CHART_PATH
-
-lint_service:
-  stage: lint
-  image: node
-  cache:
-    paths:
-    - node_modules/
-  script:
-    - yarn install
-    - yarn lint
 
 amd64:
   stage: build
   image: docker
   services:
     - docker:dind
-  cache:
-    paths:
-    - node_modules/
   script:
     - docker login -u gitlab-ci-token -p $CI_JOB_TOKEN $CI_REGISTRY
     - docker build -t $AMD64_IMAGE_TAG -f build/Dockerfile-amd64 .
@@ -49,9 +29,6 @@ arm32v6:
   allow_failure: true
   services:
     - docker:dind
-  cache:
-    paths:
-    - node_modules/
   script:
     - docker login -u gitlab-ci-token -p $CI_JOB_TOKEN $CI_REGISTRY
     - docker build -t $ARMv6_IMAGE_TAG -f build/Dockerfile-arm32v6 .
@@ -59,13 +36,32 @@ arm32v6:
 
 test_service:
   stage: test
-  image: docker
-  services:
-    - docker:dind
+  image: $AMD64_IMAGE_TAG
+  variables:
+    NODE_ENV: testing
   script:
-    - docker login -u gitlab-ci-token -p $CI_JOB_TOKEN $CI_REGISTRY
-    - docker pull $AMD64_IMAGE_TAG
-    - docker run $AMD64_IMAGE_TAG yarn test
+    - cd /app
+    - yarn install
+    - yarn test
+
+lint_chart:
+  stage: test
+  image: katchecode/gcloud-kubernetes-helm
+  script:
+    - helm lint $CHART_PATH
+
+lint_service:
+  stage: test
+  image: $AMD64_IMAGE_TAG
+  variables:
+    NODE_ENV: testing
+  cache:
+    paths:
+    - node_modules/
+  script:
+    - cd /app
+    - yarn install
+    - yarn lint
 
 # test_chart:
 #   stage: test
@@ -74,7 +70,7 @@ test_service:
 #     - docker:dind
 #   script:
 #     - minikube start
-#     - 
+#     -
 
 deploy_chart:
   stage: deploy

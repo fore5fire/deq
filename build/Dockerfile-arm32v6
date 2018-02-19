@@ -9,14 +9,16 @@ COPY package.json yarn.lock /build/
 RUN yarn install
 
 COPY . /build/
-RUN yarn build && yarn install --production --no-optional
-
+RUN yarn build && \
+    yarn install --production --no-optional && \
+    mkdir /app && \
+    mv package.json yarn.lock node_modules dist /app
 
 FROM arm32v6/node:9.3.0-alpine
 
 ENV NODE_ENV=production
 WORKDIR /app
 
-COPY --from=build /build/package.json /build/yarn.lock /build/dist /build/node_modules /build/tests /app/
+COPY --from=build /app /app
 
 CMD ["yarn","start"]
