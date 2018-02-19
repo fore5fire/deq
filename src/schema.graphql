@@ -132,7 +132,7 @@ input UserAccountFilter {
 input CursorInput {
   start: ID!
   count: Int
-  reversed: Boolean
+  previous: Boolean
 }
 
 scalar DateTime

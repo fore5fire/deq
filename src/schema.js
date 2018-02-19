@@ -31,7 +31,7 @@ const resolvers = {
     async accounts(obj, { filter = {} }, { user }) {
 
       await user.mustBeAbleTo('view user accounts');
-      // await user.mustBeAbleTo('view service account');
+      await user.mustBeAbleTo('view service account');
 
       const args = {
         ...filter,

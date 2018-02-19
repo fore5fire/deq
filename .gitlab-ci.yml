@@ -26,7 +26,11 @@ lint_chart:
 lint_server:
   stage: lint
   image: node
+  cache:
+    paths:
+    - node_modules/
   script:
+    - yarn install
     - yarn lint
 
 amd64:
@@ -34,7 +38,11 @@ amd64:
   image: docker
   only:
     - tags
+  cache:
+    paths:
+    - node_modules/
   script:
+    - yarn install
     - docker login -u gitlab-ci-token -p $CI_JOB_TOKEN $CI_REGISTRY
     - docker build -t $AMD64_IMAGE_TAG -f build/Dockerfile-amd64 .
     - docker push $AMD64_IMAGE_TAG
@@ -44,6 +52,9 @@ arm32v6:
   image: docker
   only:
     - tags
+  cache:
+    paths:
+    - node_modules/
   script:
     - docker login -u gitlab-ci-token -p $CI_JOB_TOKEN $CI_REGISTRY
     - docker build -t $ARMv6_IMAGE_TAG -f build/Dockerfile-arm32v6 .

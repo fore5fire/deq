@@ -23,17 +23,14 @@
     "eslint": "^4.18.0",
     "graphql-service-test-harness": "^1.1.4",
     "lodash.pickby": "^4.6.0",
+    "mocha": "^3.5.3",
     "portfinder": "^1.0.13",
     "raw-loader": "^0.5.1",
-    "smtp-server": "^3.4.1",
     "webpack": "^3.9.1",
     "webpack-node-externals": "^1.6.0"
   },
   "optionalDependencies": {
-    "mocha": "^3.5.3",
-    "mongo-in-memory": "^0.0.5",
-    "nodemon": "^1.12.1",
-    "npm-run-all": "^4.1.1"
+    "mongo-in-memory": "^0.0.5"
   },
   "dependencies": {
     "alive-and-well": "^1.0.6",

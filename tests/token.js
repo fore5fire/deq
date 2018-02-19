@@ -4,7 +4,6 @@ import portfinder from 'portfinder';
 import jwt from 'jsonwebtoken';
 import chaiAsPromised from 'chai-as-promised';
 import uuidv4 from 'uuid/v4';
-import SMTPServer from 'smtp-server';
 
 chai.use(chaiAsPromised);
 
