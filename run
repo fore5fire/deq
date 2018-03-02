@@ -1,0 +1,374 @@
+#!/usr/bin/env python3
+from subprocess import run, PIPE, Popen
+from argparse import RawDescriptionHelpFormatter, ArgumentParser
+from shutil import copytree, rmtree
+from os import path, listdir, mkdir, chdir, sep, environ
+from http.server import SimpleHTTPRequestHandler, HTTPServer
+from _thread import start_new_thread
+import re
+from sys import exit
+import json
+import tempfile
+import yaml
+
+projectDir = path.dirname(path.abspath(__file__))
+
+chartDir = path.join(projectDir, 'charts')
+imageDir = path.join(projectDir, 'images')
+
+chartNames = [f for f in listdir(chartDir) if not f.startswith('.')]
+imageNames = [f for f in listdir(imageDir) if not f.startswith('.')]
+
+parser = ArgumentParser(description='Execute build and testing scripts')
+subparsers = parser.add_subparsers(metavar='COMMAND', dest='command')
+
+parser_deploy = subparsers.add_parser('deploy', help='Release a chart to a minikube cluster', description=
+"""
+Release a chart to a minikube cluster.
+
+----------------------------------------------
+To delete a release of a chart:
+./run.py deploy example-chart
+----------------------------------------------
+""", formatter_class=RawDescriptionHelpFormatter)
+parser_deploy.add_argument('chart', metavar='CHART', help='The name of the chart to deploy')
+
+
+parser_test = subparsers.add_parser('test', help="Run chart tests", description=
+"""
+Run chart tests.
+
+----------------------------------------------
+To run tests for all charts:
+./run.py test
+
+To run tests for one chart:
+./run.py test example-chart
+
+To run tests for multiple charts:
+./run.py test example-chart,example-chart2
+----------------------------------------------
+""", formatter_class=RawDescriptionHelpFormatter)
+parser_test.add_argument('charts', metavar='CHARTS', help='One or more charts to test. Defaults to all charts', nargs='?', default=','.join(chartNames))
+
+
+parser_undeploy = subparsers.add_parser('undeploy', help='Delete a deployed release', description=
+"""
+Delete a deployed release.
+
+----------------------------------------------
+To delete a release of a chart:
+./run.py undeploy example-chart
+----------------------------------------------
+""", formatter_class=RawDescriptionHelpFormatter)
+parser_undeploy.add_argument('chart', metavar='CHART', help='The name of the chart whose release will be deleted')
+
+
+
+parser_build = subparsers.add_parser('build', help='Build docker images', description=
+"""
+Build docker images.
+
+----------------------------------------------
+To build all images:
+./run.py build
+
+To build one image:
+./run.py build example-image
+
+To build multiple images:
+./run.py build example-image,example-image-2
+----------------------------------------------
+""", formatter_class=RawDescriptionHelpFormatter)
+parser_build.add_argument('images', metavar='IMAGES', help='One or more images to build. Defaults to all images', nargs='?', default=','.join(imageNames))
+
+
+parser_logs = subparsers.add_parser('logs', help="Show logs for images", description=
+"""
+Show logs for images.
+
+----------------------------------------------
+To show logs for all images:
+./run.py logs
+
+To show logs for one image:
+./run.py logs example-image
+
+To show logs from multiple images:
+./run.py logs example-image,example-image-2
+----------------------------------------------
+""", formatter_class=RawDescriptionHelpFormatter)
+
+parser_logs.add_argument('images', metavar='IMAGES', help='One or more images to show logs for', nargs='?', default=','.join(imageNames))
+
+parser_restart = subparsers.add_parser('delete', help="Delete pods based on image", description=
+"""
+Delete pods based on image.
+
+----------------------------------------------
+To delete pods for all images:
+./run.py delete
+
+To delete pods for one image:
+./run.py delete example-image
+
+To delete pods for several image:
+./run.py delete example-image,example-image-2
+----------------------------------------------
+""", formatter_class=RawDescriptionHelpFormatter)
+parser_restart.add_argument('images', metavar='IMAGES', help='The charts whose pods will be restarted, comma seperated', nargs='?', default=','.join(imageNames))
+
+parser_pods = subparsers.add_parser('pods', help='List deployed pods', description=
+"""
+List deployed pods.
+
+----------------------------------------------
+To list pods for all images:
+./run.py pods
+
+To list pods for one image:
+./run.py pods example-image
+
+To list pods for multiple images:
+./run.py pods example-image,example-image-2
+----------------------------------------------
+""", formatter_class=RawDescriptionHelpFormatter)
+parser_pods.add_argument('images', metavar='IMAGES', help='One or more images whose pods will be listed', nargs='?')
+
+parser_help = subparsers.add_parser('help', help='Display help message', description='Display help message')
+
+args = parser.parse_args()
+
+
+if args.command == None or args.command == 'help':
+    parser.print_help()
+    exit(1)
+
+
+def podsWithImages(targetTags):
+
+  template = """
+  {
+    {{ range $i, $pod := .items }}
+    {{ if $i }},{{ end }}
+    "{{ $pod.metadata.name }}": [
+      {{ range $j, $container := $pod.spec.containers }}
+      {{ if $j }},{{ end }}
+      {
+        "image": "{{ $container.image }}",
+        "name": "{{ $container.name }}"
+      }
+      {{end}}
+    ]
+    {{end}}
+  }
+  """
+  raw = run(['kubectl', 'get', 'pods', '-a', '-o', 'go-template', '--template', template], stdout=PIPE, check=True, encoding='utf-8').stdout
+  pods = json.loads(raw)
+  filteredPods = {}
+  for pod, containers in pods.items():
+    images = { container['image'] for container in containers }
+    if len(images.intersection(targetTags)) > 0:
+      filteredPods[pod] = containers
+  return filteredPods
+
+def tagsForImages(images):
+
+  tags = {}
+
+  for folderName in images:
+
+    folder = path.join(imageDir, folderName)
+    if path.isdir(path.join(folder, 'build')) == False:
+      print("WARN: Image directory contains no build folder. Skipping...")
+      continue
+
+    buildFolderContents = listdir(path.join(folder, 'build'))
+    dockerfileRegex = re.compile("^Dockerfile(-(.*))?$")
+    matches = [dockerfileRegex.match(file) for file in buildFolderContents]
+    dockerfiles = { matches[i].group(2): filename for i, filename in enumerate(buildFolderContents) if matches[i] != None }
+
+    for type, dockerfile in dockerfiles.items():
+      tag = '{}/{}:local'.format(folderName, type) if type != None else '{}:local'.format(folderName)
+      tags[tag] = { 'dockerfile': path.join(folder, 'build', dockerfile), 'buildContext': folder }
+
+  return tags
+
+
+# minikubeStatus = run(["minikube", "status"], stdout=PIPE)
+# if minikubeStatus.returncode == 1:
+#   run(["minikube", 'start'], check=True)
+#
+# kubeContext = run(["kubectl", "config", "current-context"], check=True, stdout=PIPE, encoding='utf-8').stdout.strip()
+# if kubeContext != 'minikube':
+#   print("WARN: changing kubectl context to 'minikube'")
+#   run(['kubectl', 'config', 'use-context', 'minikube'], check=True, stdout=PIPE)
+
+if args.command == 'build':
+
+  images = [image.rstrip(sep) for image in args.images.split(",")]
+
+  for image in images:
+    if path.isdir(path.join(imageDir, image)) == False:
+      print("ERROR: Invalid image name {}. Image must be a directory in {}".format(image, imageDir))
+      exit(1)
+
+  # minikubeIp = run(['minikube', 'ip'], check=True, stdout=PIPE, encoding='utf-8').stdout.strip()
+  # if environ.get('HELM_HOME') != None:
+  #   minikubeHome = environ.get('HELM_HOME')
+  # else:
+  #   minikubeHome = path.join(path.expanduser('~'), '.minikube')
+  # dockerCertFolder = path.join(minikubeHome, 'certs')
+  # tlscert = path.join(dockerCertFolder, 'cert.pem')
+  # tlskey = path.join(dockerCertFolder, 'key.pem')
+  # cacert = path.join(dockerCertFolder, 'ca.pem')
+
+  tags = tagsForImages(images)
+  pods = podsWithImages(tags)
+
+  updated = set()
+
+  for tag, image in tags.items():
+
+    print('INFO: building image: {}'.format(tag))
+
+    result = run(['docker', 'build', '-t', tag, '-f', image['dockerfile'], image['buildContext']])
+    if result.returncode == 0:
+      updated.update({ pod for pod, containers in pods.items() if tag in [c['image'] for c in containers] })
+
+
+  if len(updated) > 0:
+    print("kubectl delete pods {}".format(' '.join(updated)))
+    run(['kubectl', 'delete', 'pods'] + list(updated), check=True)
+
+if args.command == 'deploy':
+
+  chart = args.chart
+  releaseName = chart.rstrip(sep)[:53]
+
+  # Validation
+  if path.isdir(path.join(chartDir, chart)) == False:
+    print("ERROR: Invalid chart name {}. Chart must be a directory in {}".format(chart, chartDir))
+    exit(1)
+
+  # Initial chart update
+  for name in chartNames:
+    print("helm dep update")
+    run(["helm", "dep", "update"], cwd=path.join(projectDir, "charts", name))
+
+  # Second chart update - this one's for our charts with internal dependencies
+  print("helm dep update --skip-refresh")
+  for name in chartNames:
+    run(["helm", "dep", "update", "--skip-refresh"], check=True, cwd= path.join(projectDir, "charts", name))
+
+  # Do the actual release.
+  print("helm upgrade {} {} -i".format(releaseName, path.join(projectDir, "charts", chart)))
+  run(["helm", "upgrade", releaseName, path.join(projectDir, "charts", chart), "-i"])
+
+
+
+if args.command == 'undeploy':
+
+  chart = args.chart
+  releaseName = chart.rstrip(sep)[:53]
+
+  # Validation
+  if path.isdir(path.join(chartDir, chart)) == False:
+    print("ERROR: Invalid chart name {}. Chart must be a directory in {}".format(chart, chartDir))
+    exit(1)
+
+  run(["helm", "delete", releaseName, "--purge"],)
+
+if args.command == 'pods':
+
+  if args.images is None:
+    run(["kubectl", "get", "pods"])
+  else:
+
+    images = [image.rstrip(sep) for image in args.images.split(",")]
+
+    #Validation
+    for image in images:
+      if path.isdir(path.join(imageDir, image)) == False:
+        print("ERROR: Invalid image name {}. Image must be a directory in {}".format(image, imageDir))
+        exit(1)
+
+    tags = tagsForImages(images)
+    pods = podsWithImages(tags)
+
+    if len(pods):
+      run(["kubectl", "get", "pods", *pods.keys()])
+    else:
+      print("no pods found")
+
+if args.command == 'logs':
+
+  images = [image.rstrip(sep) for image in args.images.split(",")]
+
+  #Validation
+  for image in images:
+    if path.isdir(path.join(imageDir, image)) == False:
+      print("ERROR: Invalid image name {}. Image must be a directory in {}".format(image, imageDir))
+      exit(1)
+
+  tags = tagsForImages(images)
+  pods = podsWithImages(tags)
+  i = 0
+
+  for pod, containers in pods.items():
+    filteredContainers = [c['name'] for c in containers if c['image'] in tags.keys()]
+    for container in filteredContainers:
+      if i:
+        print("\n------------------------------------------\n")
+      print("kubectl logs {} {}".format(pod, container))
+      run(["kubectl", "logs", pod, container])
+      i += 1
+
+if args.command == 'delete':
+
+  images = [image.rstrip(sep) for image in args.images.split(",")]
+
+  #Validation
+  for image in images:
+    if path.isdir(path.join(imageDir, image)) == False:
+      print("ERROR: Invalid image name {}. Image must be a directory in {}".format(image, imageDir))
+      exit(1)
+
+  tags = tagsForImages(images)
+  pods = podsWithImages(tags)
+
+  if len(pods.keys()):
+    run(["kubectl", "delete", "pods", *pods.keys()])
+  else:
+    print("nothing to delete")
+
+if args.command == 'test':
+
+  charts = args.charts.split(",")
+  releaseNames = [chart.rstrip(sep)[:53] for chart in charts]
+
+  #Validation
+  for chart in charts:
+    if path.isdir(path.join(chartDir, chart)) == False:
+      print("ERROR: Invalid chart name {}. Chart must be a directory in {}".format(chart, chartDir))
+      exit(1)
+
+  currentReleases = run(['helm', 'list', '-q'], stdout=PIPE, check=True, encoding='utf-8').stdout.split()
+
+  filteredReleases = [release for release in releaseNames if release in currentReleases]
+
+  # get test pods for charts being tested
+  for release in filteredReleases:
+    testPods = []
+
+    print("helm get hooks {}".format(release))
+    raw = run(["helm", "get", "hooks", release], stdout=PIPE, check=True).stdout
+    for resource in yaml.load_all(raw):
+      hook = resource.get('metadata').get('annotations').get('helm.sh/hook')
+      if hook  == 'test-success' or hook == 'test-failure':
+        testPods.append(resource['metadata']['name'])
+
+    run(["kubectl", "delete", "pods", *testPods])
+    run(["helm", "test", release])
+    for pod in testPods:
+      run(["kubectl", "logs", pod])

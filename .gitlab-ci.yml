@@ -2,7 +2,8 @@
 variables:
   PROJECT_NAME: curatrix
   CHART_PATH: deploy/$PROJECT_NAME
-  AMD64_IMAGE_TAG: $CI_REGISTRY_IMAGE:$CI_COMMIT_REF_NAME
+  AMD64_IMAGE_TAG: :$CI_COMMIT_REF_NAME
+  AMD64_TEST_IMAGE_TAG: $CI_REGISTRY_IMAGE:$CI_COMMIT_REF_NAME
   ARMv6_IMAGE_TAG: $CI_REGISTRY_IMAGE/arm32v6:$CI_COMMIT_REF_NAME
   # GCLOUD_PROJECT: katchecode-shared-hosting
   CHART_REPO: charts.katchecode.com/$PROJECT_NAME
@@ -13,53 +14,59 @@ stages:
   - test
   - deploy
 
-amd64:
+docker_build:
   stage: build
   image: docker
   services:
     - docker:dind
   script:
     - docker login -u gitlab-ci-token -p $CI_JOB_TOKEN $CI_REGISTRY
-    - docker build -t $AMD64_IMAGE_TAG -f build/Dockerfile-amd64 .
-    - docker push $AMD64_IMAGE_TAG
+    - for IMAGES in images/*/
+    - do
+    -   IMAGE_TAG=$CI_REGISTRY_IMAGE/$(basename $IMAGES)
+    -   docker build -t $IMAGE_TAG $D -f "$IMAGES"build/Dockerfile
+    -   docker push $IMAGE_TAG
+    - done
 
-arm32v6:
-  stage: build
-  image: docker
-  allow_failure: true
-  services:
-    - docker:dind
-  script:
-    - docker login -u gitlab-ci-token -p $CI_JOB_TOKEN $CI_REGISTRY
-    - docker build -t $ARMv6_IMAGE_TAG -f build/Dockerfile-arm32v6 .
-    - docker push $ARMv6_IMAGE_TAG
 
-test_service:
+# arm32v6:
+#   stage: build
+#   image: docker
+#   allow_failure: true
+#   tags:
+#     - docker
+#     - arm32
+#   services:
+#     - docker:dind
+#   script:
+#     - docker login -u gitlab-ci-token -p $CI_JOB_TOKEN $CI_REGISTRY
+#     - docker build -t $ARMv6_IMAGE_TAG -f build/Dockerfile-arm32v6 .
+#     - docker push $ARMv6_IMAGE_TAG
+
+helm_tests:
   stage: test
-  image: $AMD64_IMAGE_TAG
+  image: $
   variables:
-    NODE_ENV: testing
+    TEST_MONGODB_ENDPOINT: mongodb://mongo/tests
+    TEST_TARGET_ENDPOINT: http://target-server
+    MONGODB_ENDPOINT: mongodb://mongo/tests
   script:
-    - cd /app
-    - yarn install
-    - yarn test
+    - yarn start
 
 lint_chart:
   stage: test
   image: katchecode/gcloud-kubernetes-helm
   script:
-    - helm lint $CHART_PATH
+    - docker login -u gitlab-ci-token -p $CI_JOB_TOKEN $CI_REGISTRY
+    - for CHARTS in charts/*/
+    - do
+    -   helm lint $CHARTS
+    - done
 
 lint_service:
   stage: test
-  image: $AMD64_IMAGE_TAG
-  variables:
-    NODE_ENV: testing
-  cache:
-    paths:
-    - node_modules/
+  image: node
   script:
-    - cd /app
     - yarn install
     - yarn lint
 

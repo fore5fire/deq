@@ -14,3 +14,19 @@ We truncate at 63 chars because some Kubernetes name fields are limited to this 
 {{- $name := default .Chart.Name .Values.nameOverride -}}
 {{- printf "%s-%s" .Release.Name $name | trunc 63 | trimSuffix "-" -}}
 {{- end -}}
+
+{{- define "kc.auth_service.secret_volume_name" -}}
+privatekey
+{{- end -}}
+{{- define "kc.auth_service.private_key_path" -}}
+privatekey
+{{- end -}}
+{{- define "kc.auth_service.health_port" -}}
+4000
+{{- end -}}
+{{- define "kc.auth_service.internal_port" -}}
+3000
+{{- end -}}
+{{- define "kc.auth_service.mount_path" -}}
+/etc/jwt_keys
+{{- end -}}

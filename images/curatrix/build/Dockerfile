@@ -7,10 +7,10 @@ COPY package.json yarn.lock /build/
 RUN yarn install
 
 COPY . /build/
-RUN yarn build && \
-    yarn install --production --no-optional && \
+RUN $(yarn bin)/webpack --config build/webpack.config.js --env.production && \
+    yarn install --production && \
     mkdir /app && \
-    mv package.json yarn.lock node_modules dist tests .babelrc /app
+    mv node_modules dist /app
 
 FROM amd64/node:9.5.0-alpine
 
@@ -19,4 +19,4 @@ WORKDIR /app
 
 COPY --from=build /app /app
 
-CMD ["yarn","start"]
+CMD ["node", "dist/bundle.js"]

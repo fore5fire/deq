@@ -1,9 +1,17 @@
 ---
 image:
-  repository: registry.gitlab.com/katchecode/services/auth-service/master
+  repository: registry.gitlab.com/katchecode/services/auth-service
   tag: 93f4172c48f52eac32f2f83f1b7ff558b022e954
   # pullSecret: docker-registry-auth
   pullPolicy: IfNotPresent
+
+tests:
+  image:
+    repository: registry.gitlab.com/katchecode/services/auth-service/tests
+    tag: ''
+    # pullSecret: docker-registry-auth
+    pullPolicy: IfNotPresent
+  resources: {}
 
 resources: {}
   # limits:
@@ -31,6 +39,9 @@ mongodbEndpoint: mongodb://localhost/auth
 logLevel: info
 
 privateKey: {}
+
+nodeSelector: {}
+
   # secret: jwt-ecdsa
   # item: privatekey
 

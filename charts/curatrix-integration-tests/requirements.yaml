@@ -1,0 +1,7 @@
+dependencies:
+  - name: mongodb
+    version: 0.4.26
+    repository: https://kubernetes-charts.storage.googleapis.com
+  - name: curatrix
+    version: 1.4.2
+    repository: file://../curatrix

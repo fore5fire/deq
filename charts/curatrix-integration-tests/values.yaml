@@ -1,0 +1,28 @@
+---
+curatrix:
+  image:
+    repository: curatrix
+    tag: local
+    pullPolicy: Never
+
+  tests:
+    image:
+      repository: curatrix-tests
+      tag: local
+      pullPolicy: Never
+
+  mongodbEndpoint: mongodb://curatrix-integration-tests-mongodb
+
+  logLevel: debug
+
+  privateKey:
+    secret: curatrix-jwt-test-keys-ecdsa
+    item: privatekey
+
+  # bootstrapAdmin:
+  #   email: admin@example.com
+  #   password: This is a temporary but secure password
+
+mongodb:
+  persistence:
+    enabled: false

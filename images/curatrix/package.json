@@ -6,7 +6,7 @@
   "author": "Landon Smith <ls@katchecode.com>",
   "license": "UNLICENSED",
   "engines": {
-    "node": ">=7.0.0"
+    "node": ">=9.0.0"
   },
   "devDependencies": {
     "@babel/core": "^7.0.0-beta.34",
@@ -16,21 +16,11 @@
     "@babel/preset-env": "^7.0.0-beta.34",
     "babel-eslint": "^8.1.0",
     "babel-loader": "8.0.0-beta.0",
-    "babel-register": "7.0.0-beta.3",
-    "chai": "^4.1.2",
-    "chai-as-promised": "^7.1.1",
-    "chai-exclude": "^1.0.5",
     "eslint": "^4.18.0",
     "graphql-service-test-harness": "^1.1.4",
-    "lodash.pickby": "^4.6.0",
-    "mocha": "^3.5.3",
-    "portfinder": "^1.0.13",
     "raw-loader": "^0.5.1",
     "webpack": "^3.9.1",
     "webpack-node-externals": "^1.6.0"
-  },
-  "optionalDependencies": {
-    "mongo-in-memory": "^0.0.5"
   },
   "dependencies": {
     "alive-and-well": "^1.0.6",
@@ -44,7 +34,7 @@
     "graphql-tools": "^2.13.0",
     "graphql-type-json": "^0.1.4",
     "is-able": "^1.3.4",
-    "jsonwebtoken": "^8.1.0",
+    "jsonwebtoken": "^8.1.1",
     "koa": "^2.4.1",
     "koa-bodyparser": "^4.2.0",
     "lodash.groupby": "^4.6.0",
@@ -63,10 +53,7 @@
     "zxcvbn": "^4.4.2"
   },
   "scripts": {
-    "start": "node dist/bundle.js",
-    "build": "webpack --config build/webpack.config.js --env.production",
-    "test": "mocha tests/ --require babel-register --require source-map-support --recursive",
-    "debug": "mocha tests/ --require babel-register --require source-map-support --recursive --inspect-brk",
-    "lint": "eslint src tests"
+    "build": "docker build -t curatrix:local -f build/Dockerfile-amd64 .",
+    "lint": "eslint src"
   }
 }

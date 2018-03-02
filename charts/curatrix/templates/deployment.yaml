@@ -1,19 +1,5 @@
-{{- define "kc.auth_service.secret_volume_name" -}}
-privatekey
-{{- end -}}
-{{- define "kc.auth_service.private_key_path" -}}
-privatekey
-{{- end -}}
-{{- define "kc.auth_service.health_port" -}}
-4000
-{{- end -}}
-{{- define "kc.auth_service.internal_port" -}}
-3000
-{{- end -}}
-{{- define "kc.auth_service.mount_path" -}}
-/etc/jwt_keys
-{{- end -}}
-apiVersion: apps/v1beta2
+
+apiVersion: apps/v1
 kind: Deployment
 metadata:
   name: {{ template "fullname" . }}
@@ -34,6 +20,7 @@ spec:
       labels:
         app: {{ template "name" . }}
         release: {{ .Release.Name }}
+        service: {{ template "name" . }}
     spec:
       {{- if .Values.privateKey }}
       volumes:

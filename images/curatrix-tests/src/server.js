@@ -1,56 +1,51 @@
-import { Harness } from 'graphql-service-test-harness';
-import { spawn } from 'child_process';
 import path from 'path';
 import fs from 'fs';
 import moment from 'moment';
-import portfinder from 'portfinder';
-import pickBy from 'lodash.pickby';
+import { MongoClient } from 'mongodb';
+import pino from 'pino';
+import fetch from 'node-fetch';
 
-global.Server = async args => {
-  const port = await portfinder.getPortPromise();
-  portfinder.basePort = port + 1;
-  const healthPort = await portfinder.getPortPromise();
+const {
+  MONGODB_TEST_ENDPOINT,
+  TEST_TARGET_ENDPOINT,
+  LOG_LEVEL,
+  BOOTSTRAP_ADMIN_EMAIL,
+  BOOTSTRAP_ADMIN_PASSWORD,
+  JWT_PRIVATE_KEY_PATH
+} = process.env;
 
-  return new Server({ port, healthPort, ...args });
-};
+// let db;
+// before(async function () {
+//   db = await MongoClient.connect(MONGODB_TEST_ENDPOINT);
+//   await db.dropDatabase();
+// });
 
 
-class Server extends Harness {
+class Server {
 
-  constructor({ port, healthPort, mongodbEndpoint, bootstrapAdminEmail, bootstrapAdminPassword }) {
-    super({
-      endpoint: `http://localhost:${port}/graphql`,
-      healthEndpoint: `http://localhost:${healthPort}/ready`,
+  constructor({ endpoint, bootstrapAdmin }) {
+    this.endpoint = endpoint;
+    this.bootstrapAdmin = bootstrapAdmin;
+  }
 
-      async start() {
+  async request({ query, variables, headers = {}, method = 'POST', operationName }) {
 
-        return spawn('npm', ['start'], {
-          stdio: 'inherit',
-          env: pickBy({
-            ...process.env,
-            PORT: port.toString(),
-            HEALTH_PORT: healthPort.toString(),
-            MONGODB_ENDPOINT: mongodbEndpoint,
-            LOG_LEVEL: 'warn',
-            JWT_PRIVATE_KEY_PATH: path.resolve(__dirname, 'test-keys/private.pem'),
-            BOOTSTRAP_ADMIN_EMAIL: bootstrapAdminEmail,
-            BOOTSTRAP_ADMIN_PASSWORD: bootstrapAdminPassword,
-          }, x => x)
-        });
-      },
+    if (!query) {
+      throw new Error("graphql-service-test-harness - #request: argument 'query' is required");
+    }
 
-      stop(subprocess) {
-        const ret = new Promise(accept => {
-          subprocess?.on('exit', function () {
-            accept();
-          });
-        });
-        subprocess?.kill();
-        return ret;
-      }
+    const result = await fetch(this.endpoint, {
+      method: method,
+      body: JSON.stringify({ query, variables, operationName }),
+      headers: { 'Content-Type': 'application/json', ...headers }
     });
 
-    this.mongodbEndpoint = mongodbEndpoint;
+    const json = await result.json();
+
+    if (json.errors) {
+      throw json.errors;
+    }
+    return json.data;
   }
 
   async createUserAccount({ input, tokenExpiration = moment().add(1, 'day').format() }) {
@@ -222,4 +217,17 @@ class Server extends Harness {
   }
 };
 
-global.publicKey = fs.readFileSync(path.resolve(__dirname, 'test-keys/public.pem'));
+global.publicKey = fs.readFileSync(path.resolve(__dirname, '../test-keys/public.pem'));
+
+
+global.Server = new Server({
+  endpoint: TEST_TARGET_ENDPOINT,
+  bootstrapAdmin: {
+    email: BOOTSTRAP_ADMIN_EMAIL,
+    password: BOOTSTRAP_ADMIN_PASSWORD,
+  },
+  jwt: {
+    privateKey: "",
+    publicKey: "",
+  }
+});

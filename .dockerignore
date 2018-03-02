@@ -1,7 +1,0 @@
-dist
-.tmp
-.git
-build/Dockerfile*
-.gitlab-ci.yml
-.gitignore
-node_modules
