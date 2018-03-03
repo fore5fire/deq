@@ -1,11 +1,7 @@
 
 variables:
+
   PROJECT_NAME: curatrix
-  CHART_PATH: deploy/$PROJECT_NAME
-  AMD64_IMAGE_TAG: :$CI_COMMIT_REF_NAME
-  AMD64_TEST_IMAGE_TAG: $CI_REGISTRY_IMAGE:$CI_COMMIT_REF_NAME
-  ARMv6_IMAGE_TAG: $CI_REGISTRY_IMAGE/arm32v6:$CI_COMMIT_REF_NAME
-  # GCLOUD_PROJECT: katchecode-shared-hosting
   CHART_REPO: charts.katchecode.com/$PROJECT_NAME
   DOCKER_DRIVER: overlay2
 
@@ -14,19 +10,19 @@ stages:
   - test
   - deploy
 
-docker_build:
+build_images:
   stage: build
   image: docker
   services:
     - docker:dind
   script:
     - docker login -u gitlab-ci-token -p $CI_JOB_TOKEN $CI_REGISTRY
-    - for IMAGES in images/*/
-    - do
-    -   IMAGE_TAG=$CI_REGISTRY_IMAGE/$(basename $IMAGES)
-    -   docker build -t $IMAGE_TAG $D -f "$IMAGES"build/Dockerfile
-    -   docker push $IMAGE_TAG
-    - done
+    - |
+      for IMAGE in images/*/; do
+        IMAGE_TAG=$CI_REGISTRY_IMAGE/$(basename $IMAGE)
+        docker build -t $IMAGE_TAG $IMAGE -f "$IMAGE"build/Dockerfile
+        docker push $IMAGE_TAG
+      done
 
 
 # arm32v6:
@@ -43,53 +39,47 @@ docker_build:
 #     - docker build -t $ARMv6_IMAGE_TAG -f build/Dockerfile-arm32v6 .
 #     - docker push $ARMv6_IMAGE_TAG
 
-helm_tests:
-  stage: test
-  image: $
-  variables:
-    TEST_MONGODB_ENDPOINT: mongodb://mongo/tests
-    TEST_TARGET_ENDPOINT: http://target-server
-    MONGODB_ENDPOINT: mongodb://mongo/tests
-  script:
-    - yarn start
+# chart_tests:
+#   stage: test
+#   image: lachlanevenson/k8s-helm
+#   script:
+#     - for CHART in charts/*/
+#     - do
+#     -   helm install $CHART --wait --devel --dep-up
+#     -   helm test $CHART
+#     - done
 
 lint_chart:
   stage: test
-  image: katchecode/gcloud-kubernetes-helm
+  image: lachlanevenson/k8s-helm
   script:
-    - docker login -u gitlab-ci-token -p $CI_JOB_TOKEN $CI_REGISTRY
-    - for CHARTS in charts/*/
-    - do
-    -   helm lint $CHARTS
-    - done
-
-lint_service:
-  stage: test
-  image: node
-  script:
-    - yarn install
-    - yarn lint
-
-# test_chart:
+    - |
+      for CHART in charts/*/; do
+        helm lint $CHART
+      done
+#
+# lint_image:
 #   stage: test
-#   image: mstrzele/minikube:v0.22.2
-#   services:
-#     - docker:dind
+#   image: docker
 #   script:
-#     - minikube start
-#     -
+#     - for IMAGE in images/*/
+#     - do
+#     -   helm lint $IMAGE/build/Dockerfile-lint
+#     - done
+
 
 deploy_chart:
   stage: deploy
   image: katchecode/gcloud-kubernetes-helm
   script:
   - echo "$GCLOUD_SERVICE_ACCOUNT_KEY" | gcloud auth activate-service-account --key-file=-
-  # - gcloud config set project $GCLOUD_PROJECT
-  # - helm plugin install https://github.com/nouney/helm-gcs
-  # - helm repo add katchecode gs://$BUCKET_PATH
-  - mkdir chart_package
-  - helm package $CHART_PATH -d chart_package/
-  - gsutil cp gs://$CHART_REPO/index.yaml chart_package/ && MERGE_OPTION=--merge chart_package/index.yaml
-  - helm repo index chart_package/ --url $CHART_REPO $MERGE_OPTION
-  - gsutil cp -n chart_package/* gs://$CHART_REPO/
+  - RELEASE_FOLDER=$(mktemp -d)
+  - |
+    for CHART in charts/*/; do
+      helm package $CHART -d $RELEASE_FOLDER
+      helm lint $CHART
+    done
+  - gsutil cp gs://$CHART_REPO/index.yaml $RELEASE_FOLDER/ && MERGE_OPTION=--merge $RELEASE_FOLDER/index.yaml
+  - helm repo index $RELEASE_FOLDER/ --url $CHART_REPO $MERGE_OPTION
+  - gsutil cp -n $RELEASE_FOLDER/* gs://$CHART_REPO/
   - gsutil acl ch -u AllUsers:R gs://$CHART_REPO/*
