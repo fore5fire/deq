@@ -269,7 +269,7 @@ if args.command == 'deploy':
   if args.charts is None:
     charts = run(['helm', 'list', '-q'], stdout=PIPE, check=True, encoding='utf-8').stdout.split()
   else:
-    charts = args.charts
+    charts = args.charts.split(',')
 
   releaseNames = [chart.rstrip(sep)[:53] for chart in charts]
 
@@ -289,8 +289,8 @@ if args.command == 'deploy':
 
   # Do the actual release.
   for chart, release in zip(charts, releaseNames):
-    print("helm upgrade {} {} -i".format(release, path.join(projectDir, "charts", chart)))
-    run(["helm", "upgrade", release, path.join(projectDir, "charts", chart), "-i"])
+    print("helm upgrade {} {} -i --devel --force".format(release, path.join(projectDir, "charts", chart)))
+    run(["helm", "upgrade", release, path.join(projectDir, "charts", chart), "-i", "--devel", "--force"])
 
 
 
@@ -400,4 +400,4 @@ if args.command == 'test':
           if 'Pending' not in status:
             getPod.kill()
             run(["kubectl", "logs", '-f', pod])
-  print(tests.stderr.read(), file=stderr)
+    print(tests.stderr.read(), file=stderr)
