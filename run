@@ -6,7 +6,7 @@ from os import path, listdir, mkdir, chdir, sep, environ
 from http.server import SimpleHTTPRequestHandler, HTTPServer
 from _thread import start_new_thread
 import re
-from sys import exit
+from sys import exit, stderr
 import json
 import tempfile
 import yaml
@@ -22,16 +22,22 @@ imageNames = [f for f in listdir(imageDir) if not f.startswith('.')]
 parser = ArgumentParser(description='Execute build and testing scripts')
 subparsers = parser.add_subparsers(metavar='COMMAND', dest='command')
 
-parser_deploy = subparsers.add_parser('deploy', help='Release a chart to a minikube cluster', description=
+parser_deploy = subparsers.add_parser('deploy', help='Release charts to a minikube cluster', description=
 """
-Release a chart to a minikube cluster.
+Release charts to a minikube cluster.
 
 ----------------------------------------------
-To delete a release of a chart:
+To create or update a release:
 ./run.py deploy example-chart
+
+To create or update multiple releases:
+./run.py deploy example-chart,example-chart2
+
+To update all released charts:
+./run.py deploy
 ----------------------------------------------
 """, formatter_class=RawDescriptionHelpFormatter)
-parser_deploy.add_argument('chart', metavar='CHART', help='The name of the chart to deploy')
+parser_deploy.add_argument('charts', metavar='CHARTS', help='The name of the chart to deploy', nargs='?')
 
 
 parser_test = subparsers.add_parser('test', help="Run chart tests", description=
@@ -186,7 +192,7 @@ def tagsForImages(images):
     buildFolderContents = listdir(path.join(folder, 'build'))
     dockerfileRegex = re.compile("^Dockerfile(-(.*))?$")
     matches = [dockerfileRegex.match(file) for file in buildFolderContents]
-    dockerfiles = { matches[i].group(2): filename for i, filename in enumerate(buildFolderContents) if matches[i] != None }
+    dockerfiles = { match.group(2): filename for filename, match in zip(buildFolderContents, matches) if match != None }
 
     for type, dockerfile in dockerfiles.items():
       tag = '{}/{}:local'.format(folderName, type) if type != None else '{}:local'.format(folderName)
@@ -241,29 +247,50 @@ if args.command == 'build':
     print("kubectl delete pods {}".format(' '.join(updated)))
     run(['kubectl', 'delete', 'pods'] + list(updated), check=True)
 
+def updateChart(chartPath):
+
+  updateCharts = run(["helm", "dep", "list", chartPath], stdout=PIPE, check=True, encoding="utf-8").stdout.split("\n")
+  header = updateCharts[0].split()
+
+  if "REPOSITORY" in header:
+    repoIndex = header.index("REPOSITORY")
+    repos = [line.split()[repoIndex] for line in updateCharts[1:] if len(line) > repoIndex]
+    for repo in repos:
+      if repo.startswith("file://"):
+        updateChart(path.join(chartPath, repo[len("file://"):]))
+
+  print("helm dep update --skip-refresh")
+  run(["helm", "dep", "update", chartPath, "--skip-refresh"], check=True)
+
+
 if args.command == 'deploy':
 
-  chart = args.chart
-  releaseName = chart.rstrip(sep)[:53]
+  # Update existing releases if no charts arg is provided
+  if args.charts is None:
+    charts = run(['helm', 'list', '-q'], stdout=PIPE, check=True, encoding='utf-8').stdout.split()
+  else:
+    charts = args.charts
 
-  # Validation
-  if path.isdir(path.join(chartDir, chart)) == False:
-    print("ERROR: Invalid chart name {}. Chart must be a directory in {}".format(chart, chartDir))
-    exit(1)
+  releaseNames = [chart.rstrip(sep)[:53] for chart in charts]
 
-  # Initial chart update
-  for name in chartNames:
-    print("helm dep update")
-    run(["helm", "dep", "update"], cwd=path.join(projectDir, "charts", name))
+  #Validation
+  for chart in charts:
+    if path.isdir(path.join(chartDir, chart)) == False:
+      print("ERROR: Invalid chart name {}. Chart must be a directory in {}".format(chart, chartDir))
+      exit(1)
 
-  # Second chart update - this one's for our charts with internal dependencies
-  print("helm dep update --skip-refresh")
-  for name in chartNames:
-    run(["helm", "dep", "update", "--skip-refresh"], check=True, cwd= path.join(projectDir, "charts", name))
+  # Update indexes for our repos
+  print("helm repo update")
+  run(["helm", "repo", "update"])
+
+  # Update charts and their local dependencies
+  for chart in charts:
+    updateChart(path.join(projectDir, "charts", chart))
 
   # Do the actual release.
-  print("helm upgrade {} {} -i".format(releaseName, path.join(projectDir, "charts", chart)))
-  run(["helm", "upgrade", releaseName, path.join(projectDir, "charts", chart), "-i"])
+  for chart, release in zip(charts, releaseNames):
+    print("helm upgrade {} {} -i".format(release, path.join(projectDir, "charts", chart)))
+    run(["helm", "upgrade", release, path.join(projectDir, "charts", chart), "-i"])
 
 
 
@@ -356,19 +383,21 @@ if args.command == 'test':
   currentReleases = run(['helm', 'list', '-q'], stdout=PIPE, check=True, encoding='utf-8').stdout.split()
 
   filteredReleases = [release for release in releaseNames if release in currentReleases]
+  pattern = re.compile("^RUNNING: (.*)$")
 
-  # get test pods for charts being tested
   for release in filteredReleases:
-    testPods = []
+    print("helm test {}".format(release))
+    tests = Popen(["helm", "test", release, '--cleanup'], universal_newlines=True, stdout=PIPE, stderr=PIPE)
 
-    print("helm get hooks {}".format(release))
-    raw = run(["helm", "get", "hooks", release], stdout=PIPE, check=True).stdout
-    for resource in yaml.load_all(raw):
-      hook = resource.get('metadata').get('annotations').get('helm.sh/hook')
-      if hook  == 'test-success' or hook == 'test-failure':
-        testPods.append(resource['metadata']['name'])
+    for line in iter(tests.stdout.readline, ""):
+      print(line)
 
-    run(["kubectl", "delete", "pods", *testPods])
-    run(["helm", "test", release])
-    for pod in testPods:
-      run(["kubectl", "logs", pod])
+      match = pattern.match(line)
+      if match is not None:
+        pod = match.group(1)
+        getPod = Popen(["kubectl", "get", 'pod', pod, '-w', '-o', 'jsonpath', '--template', '{.status.phase}\n'], universal_newlines=True, stdout=PIPE)
+        for status in iter(getPod.stdout.readline, ""):
+          if 'Pending' not in status:
+            getPod.kill()
+            run(["kubectl", "logs", '-f', pod])
+  print(tests.stderr.read(), file=stderr)
