@@ -63,15 +63,6 @@ lint_chart:
       for CHART in charts/*/; do
         helm lint $CHART
       done
-#
-# lint_image:
-#   stage: test
-#   image: docker
-#   script:
-#     - for IMAGE in images/*/
-#     - do
-#     -   helm lint $IMAGE/build/Dockerfile-lint
-#     - done
 
 
 deploy_chart:
@@ -87,18 +78,8 @@ deploy_chart:
   - helm repo add kc https://charts.katchecode.com
   - |
     for CHART in charts/*/; do
-#      REPO_COL=helm dep list $CHART | head -1 | sed 's/[[:space:]]/\
-#      /g' | nl | grep 'REPOSITORY' | cut -f 1
-#      DEP_REPOS=$(cut -f "$REPO_COL")
-#      CURRENT_REPOS=$(helm repo list | tail -n +2 | cut -f 2)
-#      INTERSECTION=$(comm -32 <() <())
-#      for REPO in INTERSECTION; do
-#        helm repo add $INDEX $REPO
-#        ((INDEX++))
-#      done
       helm dep build $CHART
       helm package $CHART -d $RELEASE_FOLDER --app-version ${CI_COMMIT_TAG#v} --version ${CI_COMMIT_TAG#v} --save=false
-      # curl --data-binary "@$CHART" $CHART_MUSEUM_REPO
     done
   - gsutil cp -n $RELEASE_FOLDER/* gs://$CHART_REPO_BUCKET/
   - gsutil acl ch -u AllUsers:R gs://$CHART_REPO_BUCKET/*
