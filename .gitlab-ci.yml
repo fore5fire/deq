@@ -3,7 +3,6 @@ variables:
 
   PROJECT_NAME: curatrix
   CHART_REPO_BUCKET: charts.katchecode.com
-  # CHART_MUSEUM_BUCKET: https://charts.katchecode.com
   DOCKER_DRIVER: overlay2
 
 stages:
@@ -13,9 +12,6 @@ stages:
 
 build_images:
   stage: build
-  only:
-    - branches
-    - manual
   image: docker
   services:
     - docker:dind
@@ -60,9 +56,6 @@ build_images:
 
 lint_chart:
   stage: test
-  only:
-    - branches
-    - manual
   image: lachlanevenson/k8s-helm
   script:
     - |
