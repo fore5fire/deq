@@ -56,7 +56,7 @@ build_images:
 
 lint_chart:
   stage: test
-  image: lachlanevenson/k8s-helm
+  image: katchecode/gcloud-kubernetes-helm
   script:
     - |
       for CHART in charts/*/; do
