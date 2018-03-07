@@ -9,7 +9,7 @@ stages:
   - test
   - deploy
 
-build_images:
+build-images:
   stage: build
   image: docker
   services:
@@ -28,20 +28,22 @@ build_images:
         fi
       done
 
-
-# arm32v6:
-#   stage: build
-#   image: docker
-#   allow_failure: true
-#   tags:
-#     - docker
-#     - arm32
-#   services:
-#     - docker:dind
-#   script:
-#     - docker login -u gitlab-ci-token -p $CI_JOB_TOKEN $CI_REGISTRY
-#     - docker build -t $ARMv6_IMAGE_TAG -f build/Dockerfile-arm32v6 .
-#     - docker push $ARMv6_IMAGE_TAG
+package-charts:
+  stage: build
+  image: lachlanevenson/k8s-helm
+  only:
+    - tags
+    - ^v(0|[1-9]\d*)\.(0|[1-9]\d*)\.(0|[1-9]\d*)(-(0|[1-9]\d*|\d*[a-zA-Z-][0-9a-zA-Z-]*)(\.(0|[1-9]\d*|\d*[a-zA-Z-][0-9a-zA-Z-]*))*)?(\+[0-9a-zA-Z-]+(\.[0-9a-zA-Z-]+)*)?$
+  artifacts:
+    paths:
+      - release/
+  script:
+  - helm repo add kc https://charts.katchecode.com
+  - |
+    for CHART in charts/*/; do
+      helm dep build $CHART
+      helm package $CHART -d release/ --app-version ${CI_COMMIT_TAG#v} --version ${CI_COMMIT_TAG#v} --save=false
+    done
 
 # chart_tests:
 #   stage: test
@@ -53,9 +55,10 @@ build_images:
 #     -   helm test $CHART
 #     - done
 
-lint_chart:
+lint-charts:
   stage: test
   image: katchecode/gcloud-kubernetes-helm
+  dependencies: []
   script:
     - |
       for CHART in charts/*/; do
@@ -63,21 +66,15 @@ lint_chart:
       done
 
 
-deploy_chart:
+deploy-charts:
   stage: deploy
-  image: katchecode/gcloud-kubernetes-helm
+  image: google/cloud-sdk:alpine
+  dependencies:
+    - package-charts
   only:
     - tags
     - ^v(0|[1-9]\d*)\.(0|[1-9]\d*)\.(0|[1-9]\d*)(-(0|[1-9]\d*|\d*[a-zA-Z-][0-9a-zA-Z-]*)(\.(0|[1-9]\d*|\d*[a-zA-Z-][0-9a-zA-Z-]*))*)?(\+[0-9a-zA-Z-]+(\.[0-9a-zA-Z-]+)*)?$
   script:
-  - INDEX=0
-  - echo "$GCLOUD_SERVICE_ACCOUNT_KEY" | gcloud auth activate-service-account --key-file=-
-  - RELEASE_FOLDER=$(mktemp -d)
-  - helm repo add kc https://charts.katchecode.com
-  - |
-    for CHART in charts/*/; do
-      helm dep build $CHART
-      helm package $CHART -d $RELEASE_FOLDER --app-version ${CI_COMMIT_TAG#v} --version ${CI_COMMIT_TAG#v} --save=false
-    done
-  - gsutil cp -n $RELEASE_FOLDER/* gs://$CHART_REPO_BUCKET/
+  - echo "$GCLOUD_SERVICE_ACCOUNT_KEY" | gsutil auth activate-service-account --key-file=-
+  - gsutil cp -n release/* gs://$CHART_REPO_BUCKET/
   - gsutil acl ch -u AllUsers:R gs://$CHART_REPO_BUCKET/*
