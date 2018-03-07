@@ -30,7 +30,9 @@ build-images:
 
 package-charts:
   stage: build
-  image: lachlanevenson/k8s-helm
+  image:
+    name: lachlanevenson/k8s-helm
+    entrypoint: ["/bin/sh", "-c"]
   only:
     - tags
     - ^v(0|[1-9]\d*)\.(0|[1-9]\d*)\.(0|[1-9]\d*)(-(0|[1-9]\d*|\d*[a-zA-Z-][0-9a-zA-Z-]*)(\.(0|[1-9]\d*|\d*[a-zA-Z-][0-9a-zA-Z-]*))*)?(\+[0-9a-zA-Z-]+(\.[0-9a-zA-Z-]+)*)?$
@@ -38,7 +40,9 @@ package-charts:
     paths:
       - release/
   script:
+  - helm init --client-only
   - helm repo add kc https://charts.katchecode.com
+  - mkdir release
   - |
     for CHART in charts/*/; do
       helm dep build $CHART
