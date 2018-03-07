@@ -18,9 +18,12 @@ build-images:
     - echo "$CI_JOB_TOKEN" | docker login -u gitlab-ci-token --password-stdin $CI_REGISTRY
     - |
       for IMAGE in images/*/; do
-        IMAGE_TAG=$CI_REGISTRY_IMAGE/$(basename $IMAGE):$CI_COMMIT_SHA
-        docker build -t $IMAGE_TAG $IMAGE -f "$IMAGE"build/Dockerfile
+        IMAGE_REPO=$CI_REGISTRY_IMAGE/$(basename $IMAGE)
+        IMAGE_TAG=$IMAGE_REPO:$CI_COMMIT_SHA
+        docker pull $IMAGE_REPO:latest
+        docker build $IMAGE -f "$IMAGE"build/Dockerfile -t $IMAGE_TAG -t $IMAGE_REPO:latest --cache-from $IMAGE_REPO:latest
         docker push $IMAGE_TAG
+        docker push $IMAGE_REPO:latest
         if [ -n "$CI_COMMIT_TAG" ]; then
           VERSION_TAG=$CI_REGISTRY_IMAGE/$(basename $IMAGE):$CI_COMMIT_TAG
           docker tag $IMAGE_TAG $VERSION_TAG
