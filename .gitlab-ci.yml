@@ -79,6 +79,6 @@ deploy-charts:
     - tags
     - ^v(0|[1-9]\d*)\.(0|[1-9]\d*)\.(0|[1-9]\d*)(-(0|[1-9]\d*|\d*[a-zA-Z-][0-9a-zA-Z-]*)(\.(0|[1-9]\d*|\d*[a-zA-Z-][0-9a-zA-Z-]*))*)?(\+[0-9a-zA-Z-]+(\.[0-9a-zA-Z-]+)*)?$
   script:
-  - echo "$GCLOUD_SERVICE_ACCOUNT_KEY" | gsutil auth activate-service-account --key-file=-
+  - echo "$GCLOUD_SERVICE_ACCOUNT_KEY" | gcloud auth activate-service-account --key-file=-
   - gsutil cp -n release/* gs://$CHART_REPO_BUCKET/
   - gsutil acl ch -u AllUsers:R gs://$CHART_REPO_BUCKET/*
