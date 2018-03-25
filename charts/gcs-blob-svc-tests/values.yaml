@@ -1,0 +1,27 @@
+---
+gcs-blob-svc:
+  image:
+    repository: gcs-blob-svc
+    tag: local
+    pullPolicy: Never
+
+  tests:
+    image:
+      repository: gcs-blob-svc-tests
+      tag: local
+      pullPolicy: Never
+
+
+  debug: true
+  develop: true
+
+  gcs:
+    bucket: playback-continuity-tests
+    prefix: 'gcs-blob-svc-tests/'
+    credentialsSecret:
+      name: gcs-blob-svc-test-secret
+      key: googleApplicationCredentials
+
+mongodb:
+  persistence:
+    enabled: false

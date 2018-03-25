@@ -1,0 +1,37 @@
+schema {
+  query: Query
+  mutation: Mutation
+}
+
+type Query {
+  blob(name: String!): Blob
+  blobs(filter: ListBlobsFilter): BlobCursor
+}
+
+type Mutation {
+  createBlobUploadURL(input: BlobInput!): BlobUploadUrl
+  # mutableBlob(): MutableBlob
+}
+
+type BlobUploadUrl {
+  url: Url!
+  expiration: DateTime
+}
+
+type BlobCursor {
+  blobs: [Blob!]!
+  pageToken: String!
+}
+
+input ListBlobsFilter {
+  delimiter: String
+  prefix: String
+  cursor: CursorInput
+}
+
+input BlobInput {
+  name: String!
+  contentType: String
+  cacheControl: String
+  contentEncoding: String
+}

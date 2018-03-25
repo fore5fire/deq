@@ -1,0 +1,14 @@
+apiVersion: extensions/v1beta1
+kind: Ingress
+metadata:
+  name: {{ template "fullname" . }}
+  annotations:
+    traefik.frontend.rule.type: PathPrefixStrip
+spec:
+  rules:
+  - http:
+      paths:
+      - path: /gcs-blob-svc/
+        backend:
+          serviceName: gcs-blob-svc-tests-gcs-blob-svc
+          servicePort: http

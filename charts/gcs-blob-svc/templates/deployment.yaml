@@ -1,0 +1,67 @@
+
+apiVersion: apps/v1
+kind: Deployment
+metadata:
+  name: {{ template "fullname" . }}
+  labels:
+    app: {{ template "name" . }}
+    chart: {{ .Chart.Name }}
+    chartVersion: {{ .Chart.Version | replace "+" "_" }}
+    release: {{ .Release.Name }}
+    heritage: {{ .Release.Service }}
+spec:
+  strategy:
+    rollingUpdate: {{ toJson .Values.rollingUpdate }}
+  selector:
+    matchLabels:
+      app: {{ template "name" . }}
+      release: {{ .Release.Name }}
+  template:
+    metadata:
+      labels:
+        app: {{ template "name" . }}
+        release: {{ .Release.Name }}
+        service: {{ template "name" . }}
+    spec:
+      volumes:
+      - name: google-application-credentials
+        secret:
+          secretName: "{{ .Values.gcs.credentialsSecret.name }}"
+          items:
+          - key: "{{ .Values.gcs.credentialsSecret.key }}"
+            path: google-application-credentials.json
+      containers:
+        - name: {{ .Chart.Name }}
+          image: "{{ .Values.image.repository }}:{{ .Values.image.tag }}"
+          imagePullPolicy: {{ .Values.image.pullPolicy }}
+          volumeMounts:
+          - name: google-application-credentials
+            mountPath: "/etc/gcs-blob-svc"
+            readOnly: true
+          env:
+          - name: PORT
+            value: "80"
+          - name: DEBUG
+            value: "{{ .Values.debug }}"
+          - name: DEVELOP
+            value: "{{ .Values.develop }}"
+          - name: GCS_BUCKET
+            value: "{{ .Values.gcs.bucket }}"
+          - name: GOOGLE_APPLICATION_CREDENTIALS
+            value: "/etc/gcs-blob-svc/google-application-credentials.json"
+          ports:
+            - containerPort: 80
+          readinessProbe:
+            httpGet:
+              path: /health
+              port: 80
+          resources:
+{{ toYaml .Values.resources | indent 12 }}
+      {{- if .Values.image.pullSecret }}
+      imagePullSecrets:
+      - name: {{ .Values.image.pullSecret }}
+      {{- end }}
+    {{- if .Values.nodeSelector }}
+      nodeSelector:
+{{ toYaml .Values.nodeSelector | indent 8 }}
+    {{- end }}

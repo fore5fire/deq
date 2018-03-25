@@ -9,12 +9,11 @@ import re
 from sys import exit, stderr
 import json
 import tempfile
-import yaml
 
 projectDir = path.dirname(path.abspath(__file__))
 
 chartDir = path.join(projectDir, 'charts')
-imageDir = path.join(projectDir, 'images')
+imageDir = path.join(projectDir, 'src', 'src.katchecode.com')
 
 chartNames = [f for f in listdir(chartDir) if not f.startswith('.')]
 imageNames = [f for f in listdir(imageDir) if not f.startswith('.')]
@@ -201,15 +200,6 @@ def tagsForImages(images):
   return tags
 
 
-# minikubeStatus = run(["minikube", "status"], stdout=PIPE)
-# if minikubeStatus.returncode == 1:
-#   run(["minikube", 'start'], check=True)
-#
-# kubeContext = run(["kubectl", "config", "current-context"], check=True, stdout=PIPE, encoding='utf-8').stdout.strip()
-# if kubeContext != 'minikube':
-#   print("WARN: changing kubectl context to 'minikube'")
-#   run(['kubectl', 'config', 'use-context', 'minikube'], check=True, stdout=PIPE)
-
 if args.command == 'build':
 
   images = [image.rstrip(sep) for image in args.images.split(",")]
@@ -219,20 +209,11 @@ if args.command == 'build':
       print("ERROR: Invalid image name {}. Image must be a directory in {}".format(image, imageDir))
       exit(1)
 
-  # minikubeIp = run(['minikube', 'ip'], check=True, stdout=PIPE, encoding='utf-8').stdout.strip()
-  # if environ.get('HELM_HOME') != None:
-  #   minikubeHome = environ.get('HELM_HOME')
-  # else:
-  #   minikubeHome = path.join(path.expanduser('~'), '.minikube')
-  # dockerCertFolder = path.join(minikubeHome, 'certs')
-  # tlscert = path.join(dockerCertFolder, 'cert.pem')
-  # tlskey = path.join(dockerCertFolder, 'key.pem')
-  # cacert = path.join(dockerCertFolder, 'ca.pem')
-
   tags = tagsForImages(images)
   pods = podsWithImages(tags)
 
   updated = set()
+  allSucceeded = True
 
   for tag, image in tags.items():
 
@@ -241,11 +222,17 @@ if args.command == 'build':
     result = run(['docker', 'build', '-t', tag, '-f', image['dockerfile'], image['buildContext']])
     if result.returncode == 0:
       updated.update({ pod for pod, containers in pods.items() if tag in [c['image'] for c in containers] })
-
+    else:
+      allSucceeded = False
+      break
 
   if len(updated) > 0:
     print("kubectl delete pods {}".format(' '.join(updated)))
     run(['kubectl', 'delete', 'pods'] + list(updated), check=True)
+
+  if allSucceeded != True:
+    exit(1)
+
 
 def updateChart(chartPath):
 
@@ -267,7 +254,7 @@ if args.command == 'deploy':
 
   # Update existing releases if no charts arg is provided
   if args.charts is None:
-    charts = run(['helm', 'list', '-q'], stdout=PIPE, check=True, encoding='utf-8').stdout.split()
+    charts = list(set(chartNames).intersection(run(['helm', 'list', '-q'], stdout=PIPE, check=True, encoding='utf-8').stdout.split()))
   else:
     charts = args.charts.split(',')
 
@@ -290,7 +277,7 @@ if args.command == 'deploy':
   # Do the actual release.
   for chart, release in zip(charts, releaseNames):
     print("helm upgrade {} {} -i --devel --force".format(release, path.join(projectDir, "charts", chart)))
-    run(["helm", "upgrade", release, path.join(projectDir, "charts", chart), "-i", "--devel", "--force"])
+    run(["helm", "upgrade", release, path.join(projectDir, "charts", chart), "-i", "--devel"])
 
 
 
@@ -385,9 +372,11 @@ if args.command == 'test':
   filteredReleases = [release for release in releaseNames if release in currentReleases]
   pattern = re.compile("^RUNNING: (.*)$")
 
+  cleanup = []
+
   for release in filteredReleases:
     print("helm test {}".format(release))
-    tests = Popen(["helm", "test", release, '--cleanup'], universal_newlines=True, stdout=PIPE, stderr=PIPE)
+    tests = Popen(["helm", "test", release], universal_newlines=True, stdout=PIPE, stderr=PIPE)
 
     for line in iter(tests.stdout.readline, ""):
       print(line)
@@ -395,9 +384,12 @@ if args.command == 'test':
       match = pattern.match(line)
       if match is not None:
         pod = match.group(1)
+        cleanup.append(pod)
         getPod = Popen(["kubectl", "get", 'pod', pod, '-w', '-o', 'jsonpath', '--template', '{.status.phase}\n'], universal_newlines=True, stdout=PIPE)
         for status in iter(getPod.stdout.readline, ""):
+
           if 'Pending' not in status:
             getPod.kill()
             run(["kubectl", "logs", '-f', pod])
     print(tests.stderr.read(), file=stderr)
+    run(["kubectl", "delete", "pod", *cleanup])

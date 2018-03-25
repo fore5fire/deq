@@ -1,0 +1,6 @@
+dependencies:
+- name: gcs-blob-svc
+  repository: file://../gcs-blob-svc
+  version: 0.1.0
+digest: sha256:ea686bf3c9d3ee497f62ddfea8eb93f8a2c12cb44f75b18811eedabe355b4c4e
+generated: 2018-03-13T23:05:51.151181066-06:00
