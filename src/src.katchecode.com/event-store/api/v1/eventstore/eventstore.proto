@@ -5,7 +5,6 @@ import "google/protobuf/any.proto";
 import "google/protobuf/none.proto";
 
 service EventStore {
-  rpc GetStoreMeta      (GetStoreMetaRequest)      returns (StoreMeta);
   rpc CreateEvent       (CreateEventRequest)       returns (Event);
   rpc StreamEvents      (ListEventsRequest)        returns (stream Event);
   rpc UpdateEventStatus (stream UpdateEventStatusRequest) returns (UpdateEventStatusResponse);
@@ -33,15 +32,6 @@ message Event {
     PROCESSED = 1;
     WILL_NOT_PROCESS = 2;
   }
-}
-
-
-message GetStoreMetaRequest {
-
-}
-
-message StoreMeta {
-  string store_id = 1;
 }
 
 

@@ -4,7 +4,7 @@ import (
 	"errors"
 	"github.com/dgraph-io/badger"
 	"github.com/golang/protobuf/proto"
-	"github.com/satori/go.uuid"
+	// "github.com/satori/go.uuid"
 	"src.katchecode.com/event-store/api/v1/eventstore"
 	"sync"
 	"time"
@@ -41,41 +41,12 @@ func Open(opts Options) (*Store, error) {
 		openChannels: make(map[string]*Channel),
 	}
 
-	_, err = store.GetMeta()
-	if err == badger.ErrKeyNotFound {
-		store.initMeta()
-	} else if err != nil {
-		return nil, err
-	}
-
 	return store, nil
 }
 
 // Close closes the store
 func (s *Store) Close() error {
 	err := s.db.Close()
-	if err != nil {
-		return err
-	}
-
-	return nil
-}
-
-func (s *Store) initMeta() error {
-
-	meta := eventstore.StoreMeta{
-		StoreId: uuid.NewV4().String(),
-	}
-
-	data, err := proto.Marshal(&meta)
-	if err != nil {
-		return err
-	}
-
-	err = s.db.Update(func(txn *badger.Txn) error {
-		txn.Set(metaKey, data)
-		return nil
-	})
 	if err != nil {
 		return err
 	}
@@ -140,36 +111,6 @@ func (s *Store) insert(e *eventstore.Event, setID bool) error {
 //
 // }
 
-// GetMeta returns this stores meta
-func (s *Store) GetMeta() (meta eventstore.StoreMeta, err error) {
-	err = s.db.View(func(txn *badger.Txn) error {
-
-		item, err := txn.Get([]byte(metaKey))
-		if err != nil {
-			return err
-		}
-
-		data, err := item.Value()
-		if err != nil {
-			return err
-		}
-
-		proto.Unmarshal(data, &meta)
-		return nil
-	})
-
-	if err != nil {
-		return eventstore.StoreMeta{}, err
-	}
-
-	return meta, nil
-}
-
-// Meta represents meta for an event store
-type Meta struct {
-	StoreID string
-}
-
 // fetch is used to get events starting at the iterator's afterKey until the most recent event.
 // It returns a stream that will be sent events, or an error if a precondition is violated.
 // If follow is false, eventc will be closed once all existing events after afterKey have been sent, or if done is closed.
@@ -184,7 +125,6 @@ var (
 )
 
 var (
-	metaKey       = []byte("__event-store-meta-key__")
 	sequenceKey   = []byte("__event-store-sequence-key__")
 	channelPrefix = []byte("C")
 	eventPrefix   = []byte("E")

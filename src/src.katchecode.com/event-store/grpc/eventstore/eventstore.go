@@ -24,21 +24,6 @@ func NewServer(eventStore *eventstore.Store, payloadType string) *Server {
 	return &Server{eventStore, payloadType}
 }
 
-// GetStoreMeta implements eventstore.GetStoreMeta
-func (s *Server) GetStoreMeta(ctx context.Context, in *pb.GetStoreMetaRequest) (*pb.GetStoreMetaResponse, error) {
-	meta, err := s.store.GetMeta()
-	if err != nil {
-		log.Error().Err(err).Msg("Error fetching store meta")
-		return nil, status.Error(codes.Internal, "")
-	}
-	response := &pb.GetStoreMetaResponse{
-		Meta: &pb.StoreMeta{
-			StoreId: meta.StoreId,
-		},
-	}
-	return response, nil
-}
-
 // CreateEvent implements eventstore.CreateEvent
 func (s *Server) CreateEvent(ctx context.Context, in *pb.CreateEventRequest) (*pb.CreateEventResponse, error) {
 
