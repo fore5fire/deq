@@ -1,0 +1,4 @@
+apiVersion: v1
+description: A minimalist distributed event store using gRPC
+name: event-store
+version: 0.1.0

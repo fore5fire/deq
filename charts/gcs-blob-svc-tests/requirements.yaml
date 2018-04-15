@@ -1,4 +1,0 @@
-dependencies:
-  - name: gcs-blob-svc
-    version: 0.1.0
-    repository: file://../gcs-blob-svc

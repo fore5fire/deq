@@ -1,0 +1,19 @@
+---
+event-store:
+  image:
+    repository: event-store
+    tag: local
+    pullPolicy: Never
+
+  tests:
+    image:
+      repository: event-store-tests
+      tag: local
+      pullPolicy: Never
+
+  persistence:
+    enabled: false
+
+  debug: true
+  develop: true
+  protobufType: "model.TestModel"

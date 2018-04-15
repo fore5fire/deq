@@ -1,4 +1,0 @@
-apiVersion: v1
-description: A blob-svc adapter for Google Cloud Storage
-name: gcs-blob-svc
-version: 0.1.0

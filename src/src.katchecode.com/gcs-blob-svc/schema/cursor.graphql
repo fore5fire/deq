@@ -1,7 +1,0 @@
-
-
-input CursorInput {
-  pageToken: String
-  # previous: Boolean
-  limit: Int
-}

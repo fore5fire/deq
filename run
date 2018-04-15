@@ -8,7 +8,6 @@ from _thread import start_new_thread
 import re
 from sys import exit, stderr
 import json
-import tempfile
 
 projectDir = path.dirname(path.abspath(__file__))
 
@@ -219,12 +218,19 @@ if args.command == 'build':
 
     print('INFO: building image: {}'.format(tag))
 
-    result = run(['docker', 'build', '-t', tag, '-f', image['dockerfile'], image['buildContext']])
-    if result.returncode == 0:
-      updated.update({ pod for pod, containers in pods.items() if tag in [c['image'] for c in containers] })
-    else:
+    print('go generate ./...')
+    result = run(['go', 'generate', './...'], cwd=image['buildContext'])
+    if result.returncode != 0:
       allSucceeded = False
       break
+
+    print('docker build -t {} -f {} {}'.format(tag, image['dockerfile'], image['buildContext']))
+    result = run(['docker', 'build', '-t', tag, '-f', image['dockerfile'], image['buildContext']])
+    if result.returncode != 0:
+      allSucceeded = False
+      break
+
+    updated.update({ pod for pod, containers in pods.items() if tag in [c['image'] for c in containers] })
 
   if len(updated) > 0:
     print("kubectl delete pods {}".format(' '.join(updated)))
@@ -276,7 +282,7 @@ if args.command == 'deploy':
 
   # Do the actual release.
   for chart, release in zip(charts, releaseNames):
-    print("helm upgrade {} {} -i --devel --force".format(release, path.join(projectDir, "charts", chart)))
+    print("helm upgrade {} {} -i --devel".format(release, path.join(projectDir, "charts", chart)))
     run(["helm", "upgrade", release, path.join(projectDir, "charts", chart), "-i", "--devel"])
 
 

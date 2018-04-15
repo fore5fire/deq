@@ -1,0 +1,66 @@
+
+apiVersion: apps/v1
+kind: Deployment
+metadata:
+  name: {{ template "fullname" . }}
+  labels:
+    app: {{ template "name" . }}
+    chart: {{ .Chart.Name }}
+    chartVersion: {{ .Chart.Version | replace "+" "_" }}
+    release: {{ .Release.Name }}
+    heritage: {{ .Release.Service }}
+spec:
+  strategy: {{ toJson .Values.deploymentStrategy }}
+  selector:
+    matchLabels:
+      app: {{ template "name" . }}
+      release: {{ .Release.Name }}
+  template:
+    metadata:
+      labels:
+        app: {{ template "name" . }}
+        release: {{ .Release.Name }}
+        service: {{ template "name" . }}
+    spec:
+      volumes:
+      - name: database-volume
+        {{ if .Values.persistence.enabled }}
+        persistentVolumeClaim:
+          claimName: {{ template "fullname" . }}
+        {{ else -}}
+        emptyDir: {}
+        {{ end }}
+      containers:
+        - name: {{ .Chart.Name }}
+          image: "{{ .Values.image.repository }}:{{ .Values.image.tag }}"
+          imagePullPolicy: {{ .Values.image.pullPolicy }}
+          volumeMounts:
+          - name: database-volume
+            mountPath: "/var/lib/event-store"
+            readOnly: true
+          env:
+          - name: PORT
+            value: "80"
+          - name: DEBUG
+            value: "{{ .Values.debug }}"
+          - name: DEVELOP
+            value: "{{ .Values.develop }}"
+          - name: DATA_DIR
+            value: "{{ .Values.dataDir }}"
+          - name: PROTOBUF_TYPE
+            value: "{{ .Values.protobufType }}"
+          ports:
+            - containerPort: 80
+          readinessProbe:
+            tcpSocket:
+              port: 80
+          resources:
+{{ toYaml .Values.resources | indent 12 }}
+      {{- if .Values.image.pullSecret }}
+      imagePullSecrets:
+      - name: {{ .Values.image.pullSecret }}
+      {{- end }}
+    {{- if .Values.nodeSelector }}
+      nodeSelector:
+{{ toYaml .Values.nodeSelector | indent 8 }}
+    {{- end }}
