@@ -1,10 +1,10 @@
 syntax = "proto3";
-package eventstore;
+package deq;
 
 import "google/protobuf/any.proto";
 import "google/protobuf/empty.proto";
 
-service EventStore {
+service DEQ {
   rpc CreateEvent       (CreateEventRequest)       returns (Event);
   rpc StreamEvents      (StreamEventsRequest)        returns (stream Event);
   rpc UpdateEventStatus (stream UpdateEventStatusRequest) returns (UpdateEventStatusResponse);
