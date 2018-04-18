@@ -7,7 +7,8 @@ import "google/protobuf/empty.proto";
 service DEQ {
   rpc CreateEvent       (CreateEventRequest)       returns (Event);
   rpc StreamEvents      (StreamEventsRequest)        returns (stream Event);
-  rpc UpdateEventStatus (stream UpdateEventStatusRequest) returns (UpdateEventStatusResponse);
+  rpc UpdateEventStatus (UpdateEventStatusRequest) returns (UpdateEventStatusResponse);
+  rpc StreamingUpdateEventStatus (stream UpdateEventStatusRequest) returns (UpdateEventStatusResponse);
   // rpc ResetChannel (ResetChannelRequest) returns (ResetChannelResponse);
   rpc InsertEvents      (stream InsertEventsRequest) returns (InsertEventsResponse);
   rpc GetChannel        (GetChannelRequest)    returns (Channel);

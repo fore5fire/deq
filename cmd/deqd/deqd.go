@@ -1,7 +1,7 @@
 package main
 
 import (
-	pb "gitlab.com/katcheCode/deqd/api/v1/eventstore"
+	pb "gitlab.com/katcheCode/deqd/api/v1/deq"
 	"gitlab.com/katcheCode/deqd/pkg/env"
 	"gitlab.com/katcheCode/deqd/pkg/eventstore"
 	eventserver "gitlab.com/katcheCode/deqd/pkg/grpc/eventstore"
@@ -34,7 +34,7 @@ func main() {
 	var opts []grpc.ServerOption
 
 	grpcServer := grpc.NewServer(opts...)
-	pb.RegisterEventStoreServer(grpcServer, server)
+	pb.RegisterDEQServer(grpcServer, server)
 
 	lis, err := net.Listen("tcp", ":"+env.Port)
 	if err != nil {

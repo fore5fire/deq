@@ -4,7 +4,7 @@ import (
 	"context"
 	"fmt"
 	"github.com/golang/protobuf/ptypes"
-	pb "gitlab.com/katcheCode/deqd/api/v1/eventstore"
+	pb "gitlab.com/katcheCode/deqd/api/v1/deq"
 	"gitlab.com/katcheCode/deqd/pkg/test/model"
 	"google.golang.org/grpc"
 	"google.golang.org/grpc/codes"
@@ -16,7 +16,7 @@ import (
 	"time"
 )
 
-func gatherTestModels(client pb.EventStoreClient, duration time.Duration) (result []model.TestModel, err error) {
+func gatherTestModels(client pb.DEQClient, duration time.Duration) (result []model.TestModel, err error) {
 	log.Println("Gathering Test Models")
 
 	ctx, cancel := context.WithTimeout(context.Background(), duration)
@@ -57,7 +57,7 @@ func gatherTestModels(client pb.EventStoreClient, duration time.Duration) (resul
 	}
 }
 
-func createEvent(client pb.EventStoreClient, m model.TestModel, timeout time.Duration) (*pb.Event, error) {
+func createEvent(client pb.DEQClient, m model.TestModel, timeout time.Duration) (*pb.Event, error) {
 	payload, err := ptypes.MarshalAny(&m)
 	if err != nil {
 		return nil, err
@@ -88,7 +88,7 @@ func TestCreateAndReceive(t *testing.T) {
 	}
 	defer conn.Close()
 
-	c := pb.NewEventStoreClient(conn)
+	c := pb.NewDEQClient(conn)
 
 	events, err := gatherTestModels(c, time.Second)
 	if err == nil && len(events) > 0 {
@@ -148,7 +148,7 @@ func TestRequeueTimeout(t *testing.T) {
 	}
 	defer conn.Close()
 
-	c := pb.NewEventStoreClient(conn)
+	c := pb.NewDEQClient(conn)
 
 	for i := 0; i < 500; i++ {
 		_, err = createEvent(c, model.TestModel{

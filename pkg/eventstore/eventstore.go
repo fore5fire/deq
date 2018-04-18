@@ -5,7 +5,7 @@ import (
 	"github.com/dgraph-io/badger"
 	"github.com/golang/protobuf/proto"
 	// "github.com/satori/go.uuid"
-	"gitlab.com/katcheCode/deqd/api/v1/eventstore"
+	"gitlab.com/katcheCode/deqd/api/v1/deq"
 	"sync"
 	"time"
 )
@@ -14,7 +14,7 @@ import (
 type Store struct {
 	db               *badger.DB
 	in               chan eventPromise
-	out              chan eventstore.Event
+	out              chan deq.Event
 	sharedChannelsMu sync.RWMutex
 	sharedChannels   map[string]*sharedChannel
 	// done is used for signaling to our store's go routine
@@ -27,7 +27,7 @@ type Options struct {
 }
 
 type eventPromise struct {
-	event *eventstore.Event
+	event *deq.Event
 	done  chan error
 }
 
@@ -46,7 +46,7 @@ func Open(opts Options) (*Store, error) {
 	s := &Store{
 		db:             db,
 		in:             make(chan eventPromise, 20),
-		out:            make(chan eventstore.Event, 20),
+		out:            make(chan deq.Event, 20),
 		sharedChannels: make(map[string]*sharedChannel),
 	}
 
@@ -69,17 +69,17 @@ func (s *Store) Close() error {
 }
 
 // Create inserts an event into the store after assigning it an id
-func (s *Store) Create(e eventstore.Event) (eventstore.Event, error) {
+func (s *Store) Create(e deq.Event) (deq.Event, error) {
 	e.Id = nil
 	return s.insert(e)
 }
 
 // Insert inserts a new event into the store
-func (s *Store) Insert(e eventstore.Event) (eventstore.Event, error) {
+func (s *Store) Insert(e deq.Event) (deq.Event, error) {
 	return s.insert(e)
 }
 
-func (s *Store) insert(e eventstore.Event) (eventstore.Event, error) {
+func (s *Store) insert(e deq.Event) (deq.Event, error) {
 
 	done := make(chan error, 1)
 

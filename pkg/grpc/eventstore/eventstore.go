@@ -4,7 +4,7 @@ import (
 	"context"
 	"github.com/golang/protobuf/ptypes"
 	"github.com/golang/protobuf/ptypes/empty"
-	pb "gitlab.com/katcheCode/deqd/api/v1/eventstore"
+	pb "gitlab.com/katcheCode/deqd/api/v1/deq"
 	"gitlab.com/katcheCode/deqd/pkg/eventstore"
 	"gitlab.com/katcheCode/deqd/pkg/logger"
 	"google.golang.org/grpc/codes"
@@ -64,7 +64,7 @@ func (s *Server) CreateEvent(ctx context.Context, in *pb.CreateEventRequest) (*p
 }
 
 // StreamEvents implements eventstore.ListEvents
-func (s *Server) StreamEvents(in *pb.StreamEventsRequest, stream pb.EventStore_StreamEventsServer) error {
+func (s *Server) StreamEvents(in *pb.StreamEventsRequest, stream pb.DEQ_StreamEventsServer) error {
 
 	channelName := in.GetChannel()
 	if channelName == "" {
@@ -150,7 +150,7 @@ func (s *Server) StreamEvents(in *pb.StreamEventsRequest, stream pb.EventStore_S
 }
 
 // InsertEvents implements eventstore.InsertEvents
-func (s *Server) InsertEvents(stream pb.EventStore_InsertEventsServer) error {
+func (s *Server) InsertEvents(stream pb.DEQ_InsertEventsServer) error {
 
 	for {
 		// TODO: get a downstream done channel so we can end gracefully when the server shuts down
@@ -179,8 +179,8 @@ func (s *Server) InsertEvents(stream pb.EventStore_InsertEventsServer) error {
 	}
 }
 
-// UpdateEventStatus implements EventStore.UpdateEventStatus
-func (s *Server) UpdateEventStatus(stream pb.EventStore_UpdateEventStatusServer) error {
+// StreamingUpdateEventStatus implements DEQ.StreamingUpdateEventStatus
+func (s *Server) StreamingUpdateEventStatus(stream pb.DEQ_StreamingUpdateEventStatusServer) error {
 
 	for {
 		in, err := stream.Recv()
@@ -224,7 +224,42 @@ func (s *Server) UpdateEventStatus(stream pb.EventStore_UpdateEventStatusServer)
 	}
 }
 
-// GetChannel implements EventStore.GetChannel
+// UpdateEventStatus implements DEQ.UpdateEventStatus
+func (s *Server) UpdateEventStatus(ctx context.Context, in *pb.UpdateEventStatusRequest) (*pb.UpdateEventStatusResponse, error) {
+
+	channelName := in.GetChannel()
+	if channelName == "" {
+		return nil, status.Error(codes.InvalidArgument, "Missing required argument 'channel'")
+	}
+
+	key := in.GetKey()
+	if len(key) == 0 {
+		return nil, status.Error(codes.InvalidArgument, "Missing required argument 'key'")
+	}
+
+	var eventStatus eventstore.EventStatus
+	switch in.GetEventStatus() {
+	case pb.Event_PENDING:
+		eventStatus = eventstore.EventStatusPending
+	case pb.Event_PROCESSED:
+		eventStatus = eventstore.EventStatusPending
+	case pb.Event_WILL_NOT_PROCESS:
+		eventStatus = eventstore.EventStatusWillNotProcess
+	default:
+		updateEventStatusLog.Debug().Str("event_status", in.GetEventStatus().String()).Msg("Invalid argument 'event_status'")
+		return nil, status.Error(codes.InvalidArgument, "Invalid value for argument 'event_status'")
+	}
+
+	err := s.store.Channel(channelName).SetEventStatus(key, eventStatus)
+	if err != nil {
+		updateEventStatusLog.Error().Err(err).Msg("Error setting event status")
+		return nil, status.Error(codes.Internal, "")
+	}
+
+	return &pb.UpdateEventStatusResponse{}, nil
+}
+
+// GetChannel implements DEQ.GetChannel
 func (s *Server) GetChannel(ctx context.Context, in *pb.GetChannelRequest) (*pb.Channel, error) {
 
 	channelName := in.GetName()

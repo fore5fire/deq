@@ -6,7 +6,7 @@ import (
 	"errors"
 	"github.com/dgraph-io/badger"
 	"github.com/golang/protobuf/proto"
-	"gitlab.com/katcheCode/deqd/api/v1/eventstore"
+	"gitlab.com/katcheCode/deqd/api/v1/deq"
 	"gitlab.com/katcheCode/deqd/pkg/logger"
 	"sync"
 )
@@ -16,7 +16,7 @@ var log = logger.With().Str("pkg", "gitlab.com/katcheCode/deqd/eventstore").Logg
 // Channel allows multiple listeners to synchronize processing of events
 type Channel struct {
 	name string
-	out  chan eventstore.Event
+	out  chan deq.Event
 	done chan error
 	err  error
 	db   *badger.DB
@@ -24,8 +24,8 @@ type Channel struct {
 
 type sharedChannel struct {
 	sync.Mutex
-	in        chan eventstore.Event
-	out       chan eventstore.Event
+	in        chan deq.Event
+	out       chan deq.Event
 	done      chan error
 	doneChans []chan error
 	db        *badger.DB
@@ -39,8 +39,8 @@ func (s *Store) Channel(name string) Channel {
 
 	if !ok {
 		shared = &sharedChannel{
-			in:  make(chan eventstore.Event, 20),
-			out: make(chan eventstore.Event, 20),
+			in:  make(chan deq.Event, 20),
+			out: make(chan deq.Event, 20),
 			db:  s.db,
 		}
 		s.sharedChannelsMu.Lock()
@@ -74,7 +74,7 @@ type ChannelSettings struct {
 var ChannelSettingsDefaults = ChannelSettings{}
 
 // Follow returns
-func (c Channel) Follow() (eventc chan eventstore.Event, done chan struct{}) {
+func (c Channel) Follow() (eventc chan deq.Event, done chan struct{}) {
 
 	done = make(chan struct{})
 	go func() {
@@ -176,7 +176,7 @@ func (c Channel) SetSettings() error {
 }
 
 // RequeueEvent adds the event back into the event queue for this channel
-func (c *Channel) RequeueEvent(e eventstore.Event) {
+func (c *Channel) RequeueEvent(e deq.Event) {
 	log.Debug().Interface("event", e).Msg("Requeuing event")
 	c.out <- e
 }
@@ -229,7 +229,7 @@ func (s *sharedChannel) catchUp(cursor []byte) ([]byte, error) {
 	// 	return
 	// }
 
-	var event eventstore.Event
+	var event deq.Event
 	var lastKey []byte
 
 	for it.Seek(cursor); it.ValidForPrefix(eventPrefix); it.Next() {
