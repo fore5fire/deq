@@ -1,6 +1,6 @@
 
 variables:
-  PROJECT_NAME: curatrix
+  PROJECT_NAME: deq
   CHART_REPO_BUCKET: charts.katchecode.com
   DOCKER_DRIVER: overlay2
 
