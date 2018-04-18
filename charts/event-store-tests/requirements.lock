@@ -1,6 +1,0 @@
-dependencies:
-- name: event-store
-  repository: file://../event-store
-  version: 0.1.0
-digest: sha256:2ab42138b53255a2c5bc135932a9d4bc95e78a7cbd60e90c63df903731f587de
-generated: 2018-04-03T18:43:02.103644484-06:00

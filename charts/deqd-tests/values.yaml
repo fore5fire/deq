@@ -1,0 +1,19 @@
+---
+deqd:
+  image:
+    repository: deqd
+    tag: local
+    pullPolicy: Never
+
+  tests:
+    image:
+      repository: deqd-tests
+      tag: local
+      pullPolicy: Never
+
+  persistence:
+    enabled: false
+
+  debug: true
+  develop: true
+  protobufType: "model.TestModel"

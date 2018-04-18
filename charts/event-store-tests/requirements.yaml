@@ -1,4 +1,0 @@
-dependencies:
-  - name: event-store
-    version: 0.1.0
-    repository: file://../event-store
