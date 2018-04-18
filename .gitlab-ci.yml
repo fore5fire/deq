@@ -1,6 +1,6 @@
 
 variables:
-  PROJECT_NAME: deq
+  PROJECT_NAME: deqd
   CHART_REPO_BUCKET: charts.katchecode.com
   DOCKER_DRIVER: overlay2
 
@@ -17,12 +17,12 @@ build-images:
   script:
     - echo "$CI_JOB_TOKEN" | docker login -u gitlab-ci-token --password-stdin $CI_REGISTRY
     - |
-      for IMAGE in images/*/; do
+      for IMAGE in src/src.katchecode.com/*/; do
         IMAGE_REPO=$CI_REGISTRY_IMAGE/$(basename $IMAGE)
         IMAGE_TAG=$IMAGE_REPO:$CI_COMMIT_SHA
         CACHE_REPO=$IMAGE_REPO/cache
-        docker pull $IMAGE_REPO:latest
-        docker pull $CACHE_REPO --all-tags || true
+        ! docker pull $IMAGE_REPO:latest
+        ! docker pull $CACHE_REPO --all-tags
         CACHE_ARGS=$(docker image ls --filter reference="$CACHE_REPO" --format="{{.Repository}}:{{.Tag}}" | tr '\n' ' ' | sed 's/^/ /' | sed -e 's/[[:space:]]*$//' | sed 's/ / --cache-from /g')
         docker build $IMAGE -f "$IMAGE"build/Dockerfile -t $IMAGE_TAG -t $IMAGE_REPO:latest --cache-from $IMAGE_REPO:latest $CACHE_ARGS
         docker push $IMAGE_TAG

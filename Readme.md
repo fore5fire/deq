@@ -1,9 +1,9 @@
-A blob-svc adapter for Google Cloud Storage
+A durable event queue
 
 Contributing
 
 Requires python 3.5 or above.
 
 ./run build
-./run deploy gcs-blob-svc
+./run deploy deqd-tests
 ./run test
