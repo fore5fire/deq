@@ -1,4 +1,4 @@
 apiVersion: v1
-description: Test environment for event-store
+description: Test environment for deqd
 name: deqd-tests
 version: 0.1.0

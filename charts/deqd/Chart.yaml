@@ -1,4 +1,4 @@
 apiVersion: v1
-description: A minimalist distributed event store using gRPC
+description: A minimalist durable event queue using gRPC
 name: deqd
 version: 0.1.0

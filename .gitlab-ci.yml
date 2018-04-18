@@ -17,14 +17,14 @@ build-images:
   script:
     - echo "$CI_JOB_TOKEN" | docker login -u gitlab-ci-token --password-stdin $CI_REGISTRY
     - |
-      for IMAGE in src/src.katchecode.com/*/; do
+      for IMAGE in cmd/*/; do
         IMAGE_REPO=$CI_REGISTRY_IMAGE/$(basename $IMAGE)
         IMAGE_TAG=$IMAGE_REPO:$CI_COMMIT_SHA
         CACHE_REPO=$IMAGE_REPO/cache
         ! docker pull $IMAGE_REPO:latest
         ! docker pull $CACHE_REPO --all-tags
         CACHE_ARGS=$(docker image ls --filter reference="$CACHE_REPO" --format="{{.Repository}}:{{.Tag}}" | tr '\n' ' ' | sed 's/^/ /' | sed -e 's/[[:space:]]*$//' | sed 's/ / --cache-from /g')
-        docker build $IMAGE -f "$IMAGE"build/Dockerfile -t $IMAGE_TAG -t $IMAGE_REPO:latest --cache-from $IMAGE_REPO:latest $CACHE_ARGS
+        docker build . -f "$IMAGE"Dockerfile -t $IMAGE_TAG -t $IMAGE_REPO:latest --cache-from $IMAGE_REPO:latest $CACHE_ARGS
         docker push $IMAGE_TAG
         docker push $IMAGE_REPO:latest
         if [ -n "$CI_COMMIT_TAG" ]; then

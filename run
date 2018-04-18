@@ -12,7 +12,7 @@ import json
 projectDir = path.dirname(path.abspath(__file__))
 
 chartDir = path.join(projectDir, 'charts')
-imageDir = path.join(projectDir, 'src', 'src.katchecode.com')
+imageDir = path.join(projectDir, 'cmd')
 
 chartNames = [f for f in listdir(chartDir) if not f.startswith('.')]
 imageNames = [f for f in listdir(imageDir) if not f.startswith('.')]
@@ -181,20 +181,8 @@ def tagsForImages(images):
   tags = {}
 
   for folderName in images:
-
     folder = path.join(imageDir, folderName)
-    if path.isdir(path.join(folder, 'build')) == False:
-      print("WARN: Image directory contains no build folder. Skipping...")
-      continue
-
-    buildFolderContents = listdir(path.join(folder, 'build'))
-    dockerfileRegex = re.compile("^Dockerfile(-(.*))?$")
-    matches = [dockerfileRegex.match(file) for file in buildFolderContents]
-    dockerfiles = { match.group(2): filename for filename, match in zip(buildFolderContents, matches) if match != None }
-
-    for type, dockerfile in dockerfiles.items():
-      tag = '{}/{}:local'.format(folderName, type) if type != None else '{}:local'.format(folderName)
-      tags[tag] = { 'dockerfile': path.join(folder, 'build', dockerfile), 'buildContext': folder }
+    tags[folderName + ':local'] = path.join(folder, 'Dockerfile')
 
   return tags
 
@@ -218,14 +206,8 @@ if args.command == 'build':
 
     print('INFO: building image: {}'.format(tag))
 
-    print('go generate ./...')
-    result = run(['go', 'generate', './...'], cwd=image['buildContext'])
-    if result.returncode != 0:
-      allSucceeded = False
-      break
-
-    print('docker build -t {} -f {} {}'.format(tag, image['dockerfile'], image['buildContext']))
-    result = run(['docker', 'build', '-t', tag, '-f', image['dockerfile'], image['buildContext']])
+    print('docker build -t {} -f {} {}'.format(tag, image, projectDir))
+    result = run(['docker', 'build', '-t', tag, '-f', image, projectDir])
     if result.returncode != 0:
       allSucceeded = False
       break
