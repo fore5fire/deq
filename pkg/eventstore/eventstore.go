@@ -5,7 +5,7 @@ import (
 	"github.com/dgraph-io/badger"
 	"github.com/golang/protobuf/proto"
 	// "github.com/satori/go.uuid"
-	"gitlab.com/katchecode/deqd/api/v1/eventstore"
+	"gitlab.com/katcheCode/deqd/api/v1/eventstore"
 	"sync"
 	"time"
 )

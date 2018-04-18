@@ -1,11 +1,11 @@
 package main
 
 import (
-	pb "gitlab.com/katchecode/deqd/api/v1/eventstore"
-	"gitlab.com/katchecode/deqd/pkg/env"
-	"gitlab.com/katchecode/deqd/pkg/eventstore"
-	eventserver "gitlab.com/katchecode/deqd/pkg/grpc/eventstore"
-	"gitlab.com/katchecode/deqd/pkg/logger"
+	pb "gitlab.com/katcheCode/deqd/api/v1/eventstore"
+	"gitlab.com/katcheCode/deqd/pkg/env"
+	"gitlab.com/katcheCode/deqd/pkg/eventstore"
+	eventserver "gitlab.com/katcheCode/deqd/pkg/grpc/eventstore"
+	"gitlab.com/katcheCode/deqd/pkg/logger"
 	"google.golang.org/grpc"
 	"net"
 	"os"

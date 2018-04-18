@@ -4,16 +4,16 @@ import (
 	"context"
 	"github.com/golang/protobuf/ptypes"
 	"github.com/golang/protobuf/ptypes/empty"
-	pb "gitlab.com/katchecode/deqd/api/v1/eventstore"
-	"gitlab.com/katchecode/deqd/pkg/eventstore"
-	"gitlab.com/katchecode/deqd/pkg/logger"
+	pb "gitlab.com/katcheCode/deqd/api/v1/eventstore"
+	"gitlab.com/katcheCode/deqd/pkg/eventstore"
+	"gitlab.com/katcheCode/deqd/pkg/logger"
 	"google.golang.org/grpc/codes"
 	"google.golang.org/grpc/status"
 	"io"
 	"time"
 )
 
-var log = logger.With().Str("pkg", "gitlab.com/katchecode/deqd/grpc/eventstore").Logger()
+var log = logger.With().Str("pkg", "gitlab.com/katcheCode/deqd/grpc/eventstore").Logger()
 var createEventLog = log.With().Str("handler", "CreateEvent").Logger()
 var streamEventsLog = log.With().Str("handler", "StreamEvents").Logger()
 var insertEventsLog = log.With().Str("handler", "InsertEvents").Logger()

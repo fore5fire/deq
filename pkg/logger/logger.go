@@ -2,7 +2,7 @@ package logger
 
 import (
 	"github.com/rs/zerolog"
-	"gitlab.com/katchecode/deqd/pkg/env"
+	"gitlab.com/katcheCode/deqd/pkg/env"
 	"os"
 )
 

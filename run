@@ -182,7 +182,7 @@ def tagsForImages(images):
 
   for folderName in images:
     folder = path.join(imageDir, folderName)
-    tags[folderName + ':local'] = path.join(folder, 'Dockerfile')
+    tags[folderName.lower() + ':local'] = path.join(folder, 'Dockerfile')
 
   return tags
 

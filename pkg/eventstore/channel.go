@@ -6,12 +6,12 @@ import (
 	"errors"
 	"github.com/dgraph-io/badger"
 	"github.com/golang/protobuf/proto"
-	"gitlab.com/katchecode/deqd/api/v1/eventstore"
-	"gitlab.com/katchecode/deqd/pkg/logger"
+	"gitlab.com/katcheCode/deqd/api/v1/eventstore"
+	"gitlab.com/katcheCode/deqd/pkg/logger"
 	"sync"
 )
 
-var log = logger.With().Str("pkg", "gitlab.com/katchecode/deqd/eventstore").Logger()
+var log = logger.With().Str("pkg", "gitlab.com/katcheCode/deqd/eventstore").Logger()
 
 // Channel allows multiple listeners to synchronize processing of events
 type Channel struct {
