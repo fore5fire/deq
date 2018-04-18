@@ -76,7 +76,7 @@ func (s *Server) StreamEvents(in *pb.StreamEventsRequest, stream pb.EventStore_S
 		requeueDelay = 8000 * time.Millisecond
 	}
 
-	streamEventsLog.Debug().Msg("New Client")
+	streamEventsLog.Debug().Msg("New client streaming events")
 
 	channel := s.store.Channel(in.GetChannel())
 	eventc, done := channel.Follow()

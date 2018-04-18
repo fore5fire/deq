@@ -184,9 +184,8 @@ func TestRequeueTimeout(t *testing.T) {
 	if eventsErr != nil {
 		t.Fatalf("Error streaming events: %v\n", err)
 	}
-	if len(events) < 1000 {
-		t.Fatalf("Missed some events. Out of 1000 got %v\n", len(events))
-	}
+
+	var missed []int
 outer:
 	for i := 0; i < 1000; i++ {
 		for _, m := range events {
@@ -194,6 +193,10 @@ outer:
 				continue outer
 			}
 		}
-		t.Fatalf("No message for event %d", i)
+		missed = append(missed, i)
+	}
+
+	if len(missed) > 0 {
+		t.Fatalf("Missed messages: %v", missed)
 	}
 }
