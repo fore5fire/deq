@@ -2,30 +2,30 @@ syntax = "proto3";
 package eventstore;
 
 import "google/protobuf/any.proto";
-import "google/protobuf/none.proto";
+import "google/protobuf/empty.proto";
 
 service EventStore {
   rpc CreateEvent       (CreateEventRequest)       returns (Event);
-  rpc StreamEvents      (ListEventsRequest)        returns (stream Event);
+  rpc StreamEvents      (StreamEventsRequest)        returns (stream Event);
   rpc UpdateEventStatus (stream UpdateEventStatusRequest) returns (UpdateEventStatusResponse);
   // rpc ResetChannel (ResetChannelRequest) returns (ResetChannelResponse);
   rpc InsertEvents      (stream InsertEventsRequest) returns (InsertEventsResponse);
-  rpc GetChannel        (GetChannelRequest)    returns (Channel)
-  rpc EnsureChannel     (EnsureChannelRequest) returns (google.protobuf.None);
+  rpc GetChannel        (GetChannelRequest)    returns (Channel);
+  rpc EnsureChannel     (EnsureChannelRequest) returns (google.protobuf.Empty);
 }
 
 
 message Channel {
   string name = 1;
-  bytes  min_id = 2;
-  bytes  max_id = 3;
-  uint32 requeue_delay_miliseconds = 4;
-  // uint32 requeue_limit = 5;
+  // bytes  min_id = 2;
+  // bytes  max_id = 3;
+  // uint32 requeue_limit = 4;
 }
 
 message Event {
   google.protobuf.Any payload = 1;
   bytes               id = 2;
+  bytes               key = 3;
 
   enum Status {
     PENDING = 0;
@@ -48,13 +48,16 @@ message GetChannelRequest {
   string name = 1;
 }
 
-message ListEventsRequest {
+message StreamEventsRequest {
   string channel = 1;
   bool   follow = 2;
+  uint32 requeue_delay_miliseconds = 3;
 }
 
 message UpdateEventStatusRequest {
-  Event.State event_state = 1;
+  string       channel = 1;
+  bytes        key = 2;
+  Event.Status event_status = 3;
 }
 
 message UpdateEventStatusResponse {

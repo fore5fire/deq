@@ -8,16 +8,16 @@ It is generated from these files:
 	eventstore.proto
 
 It has these top-level messages:
-	GetStoreMetaRequest
-	GetStoreMetaResponse
-	StoreMeta
+	Channel
+	Event
 	CreateEventRequest
-	CreateEventResponse
-	ListEventsRequest
-	ListEventsResponse
+	EnsureChannelRequest
+	GetChannelRequest
+	StreamEventsRequest
+	UpdateEventStatusRequest
+	UpdateEventStatusResponse
 	InsertEventsRequest
 	InsertEventsResponse
-	Event
 */
 package eventstore
 
@@ -25,6 +25,7 @@ import proto "github.com/golang/protobuf/proto"
 import fmt "fmt"
 import math "math"
 import google_protobuf "github.com/golang/protobuf/ptypes/any"
+import google_protobuf1 "github.com/golang/protobuf/ptypes/empty"
 
 import (
 	context "golang.org/x/net/context"
@@ -42,44 +43,76 @@ var _ = math.Inf
 // proto package needs to be updated.
 const _ = proto.ProtoPackageIsVersion2 // please upgrade the proto package
 
-type GetStoreMetaRequest struct {
+type Event_Status int32
+
+const (
+	Event_PENDING          Event_Status = 0
+	Event_PROCESSED        Event_Status = 1
+	Event_WILL_NOT_PROCESS Event_Status = 2
+)
+
+var Event_Status_name = map[int32]string{
+	0: "PENDING",
+	1: "PROCESSED",
+	2: "WILL_NOT_PROCESS",
+}
+var Event_Status_value = map[string]int32{
+	"PENDING":          0,
+	"PROCESSED":        1,
+	"WILL_NOT_PROCESS": 2,
 }
 
-func (m *GetStoreMetaRequest) Reset()                    { *m = GetStoreMetaRequest{} }
-func (m *GetStoreMetaRequest) String() string            { return proto.CompactTextString(m) }
-func (*GetStoreMetaRequest) ProtoMessage()               {}
-func (*GetStoreMetaRequest) Descriptor() ([]byte, []int) { return fileDescriptor0, []int{0} }
+func (x Event_Status) String() string {
+	return proto.EnumName(Event_Status_name, int32(x))
+}
+func (Event_Status) EnumDescriptor() ([]byte, []int) { return fileDescriptor0, []int{1, 0} }
 
-type GetStoreMetaResponse struct {
-	Meta *StoreMeta `protobuf:"bytes,1,opt,name=meta" json:"meta,omitempty"`
+type Channel struct {
+	Name string `protobuf:"bytes,1,opt,name=name" json:"name,omitempty"`
 }
 
-func (m *GetStoreMetaResponse) Reset()                    { *m = GetStoreMetaResponse{} }
-func (m *GetStoreMetaResponse) String() string            { return proto.CompactTextString(m) }
-func (*GetStoreMetaResponse) ProtoMessage()               {}
-func (*GetStoreMetaResponse) Descriptor() ([]byte, []int) { return fileDescriptor0, []int{1} }
+func (m *Channel) Reset()                    { *m = Channel{} }
+func (m *Channel) String() string            { return proto.CompactTextString(m) }
+func (*Channel) ProtoMessage()               {}
+func (*Channel) Descriptor() ([]byte, []int) { return fileDescriptor0, []int{0} }
 
-func (m *GetStoreMetaResponse) GetMeta() *StoreMeta {
+func (m *Channel) GetName() string {
 	if m != nil {
-		return m.Meta
+		return m.Name
+	}
+	return ""
+}
+
+type Event struct {
+	Payload *google_protobuf.Any `protobuf:"bytes,1,opt,name=payload" json:"payload,omitempty"`
+	Id      []byte               `protobuf:"bytes,2,opt,name=id,proto3" json:"id,omitempty"`
+	Key     []byte               `protobuf:"bytes,3,opt,name=key,proto3" json:"key,omitempty"`
+}
+
+func (m *Event) Reset()                    { *m = Event{} }
+func (m *Event) String() string            { return proto.CompactTextString(m) }
+func (*Event) ProtoMessage()               {}
+func (*Event) Descriptor() ([]byte, []int) { return fileDescriptor0, []int{1} }
+
+func (m *Event) GetPayload() *google_protobuf.Any {
+	if m != nil {
+		return m.Payload
 	}
 	return nil
 }
 
-type StoreMeta struct {
-	StoreId string `protobuf:"bytes,1,opt,name=store_id,json=storeId" json:"store_id,omitempty"`
+func (m *Event) GetId() []byte {
+	if m != nil {
+		return m.Id
+	}
+	return nil
 }
 
-func (m *StoreMeta) Reset()                    { *m = StoreMeta{} }
-func (m *StoreMeta) String() string            { return proto.CompactTextString(m) }
-func (*StoreMeta) ProtoMessage()               {}
-func (*StoreMeta) Descriptor() ([]byte, []int) { return fileDescriptor0, []int{2} }
-
-func (m *StoreMeta) GetStoreId() string {
+func (m *Event) GetKey() []byte {
 	if m != nil {
-		return m.StoreId
+		return m.Key
 	}
-	return ""
+	return nil
 }
 
 type CreateEventRequest struct {
@@ -89,7 +122,7 @@ type CreateEventRequest struct {
 func (m *CreateEventRequest) Reset()                    { *m = CreateEventRequest{} }
 func (m *CreateEventRequest) String() string            { return proto.CompactTextString(m) }
 func (*CreateEventRequest) ProtoMessage()               {}
-func (*CreateEventRequest) Descriptor() ([]byte, []int) { return fileDescriptor0, []int{3} }
+func (*CreateEventRequest) Descriptor() ([]byte, []int) { return fileDescriptor0, []int{2} }
 
 func (m *CreateEventRequest) GetEvent() *Event {
 	if m != nil {
@@ -98,53 +131,109 @@ func (m *CreateEventRequest) GetEvent() *Event {
 	return nil
 }
 
-type CreateEventResponse struct {
+type EnsureChannelRequest struct {
+	Channel *Channel `protobuf:"bytes,1,opt,name=channel" json:"channel,omitempty"`
 }
 
-func (m *CreateEventResponse) Reset()                    { *m = CreateEventResponse{} }
-func (m *CreateEventResponse) String() string            { return proto.CompactTextString(m) }
-func (*CreateEventResponse) ProtoMessage()               {}
-func (*CreateEventResponse) Descriptor() ([]byte, []int) { return fileDescriptor0, []int{4} }
+func (m *EnsureChannelRequest) Reset()                    { *m = EnsureChannelRequest{} }
+func (m *EnsureChannelRequest) String() string            { return proto.CompactTextString(m) }
+func (*EnsureChannelRequest) ProtoMessage()               {}
+func (*EnsureChannelRequest) Descriptor() ([]byte, []int) { return fileDescriptor0, []int{3} }
 
-type ListEventsRequest struct {
-	AfterKey string `protobuf:"bytes,1,opt,name=after_key,json=afterKey" json:"after_key,omitempty"`
-	Follow   bool   `protobuf:"varint,2,opt,name=follow" json:"follow,omitempty"`
-}
-
-func (m *ListEventsRequest) Reset()                    { *m = ListEventsRequest{} }
-func (m *ListEventsRequest) String() string            { return proto.CompactTextString(m) }
-func (*ListEventsRequest) ProtoMessage()               {}
-func (*ListEventsRequest) Descriptor() ([]byte, []int) { return fileDescriptor0, []int{5} }
-
-func (m *ListEventsRequest) GetAfterKey() string {
+func (m *EnsureChannelRequest) GetChannel() *Channel {
 	if m != nil {
-		return m.AfterKey
+		return m.Channel
+	}
+	return nil
+}
+
+type GetChannelRequest struct {
+	Name string `protobuf:"bytes,1,opt,name=name" json:"name,omitempty"`
+}
+
+func (m *GetChannelRequest) Reset()                    { *m = GetChannelRequest{} }
+func (m *GetChannelRequest) String() string            { return proto.CompactTextString(m) }
+func (*GetChannelRequest) ProtoMessage()               {}
+func (*GetChannelRequest) Descriptor() ([]byte, []int) { return fileDescriptor0, []int{4} }
+
+func (m *GetChannelRequest) GetName() string {
+	if m != nil {
+		return m.Name
 	}
 	return ""
 }
 
-func (m *ListEventsRequest) GetFollow() bool {
+type StreamEventsRequest struct {
+	Channel                 string `protobuf:"bytes,1,opt,name=channel" json:"channel,omitempty"`
+	Follow                  bool   `protobuf:"varint,2,opt,name=follow" json:"follow,omitempty"`
+	RequeueDelayMiliseconds uint32 `protobuf:"varint,3,opt,name=requeue_delay_miliseconds,json=requeueDelayMiliseconds" json:"requeue_delay_miliseconds,omitempty"`
+}
+
+func (m *StreamEventsRequest) Reset()                    { *m = StreamEventsRequest{} }
+func (m *StreamEventsRequest) String() string            { return proto.CompactTextString(m) }
+func (*StreamEventsRequest) ProtoMessage()               {}
+func (*StreamEventsRequest) Descriptor() ([]byte, []int) { return fileDescriptor0, []int{5} }
+
+func (m *StreamEventsRequest) GetChannel() string {
+	if m != nil {
+		return m.Channel
+	}
+	return ""
+}
+
+func (m *StreamEventsRequest) GetFollow() bool {
 	if m != nil {
 		return m.Follow
 	}
 	return false
 }
 
-type ListEventsResponse struct {
-	Event *Event `protobuf:"bytes,1,opt,name=event" json:"event,omitempty"`
+func (m *StreamEventsRequest) GetRequeueDelayMiliseconds() uint32 {
+	if m != nil {
+		return m.RequeueDelayMiliseconds
+	}
+	return 0
 }
 
-func (m *ListEventsResponse) Reset()                    { *m = ListEventsResponse{} }
-func (m *ListEventsResponse) String() string            { return proto.CompactTextString(m) }
-func (*ListEventsResponse) ProtoMessage()               {}
-func (*ListEventsResponse) Descriptor() ([]byte, []int) { return fileDescriptor0, []int{6} }
+type UpdateEventStatusRequest struct {
+	Channel     string       `protobuf:"bytes,1,opt,name=channel" json:"channel,omitempty"`
+	Key         []byte       `protobuf:"bytes,2,opt,name=key,proto3" json:"key,omitempty"`
+	EventStatus Event_Status `protobuf:"varint,3,opt,name=event_status,json=eventStatus,enum=eventstore.Event_Status" json:"event_status,omitempty"`
+}
 
-func (m *ListEventsResponse) GetEvent() *Event {
+func (m *UpdateEventStatusRequest) Reset()                    { *m = UpdateEventStatusRequest{} }
+func (m *UpdateEventStatusRequest) String() string            { return proto.CompactTextString(m) }
+func (*UpdateEventStatusRequest) ProtoMessage()               {}
+func (*UpdateEventStatusRequest) Descriptor() ([]byte, []int) { return fileDescriptor0, []int{6} }
+
+func (m *UpdateEventStatusRequest) GetChannel() string {
 	if m != nil {
-		return m.Event
+		return m.Channel
+	}
+	return ""
+}
+
+func (m *UpdateEventStatusRequest) GetKey() []byte {
+	if m != nil {
+		return m.Key
 	}
 	return nil
 }
+
+func (m *UpdateEventStatusRequest) GetEventStatus() Event_Status {
+	if m != nil {
+		return m.EventStatus
+	}
+	return Event_PENDING
+}
+
+type UpdateEventStatusResponse struct {
+}
+
+func (m *UpdateEventStatusResponse) Reset()                    { *m = UpdateEventStatusResponse{} }
+func (m *UpdateEventStatusResponse) String() string            { return proto.CompactTextString(m) }
+func (*UpdateEventStatusResponse) ProtoMessage()               {}
+func (*UpdateEventStatusResponse) Descriptor() ([]byte, []int) { return fileDescriptor0, []int{7} }
 
 type InsertEventsRequest struct {
 	Event *Event `protobuf:"bytes,1,opt,name=event" json:"event,omitempty"`
@@ -153,7 +242,7 @@ type InsertEventsRequest struct {
 func (m *InsertEventsRequest) Reset()                    { *m = InsertEventsRequest{} }
 func (m *InsertEventsRequest) String() string            { return proto.CompactTextString(m) }
 func (*InsertEventsRequest) ProtoMessage()               {}
-func (*InsertEventsRequest) Descriptor() ([]byte, []int) { return fileDescriptor0, []int{7} }
+func (*InsertEventsRequest) Descriptor() ([]byte, []int) { return fileDescriptor0, []int{8} }
 
 func (m *InsertEventsRequest) GetEvent() *Event {
 	if m != nil {
@@ -168,51 +257,20 @@ type InsertEventsResponse struct {
 func (m *InsertEventsResponse) Reset()                    { *m = InsertEventsResponse{} }
 func (m *InsertEventsResponse) String() string            { return proto.CompactTextString(m) }
 func (*InsertEventsResponse) ProtoMessage()               {}
-func (*InsertEventsResponse) Descriptor() ([]byte, []int) { return fileDescriptor0, []int{8} }
-
-type Event struct {
-	Payload *google_protobuf.Any `protobuf:"bytes,1,opt,name=payload" json:"payload,omitempty"`
-	Id      string               `protobuf:"bytes,2,opt,name=id" json:"id,omitempty"`
-	Key     string               `protobuf:"bytes,3,opt,name=key" json:"key,omitempty"`
-}
-
-func (m *Event) Reset()                    { *m = Event{} }
-func (m *Event) String() string            { return proto.CompactTextString(m) }
-func (*Event) ProtoMessage()               {}
-func (*Event) Descriptor() ([]byte, []int) { return fileDescriptor0, []int{9} }
-
-func (m *Event) GetPayload() *google_protobuf.Any {
-	if m != nil {
-		return m.Payload
-	}
-	return nil
-}
-
-func (m *Event) GetId() string {
-	if m != nil {
-		return m.Id
-	}
-	return ""
-}
-
-func (m *Event) GetKey() string {
-	if m != nil {
-		return m.Key
-	}
-	return ""
-}
+func (*InsertEventsResponse) Descriptor() ([]byte, []int) { return fileDescriptor0, []int{9} }
 
 func init() {
-	proto.RegisterType((*GetStoreMetaRequest)(nil), "eventstore.GetStoreMetaRequest")
-	proto.RegisterType((*GetStoreMetaResponse)(nil), "eventstore.GetStoreMetaResponse")
-	proto.RegisterType((*StoreMeta)(nil), "eventstore.StoreMeta")
+	proto.RegisterType((*Channel)(nil), "eventstore.Channel")
+	proto.RegisterType((*Event)(nil), "eventstore.Event")
 	proto.RegisterType((*CreateEventRequest)(nil), "eventstore.CreateEventRequest")
-	proto.RegisterType((*CreateEventResponse)(nil), "eventstore.CreateEventResponse")
-	proto.RegisterType((*ListEventsRequest)(nil), "eventstore.ListEventsRequest")
-	proto.RegisterType((*ListEventsResponse)(nil), "eventstore.ListEventsResponse")
+	proto.RegisterType((*EnsureChannelRequest)(nil), "eventstore.EnsureChannelRequest")
+	proto.RegisterType((*GetChannelRequest)(nil), "eventstore.GetChannelRequest")
+	proto.RegisterType((*StreamEventsRequest)(nil), "eventstore.StreamEventsRequest")
+	proto.RegisterType((*UpdateEventStatusRequest)(nil), "eventstore.UpdateEventStatusRequest")
+	proto.RegisterType((*UpdateEventStatusResponse)(nil), "eventstore.UpdateEventStatusResponse")
 	proto.RegisterType((*InsertEventsRequest)(nil), "eventstore.InsertEventsRequest")
 	proto.RegisterType((*InsertEventsResponse)(nil), "eventstore.InsertEventsResponse")
-	proto.RegisterType((*Event)(nil), "eventstore.Event")
+	proto.RegisterEnum("eventstore.Event_Status", Event_Status_name, Event_Status_value)
 }
 
 // Reference imports to suppress errors if they are not otherwise used.
@@ -226,10 +284,13 @@ const _ = grpc.SupportPackageIsVersion4
 // Client API for EventStore service
 
 type EventStoreClient interface {
-	GetStoreMeta(ctx context.Context, in *GetStoreMetaRequest, opts ...grpc.CallOption) (*GetStoreMetaResponse, error)
-	CreateEvent(ctx context.Context, in *CreateEventRequest, opts ...grpc.CallOption) (*CreateEventResponse, error)
-	ListEvents(ctx context.Context, in *ListEventsRequest, opts ...grpc.CallOption) (EventStore_ListEventsClient, error)
+	CreateEvent(ctx context.Context, in *CreateEventRequest, opts ...grpc.CallOption) (*Event, error)
+	StreamEvents(ctx context.Context, in *StreamEventsRequest, opts ...grpc.CallOption) (EventStore_StreamEventsClient, error)
+	UpdateEventStatus(ctx context.Context, opts ...grpc.CallOption) (EventStore_UpdateEventStatusClient, error)
+	// rpc ResetChannel (ResetChannelRequest) returns (ResetChannelResponse);
 	InsertEvents(ctx context.Context, opts ...grpc.CallOption) (EventStore_InsertEventsClient, error)
+	GetChannel(ctx context.Context, in *GetChannelRequest, opts ...grpc.CallOption) (*Channel, error)
+	EnsureChannel(ctx context.Context, in *EnsureChannelRequest, opts ...grpc.CallOption) (*google_protobuf1.Empty, error)
 }
 
 type eventStoreClient struct {
@@ -240,17 +301,8 @@ func NewEventStoreClient(cc *grpc.ClientConn) EventStoreClient {
 	return &eventStoreClient{cc}
 }
 
-func (c *eventStoreClient) GetStoreMeta(ctx context.Context, in *GetStoreMetaRequest, opts ...grpc.CallOption) (*GetStoreMetaResponse, error) {
-	out := new(GetStoreMetaResponse)
-	err := grpc.Invoke(ctx, "/eventstore.EventStore/GetStoreMeta", in, out, c.cc, opts...)
-	if err != nil {
-		return nil, err
-	}
-	return out, nil
-}
-
-func (c *eventStoreClient) CreateEvent(ctx context.Context, in *CreateEventRequest, opts ...grpc.CallOption) (*CreateEventResponse, error) {
-	out := new(CreateEventResponse)
+func (c *eventStoreClient) CreateEvent(ctx context.Context, in *CreateEventRequest, opts ...grpc.CallOption) (*Event, error) {
+	out := new(Event)
 	err := grpc.Invoke(ctx, "/eventstore.EventStore/CreateEvent", in, out, c.cc, opts...)
 	if err != nil {
 		return nil, err
@@ -258,12 +310,12 @@ func (c *eventStoreClient) CreateEvent(ctx context.Context, in *CreateEventReque
 	return out, nil
 }
 
-func (c *eventStoreClient) ListEvents(ctx context.Context, in *ListEventsRequest, opts ...grpc.CallOption) (EventStore_ListEventsClient, error) {
-	stream, err := grpc.NewClientStream(ctx, &_EventStore_serviceDesc.Streams[0], c.cc, "/eventstore.EventStore/ListEvents", opts...)
+func (c *eventStoreClient) StreamEvents(ctx context.Context, in *StreamEventsRequest, opts ...grpc.CallOption) (EventStore_StreamEventsClient, error) {
+	stream, err := grpc.NewClientStream(ctx, &_EventStore_serviceDesc.Streams[0], c.cc, "/eventstore.EventStore/StreamEvents", opts...)
 	if err != nil {
 		return nil, err
 	}
-	x := &eventStoreListEventsClient{stream}
+	x := &eventStoreStreamEventsClient{stream}
 	if err := x.ClientStream.SendMsg(in); err != nil {
 		return nil, err
 	}
@@ -273,17 +325,51 @@ func (c *eventStoreClient) ListEvents(ctx context.Context, in *ListEventsRequest
 	return x, nil
 }
 
-type EventStore_ListEventsClient interface {
-	Recv() (*ListEventsResponse, error)
+type EventStore_StreamEventsClient interface {
+	Recv() (*Event, error)
 	grpc.ClientStream
 }
 
-type eventStoreListEventsClient struct {
+type eventStoreStreamEventsClient struct {
 	grpc.ClientStream
 }
 
-func (x *eventStoreListEventsClient) Recv() (*ListEventsResponse, error) {
-	m := new(ListEventsResponse)
+func (x *eventStoreStreamEventsClient) Recv() (*Event, error) {
+	m := new(Event)
+	if err := x.ClientStream.RecvMsg(m); err != nil {
+		return nil, err
+	}
+	return m, nil
+}
+
+func (c *eventStoreClient) UpdateEventStatus(ctx context.Context, opts ...grpc.CallOption) (EventStore_UpdateEventStatusClient, error) {
+	stream, err := grpc.NewClientStream(ctx, &_EventStore_serviceDesc.Streams[1], c.cc, "/eventstore.EventStore/UpdateEventStatus", opts...)
+	if err != nil {
+		return nil, err
+	}
+	x := &eventStoreUpdateEventStatusClient{stream}
+	return x, nil
+}
+
+type EventStore_UpdateEventStatusClient interface {
+	Send(*UpdateEventStatusRequest) error
+	CloseAndRecv() (*UpdateEventStatusResponse, error)
+	grpc.ClientStream
+}
+
+type eventStoreUpdateEventStatusClient struct {
+	grpc.ClientStream
+}
+
+func (x *eventStoreUpdateEventStatusClient) Send(m *UpdateEventStatusRequest) error {
+	return x.ClientStream.SendMsg(m)
+}
+
+func (x *eventStoreUpdateEventStatusClient) CloseAndRecv() (*UpdateEventStatusResponse, error) {
+	if err := x.ClientStream.CloseSend(); err != nil {
+		return nil, err
+	}
+	m := new(UpdateEventStatusResponse)
 	if err := x.ClientStream.RecvMsg(m); err != nil {
 		return nil, err
 	}
@@ -291,7 +377,7 @@ func (x *eventStoreListEventsClient) Recv() (*ListEventsResponse, error) {
 }
 
 func (c *eventStoreClient) InsertEvents(ctx context.Context, opts ...grpc.CallOption) (EventStore_InsertEventsClient, error) {
-	stream, err := grpc.NewClientStream(ctx, &_EventStore_serviceDesc.Streams[1], c.cc, "/eventstore.EventStore/InsertEvents", opts...)
+	stream, err := grpc.NewClientStream(ctx, &_EventStore_serviceDesc.Streams[2], c.cc, "/eventstore.EventStore/InsertEvents", opts...)
 	if err != nil {
 		return nil, err
 	}
@@ -324,35 +410,38 @@ func (x *eventStoreInsertEventsClient) CloseAndRecv() (*InsertEventsResponse, er
 	return m, nil
 }
 
+func (c *eventStoreClient) GetChannel(ctx context.Context, in *GetChannelRequest, opts ...grpc.CallOption) (*Channel, error) {
+	out := new(Channel)
+	err := grpc.Invoke(ctx, "/eventstore.EventStore/GetChannel", in, out, c.cc, opts...)
+	if err != nil {
+		return nil, err
+	}
+	return out, nil
+}
+
+func (c *eventStoreClient) EnsureChannel(ctx context.Context, in *EnsureChannelRequest, opts ...grpc.CallOption) (*google_protobuf1.Empty, error) {
+	out := new(google_protobuf1.Empty)
+	err := grpc.Invoke(ctx, "/eventstore.EventStore/EnsureChannel", in, out, c.cc, opts...)
+	if err != nil {
+		return nil, err
+	}
+	return out, nil
+}
+
 // Server API for EventStore service
 
 type EventStoreServer interface {
-	GetStoreMeta(context.Context, *GetStoreMetaRequest) (*GetStoreMetaResponse, error)
-	CreateEvent(context.Context, *CreateEventRequest) (*CreateEventResponse, error)
-	ListEvents(*ListEventsRequest, EventStore_ListEventsServer) error
+	CreateEvent(context.Context, *CreateEventRequest) (*Event, error)
+	StreamEvents(*StreamEventsRequest, EventStore_StreamEventsServer) error
+	UpdateEventStatus(EventStore_UpdateEventStatusServer) error
+	// rpc ResetChannel (ResetChannelRequest) returns (ResetChannelResponse);
 	InsertEvents(EventStore_InsertEventsServer) error
+	GetChannel(context.Context, *GetChannelRequest) (*Channel, error)
+	EnsureChannel(context.Context, *EnsureChannelRequest) (*google_protobuf1.Empty, error)
 }
 
 func RegisterEventStoreServer(s *grpc.Server, srv EventStoreServer) {
 	s.RegisterService(&_EventStore_serviceDesc, srv)
-}
-
-func _EventStore_GetStoreMeta_Handler(srv interface{}, ctx context.Context, dec func(interface{}) error, interceptor grpc.UnaryServerInterceptor) (interface{}, error) {
-	in := new(GetStoreMetaRequest)
-	if err := dec(in); err != nil {
-		return nil, err
-	}
-	if interceptor == nil {
-		return srv.(EventStoreServer).GetStoreMeta(ctx, in)
-	}
-	info := &grpc.UnaryServerInfo{
-		Server:     srv,
-		FullMethod: "/eventstore.EventStore/GetStoreMeta",
-	}
-	handler := func(ctx context.Context, req interface{}) (interface{}, error) {
-		return srv.(EventStoreServer).GetStoreMeta(ctx, req.(*GetStoreMetaRequest))
-	}
-	return interceptor(ctx, in, info, handler)
 }
 
 func _EventStore_CreateEvent_Handler(srv interface{}, ctx context.Context, dec func(interface{}) error, interceptor grpc.UnaryServerInterceptor) (interface{}, error) {
@@ -373,25 +462,51 @@ func _EventStore_CreateEvent_Handler(srv interface{}, ctx context.Context, dec f
 	return interceptor(ctx, in, info, handler)
 }
 
-func _EventStore_ListEvents_Handler(srv interface{}, stream grpc.ServerStream) error {
-	m := new(ListEventsRequest)
+func _EventStore_StreamEvents_Handler(srv interface{}, stream grpc.ServerStream) error {
+	m := new(StreamEventsRequest)
 	if err := stream.RecvMsg(m); err != nil {
 		return err
 	}
-	return srv.(EventStoreServer).ListEvents(m, &eventStoreListEventsServer{stream})
+	return srv.(EventStoreServer).StreamEvents(m, &eventStoreStreamEventsServer{stream})
 }
 
-type EventStore_ListEventsServer interface {
-	Send(*ListEventsResponse) error
+type EventStore_StreamEventsServer interface {
+	Send(*Event) error
 	grpc.ServerStream
 }
 
-type eventStoreListEventsServer struct {
+type eventStoreStreamEventsServer struct {
 	grpc.ServerStream
 }
 
-func (x *eventStoreListEventsServer) Send(m *ListEventsResponse) error {
+func (x *eventStoreStreamEventsServer) Send(m *Event) error {
 	return x.ServerStream.SendMsg(m)
+}
+
+func _EventStore_UpdateEventStatus_Handler(srv interface{}, stream grpc.ServerStream) error {
+	return srv.(EventStoreServer).UpdateEventStatus(&eventStoreUpdateEventStatusServer{stream})
+}
+
+type EventStore_UpdateEventStatusServer interface {
+	SendAndClose(*UpdateEventStatusResponse) error
+	Recv() (*UpdateEventStatusRequest, error)
+	grpc.ServerStream
+}
+
+type eventStoreUpdateEventStatusServer struct {
+	grpc.ServerStream
+}
+
+func (x *eventStoreUpdateEventStatusServer) SendAndClose(m *UpdateEventStatusResponse) error {
+	return x.ServerStream.SendMsg(m)
+}
+
+func (x *eventStoreUpdateEventStatusServer) Recv() (*UpdateEventStatusRequest, error) {
+	m := new(UpdateEventStatusRequest)
+	if err := x.ServerStream.RecvMsg(m); err != nil {
+		return nil, err
+	}
+	return m, nil
 }
 
 func _EventStore_InsertEvents_Handler(srv interface{}, stream grpc.ServerStream) error {
@@ -420,24 +535,69 @@ func (x *eventStoreInsertEventsServer) Recv() (*InsertEventsRequest, error) {
 	return m, nil
 }
 
+func _EventStore_GetChannel_Handler(srv interface{}, ctx context.Context, dec func(interface{}) error, interceptor grpc.UnaryServerInterceptor) (interface{}, error) {
+	in := new(GetChannelRequest)
+	if err := dec(in); err != nil {
+		return nil, err
+	}
+	if interceptor == nil {
+		return srv.(EventStoreServer).GetChannel(ctx, in)
+	}
+	info := &grpc.UnaryServerInfo{
+		Server:     srv,
+		FullMethod: "/eventstore.EventStore/GetChannel",
+	}
+	handler := func(ctx context.Context, req interface{}) (interface{}, error) {
+		return srv.(EventStoreServer).GetChannel(ctx, req.(*GetChannelRequest))
+	}
+	return interceptor(ctx, in, info, handler)
+}
+
+func _EventStore_EnsureChannel_Handler(srv interface{}, ctx context.Context, dec func(interface{}) error, interceptor grpc.UnaryServerInterceptor) (interface{}, error) {
+	in := new(EnsureChannelRequest)
+	if err := dec(in); err != nil {
+		return nil, err
+	}
+	if interceptor == nil {
+		return srv.(EventStoreServer).EnsureChannel(ctx, in)
+	}
+	info := &grpc.UnaryServerInfo{
+		Server:     srv,
+		FullMethod: "/eventstore.EventStore/EnsureChannel",
+	}
+	handler := func(ctx context.Context, req interface{}) (interface{}, error) {
+		return srv.(EventStoreServer).EnsureChannel(ctx, req.(*EnsureChannelRequest))
+	}
+	return interceptor(ctx, in, info, handler)
+}
+
 var _EventStore_serviceDesc = grpc.ServiceDesc{
 	ServiceName: "eventstore.EventStore",
 	HandlerType: (*EventStoreServer)(nil),
 	Methods: []grpc.MethodDesc{
 		{
-			MethodName: "GetStoreMeta",
-			Handler:    _EventStore_GetStoreMeta_Handler,
-		},
-		{
 			MethodName: "CreateEvent",
 			Handler:    _EventStore_CreateEvent_Handler,
+		},
+		{
+			MethodName: "GetChannel",
+			Handler:    _EventStore_GetChannel_Handler,
+		},
+		{
+			MethodName: "EnsureChannel",
+			Handler:    _EventStore_EnsureChannel_Handler,
 		},
 	},
 	Streams: []grpc.StreamDesc{
 		{
-			StreamName:    "ListEvents",
-			Handler:       _EventStore_ListEvents_Handler,
+			StreamName:    "StreamEvents",
+			Handler:       _EventStore_StreamEvents_Handler,
 			ServerStreams: true,
+		},
+		{
+			StreamName:    "UpdateEventStatus",
+			Handler:       _EventStore_UpdateEventStatus_Handler,
+			ClientStreams: true,
 		},
 		{
 			StreamName:    "InsertEvents",
@@ -451,30 +611,40 @@ var _EventStore_serviceDesc = grpc.ServiceDesc{
 func init() { proto.RegisterFile("eventstore.proto", fileDescriptor0) }
 
 var fileDescriptor0 = []byte{
-	// 394 bytes of a gzipped FileDescriptorProto
-	0x1f, 0x8b, 0x08, 0x00, 0x00, 0x00, 0x00, 0x00, 0x02, 0xff, 0x8c, 0x52, 0x5d, 0x4f, 0xea, 0x40,
-	0x10, 0x4d, 0xcb, 0xe5, 0xa3, 0x03, 0xb9, 0x81, 0xe5, 0x23, 0xd0, 0x9b, 0x0b, 0xa4, 0x0f, 0xf7,
-	0xe2, 0x4b, 0x31, 0xf8, 0xac, 0x09, 0x31, 0x46, 0x89, 0x62, 0x62, 0x79, 0xf2, 0x89, 0x94, 0x74,
-	0x20, 0x8d, 0xb5, 0x8b, 0xdd, 0x45, 0xd3, 0xdf, 0xe9, 0x1f, 0x32, 0xdd, 0x2e, 0xb2, 0x15, 0x48,
-	0x78, 0x6b, 0xcf, 0x9c, 0x39, 0x7b, 0x66, 0xce, 0x40, 0x15, 0xdf, 0x31, 0xe4, 0x8c, 0xd3, 0x08,
-	0xed, 0x75, 0x44, 0x39, 0x25, 0xb0, 0x43, 0xcc, 0xce, 0x8a, 0xd2, 0x55, 0x80, 0x43, 0x51, 0x59,
-	0x6c, 0x96, 0x43, 0x37, 0x8c, 0x53, 0x9a, 0xd5, 0x84, 0xfa, 0x2d, 0xf2, 0x59, 0x42, 0x9b, 0x22,
-	0x77, 0x1d, 0x7c, 0xdb, 0x20, 0xe3, 0xd6, 0x18, 0x1a, 0x59, 0x98, 0xad, 0x69, 0xc8, 0x90, 0x9c,
-	0xc1, 0xaf, 0x57, 0xe4, 0x6e, 0x5b, 0xeb, 0x6b, 0x83, 0xf2, 0xa8, 0x69, 0x2b, 0xcf, 0xee, 0xc8,
-	0x82, 0x62, 0xfd, 0x03, 0xe3, 0x1b, 0x22, 0x1d, 0x28, 0x09, 0xd6, 0xdc, 0xf7, 0x44, 0xaf, 0xe1,
-	0x14, 0xc5, 0xff, 0xc4, 0xb3, 0x2e, 0x81, 0x5c, 0x47, 0xe8, 0x72, 0xbc, 0x49, 0xb4, 0xa4, 0x01,
-	0xf2, 0x1f, 0xf2, 0x42, 0x5b, 0xbe, 0x54, 0x53, 0x5f, 0x4a, 0x89, 0x69, 0x3d, 0x19, 0x20, 0xd3,
-	0x9e, 0x1a, 0xb5, 0xee, 0xa0, 0xf6, 0xe0, 0x33, 0x2e, 0x40, 0xb6, 0x15, 0xfd, 0x03, 0x86, 0xbb,
-	0xe4, 0x18, 0xcd, 0x5f, 0x30, 0x96, 0x36, 0x4a, 0x02, 0xb8, 0xc7, 0x98, 0xb4, 0xa0, 0xb0, 0xa4,
-	0x41, 0x40, 0x3f, 0xda, 0x7a, 0x5f, 0x1b, 0x94, 0x1c, 0xf9, 0x97, 0xf8, 0x53, 0x95, 0xe4, 0x22,
-	0x4e, 0xf6, 0x77, 0x05, 0xf5, 0x49, 0xc8, 0x30, 0xfa, 0x61, 0xe5, 0xe4, 0xfe, 0x16, 0x34, 0xb2,
-	0xfd, 0x72, 0xc0, 0x67, 0xc8, 0x0b, 0x84, 0xd8, 0x50, 0x5c, 0xbb, 0x71, 0x40, 0x5d, 0x4f, 0x6a,
-	0x35, 0xec, 0x34, 0x6e, 0x7b, 0x1b, 0xb7, 0x3d, 0x0e, 0x63, 0x67, 0x4b, 0x22, 0xbf, 0x41, 0xf7,
-	0x3d, 0x31, 0xa3, 0xe1, 0xe8, 0xbe, 0x47, 0xaa, 0x90, 0x4b, 0xd6, 0x91, 0x13, 0x40, 0xf2, 0x39,
-	0xfa, 0xd4, 0x01, 0x84, 0xb6, 0xc8, 0x8f, 0x3c, 0x41, 0x45, 0xbd, 0x05, 0xd2, 0x53, 0xbd, 0x1e,
-	0x38, 0x1e, 0xb3, 0x7f, 0x9c, 0x20, 0xb7, 0xf7, 0x08, 0x65, 0x25, 0x34, 0xd2, 0x55, 0x1b, 0xf6,
-	0x8f, 0xc1, 0xec, 0x1d, 0xad, 0x4b, 0xbd, 0x29, 0xc0, 0x2e, 0x23, 0xf2, 0x57, 0xa5, 0xef, 0x5d,
-	0x81, 0xd9, 0x3d, 0x56, 0x4e, 0xc5, 0xce, 0x35, 0x32, 0x83, 0x8a, 0xba, 0xf3, 0xec, 0xc4, 0x07,
-	0xd2, 0xcc, 0x4e, 0x7c, 0x28, 0xae, 0x81, 0xb6, 0x28, 0x88, 0x38, 0x2e, 0xbe, 0x02, 0x00, 0x00,
-	0xff, 0xff, 0x28, 0x8e, 0x51, 0x33, 0xab, 0x03, 0x00, 0x00,
+	// 546 bytes of a gzipped FileDescriptorProto
+	0x1f, 0x8b, 0x08, 0x00, 0x00, 0x00, 0x00, 0x00, 0x02, 0xff, 0x8c, 0x54, 0x41, 0x6f, 0xda, 0x4c,
+	0x10, 0xfd, 0x0c, 0x5f, 0xa0, 0x0c, 0x10, 0x99, 0x01, 0x51, 0xe3, 0x28, 0x2d, 0xb2, 0x5a, 0x85,
+	0x4b, 0x9d, 0x8a, 0xde, 0x52, 0xb5, 0x4a, 0x05, 0x56, 0x84, 0x94, 0x92, 0xc8, 0xb4, 0xea, 0x11,
+	0x99, 0x78, 0x92, 0xa2, 0x1a, 0x2f, 0xf5, 0x2e, 0xad, 0x38, 0xf7, 0x37, 0xf4, 0xcf, 0xf5, 0xd7,
+	0x54, 0x5e, 0xdb, 0x60, 0xc7, 0x8e, 0xd2, 0xdb, 0xee, 0xcc, 0xdb, 0xf7, 0x66, 0xdf, 0xec, 0x2c,
+	0xa8, 0xf4, 0x83, 0x7c, 0xc1, 0x05, 0x0b, 0xc8, 0x5c, 0x07, 0x4c, 0x30, 0x84, 0x7d, 0x44, 0xef,
+	0xdd, 0x31, 0x76, 0xe7, 0xd1, 0xa9, 0xcc, 0x2c, 0x36, 0xb7, 0xa7, 0x8e, 0xbf, 0x8d, 0x60, 0xfa,
+	0xd1, 0xfd, 0x14, 0xad, 0xd6, 0x22, 0x4e, 0x1a, 0xc7, 0x50, 0x1d, 0x7d, 0x75, 0x7c, 0x9f, 0x3c,
+	0x44, 0xf8, 0xdf, 0x77, 0x56, 0xa4, 0x29, 0x7d, 0x65, 0x50, 0xb3, 0xe5, 0xda, 0xf8, 0xad, 0xc0,
+	0x81, 0x15, 0xaa, 0xa0, 0x09, 0xd5, 0xb5, 0xb3, 0xf5, 0x98, 0xe3, 0x4a, 0x40, 0x7d, 0xd8, 0x31,
+	0x23, 0x5e, 0x33, 0xe1, 0x35, 0x3f, 0xf8, 0x5b, 0x3b, 0x01, 0xe1, 0x21, 0x94, 0x96, 0xae, 0x56,
+	0xea, 0x2b, 0x83, 0x86, 0x5d, 0x5a, 0xba, 0xa8, 0x42, 0xf9, 0x1b, 0x6d, 0xb5, 0xb2, 0x0c, 0x84,
+	0x4b, 0xe3, 0x0c, 0x2a, 0x33, 0xe1, 0x88, 0x0d, 0xc7, 0x3a, 0x54, 0xaf, 0xad, 0xe9, 0x78, 0x32,
+	0xbd, 0x50, 0xff, 0xc3, 0x26, 0xd4, 0xae, 0xed, 0xab, 0x91, 0x35, 0x9b, 0x59, 0x63, 0x55, 0xc1,
+	0x0e, 0xa8, 0x5f, 0x26, 0x97, 0x97, 0xf3, 0xe9, 0xd5, 0xa7, 0x79, 0x1c, 0x57, 0x4b, 0xc6, 0x3b,
+	0xc0, 0x51, 0x40, 0x8e, 0x20, 0x59, 0x9c, 0x4d, 0xdf, 0x37, 0xc4, 0x05, 0x9e, 0xc0, 0x81, 0xb4,
+	0x24, 0xae, 0xb0, 0x65, 0xa6, 0x2c, 0x8b, 0x80, 0x51, 0xde, 0xb0, 0xa0, 0x63, 0xf9, 0x7c, 0x13,
+	0x50, 0x7c, 0xf7, 0x84, 0xe0, 0x15, 0x54, 0x6f, 0xa2, 0x48, 0x4c, 0xd1, 0x4e, 0x53, 0x24, 0xe0,
+	0x04, 0x63, 0x9c, 0x40, 0xeb, 0x82, 0xc4, 0x3d, 0x8e, 0x22, 0x1b, 0x7f, 0x29, 0xd0, 0x9e, 0x89,
+	0x80, 0x9c, 0x95, 0x2c, 0x83, 0x27, 0x58, 0x2d, 0xab, 0x57, 0xdb, 0x51, 0x63, 0x17, 0x2a, 0xb7,
+	0xcc, 0xf3, 0xd8, 0x4f, 0x69, 0xe1, 0x13, 0x3b, 0xde, 0xe1, 0x19, 0xf4, 0x82, 0xf0, 0xf0, 0x86,
+	0xe6, 0x2e, 0x79, 0xce, 0x76, 0xbe, 0x5a, 0x7a, 0x4b, 0x4e, 0x37, 0xcc, 0x77, 0xb9, 0x34, 0xb7,
+	0x69, 0x3f, 0x8d, 0x01, 0xe3, 0x30, 0xff, 0x71, 0x9f, 0x0e, 0xab, 0xd0, 0x3e, 0xaf, 0xdd, 0xc4,
+	0xb5, 0xc8, 0xfc, 0xc7, 0x4b, 0x89, 0x3b, 0x57, 0xda, 0x75, 0x0e, 0xdf, 0x42, 0x43, 0xda, 0x32,
+	0xe7, 0x92, 0x42, 0xea, 0x1e, 0x0e, 0xb5, 0x9c, 0xdd, 0x66, 0x2c, 0x51, 0xa7, 0xbd, 0x9e, 0x71,
+	0x04, 0xbd, 0x82, 0x22, 0xf8, 0x9a, 0xf9, 0x9c, 0x8c, 0xf7, 0xd0, 0x9e, 0xf8, 0x9c, 0x02, 0x91,
+	0xf5, 0xe9, 0x9f, 0x1b, 0xdb, 0x85, 0x4e, 0xf6, 0x7c, 0xc4, 0x3b, 0xfc, 0x53, 0x06, 0x88, 0xf5,
+	0x58, 0x40, 0x78, 0x0e, 0xf5, 0xd4, 0xf3, 0xc1, 0x67, 0x99, 0x2e, 0xe7, 0xde, 0x95, 0x9e, 0xd7,
+	0xc3, 0x31, 0x34, 0xd2, 0x0d, 0xc5, 0xe7, 0x69, 0x48, 0x41, 0xab, 0x0b, 0x38, 0x5e, 0x2b, 0xb8,
+	0x80, 0x56, 0xce, 0x0b, 0x7c, 0x91, 0x46, 0x3e, 0xd4, 0x2f, 0xfd, 0xe5, 0x23, 0xa8, 0xe8, 0xe2,
+	0x03, 0x05, 0x67, 0xd0, 0x48, 0x5b, 0x92, 0xad, 0xb4, 0xc0, 0x6c, 0xbd, 0xff, 0x30, 0x60, 0x47,
+	0x7a, 0x0e, 0xb0, 0x7f, 0xf9, 0x78, 0x9c, 0x3e, 0x91, 0x9b, 0x08, 0xbd, 0x68, 0x88, 0x70, 0x02,
+	0xcd, 0xcc, 0x08, 0x62, 0x46, 0xb6, 0x68, 0x3a, 0xf5, 0x6e, 0xee, 0xc7, 0xb1, 0xc2, 0x9f, 0x6c,
+	0x51, 0x91, 0xfb, 0x37, 0x7f, 0x03, 0x00, 0x00, 0xff, 0xff, 0xfb, 0x0e, 0x17, 0x8e, 0x22, 0x05,
+	0x00, 0x00,
 }

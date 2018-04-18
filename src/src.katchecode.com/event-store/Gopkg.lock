@@ -8,6 +8,7 @@
   revision = "28f7e881ca57bc00e028f9ede9f0d9104cfeef5e"
 
 [[projects]]
+  branch = "master"
   name = "github.com/dgraph-io/badger"
   packages = [
     ".",
@@ -17,8 +18,7 @@
     "table",
     "y"
   ]
-  revision = "69611218c7078be6de16f4ea13fb256e701b6b73"
-  version = "v1.3.0"
+  revision = "deb140b6378159c58f803c01430a1b6ba3af248e"
 
 [[projects]]
   branch = "master"
@@ -38,6 +38,7 @@
     "ptypes",
     "ptypes/any",
     "ptypes/duration",
+    "ptypes/empty",
     "ptypes/timestamp"
   ]
   revision = "925541529c1fa6821df4e44ce2723319eb2be768"
@@ -57,12 +58,6 @@
   ]
   revision = "56a970de510213e50dbaa39ad73ac07c9ec75606"
   version = "v1.5.0"
-
-[[projects]]
-  name = "github.com/satori/go.uuid"
-  packages = ["."]
-  revision = "f58768cc1a7a7e77a3bd49e98cdd21419399b6a3"
-  version = "v1.2.0"
 
 [[projects]]
   branch = "master"
@@ -144,6 +139,6 @@
 [solve-meta]
   analyzer-name = "dep"
   analyzer-version = 1
-  inputs-digest = "27bba042d0f24eb9618648578513c047d0e4105f21c4de62d408702efef51326"
+  inputs-digest = "0a2bd705c4f74417629c03ef953bee925c51240b4ae6fe11e8ec71ba69a78996"
   solver-name = "gps-cdcl"
   solver-version = 1

@@ -13,14 +13,22 @@ import (
 // Store is an EventStore connected to a specific database
 type Store struct {
 	db               *badger.DB
-	incoming         chan *eventstore.Event
-	openChannels     map[string]*Channel
-	openChannelsLock sync.Mutex
+	in               chan eventPromise
+	out              chan eventstore.Event
+	sharedChannelsMu sync.RWMutex
+	sharedChannels   map[string]*sharedChannel
+	// done is used for signaling to our store's go routine
+	done chan error
 }
 
 // Options are parameters for opening a store
 type Options struct {
 	Dir string
+}
+
+type eventPromise struct {
+	event *eventstore.Event
+	done  chan error
 }
 
 // Open opens a store from disk, or creates a new store if it does not already exist
@@ -35,13 +43,17 @@ func Open(opts Options) (*Store, error) {
 	if err != nil {
 		return nil, err
 	}
-	store := &Store{
-		db:           db,
-		incoming:     make(chan *eventstore.Event, 20),
-		openChannels: make(map[string]*Channel),
+	s := &Store{
+		db:             db,
+		in:             make(chan eventPromise, 20),
+		out:            make(chan eventstore.Event, 20),
+		sharedChannels: make(map[string]*sharedChannel),
 	}
 
-	return store, nil
+	go s.startIn()
+	go s.startOut()
+
+	return s, nil
 }
 
 // Close closes the store
@@ -50,60 +62,81 @@ func (s *Store) Close() error {
 	if err != nil {
 		return err
 	}
+	// TODO fix end signal
+	close(s.done)
 
 	return nil
 }
 
 // Create inserts an event into the store after assigning it an id
-func (s *Store) Create(e *eventstore.Event) error {
-	return s.insert(e, true)
+func (s *Store) Create(e eventstore.Event) (eventstore.Event, error) {
+	e.Id = nil
+	return s.insert(e)
 }
 
 // Insert inserts a new event into the store
-func (s *Store) Insert(e *eventstore.Event) error {
-	return s.insert(e, false)
+func (s *Store) Insert(e eventstore.Event) (eventstore.Event, error) {
+	return s.insert(e)
 }
 
-func (s *Store) insert(e *eventstore.Event, setID bool) error {
+func (s *Store) insert(e eventstore.Event) (eventstore.Event, error) {
 
-	const leaseSize = 1
+	done := make(chan error, 1)
 
-	sequence, err := s.db.GetSequence(sequenceKey, leaseSize)
-	if err != nil {
-		return nil
+	s.in <- eventPromise{
+		event: &e,
+		done:  done,
 	}
 
-	// defer sequence.Release()
+	return e, <-done
+}
 
-	err = s.db.Update(func(txn *badger.Txn) (err error) {
+func (s *Store) startIn() {
 
-		data, err := proto.Marshal(e)
-		if err != nil {
-			return err
-		}
-		num, err := sequence.Next()
-		if err != nil {
-			return err
-		}
+	counter := 0
+
+	for promise := range s.in {
 
 		now := time.Now().UnixNano()
-		key := string(eventPrefix) + string(now) + string(num)
 
-		if setID {
-			e.Id = key
+		promise.event.Key = append(append(eventPrefix, string(now)...), string(counter)...)
+
+		if promise.event.Id == nil {
+			promise.event.Id = promise.event.Key
 		}
 
-		txn.Set([]byte(key), data)
-		return nil
-	})
+		txn := s.db.NewTransaction(true)
+		defer txn.Discard()
 
-	s.incoming <- e
+		data, err := proto.Marshal(promise.event)
+		if err != nil {
+			promise.done <- err
+		}
 
-	if err != nil {
-		return err
+		txn.Set(promise.event.Key, data)
+		err = txn.Commit(nil)
+		if err != nil {
+			promise.done <- err
+		}
+
+		s.out <- *promise.event
+		close(promise.done)
+		counter++
 	}
+}
 
-	return nil
+func (s *Store) startOut() {
+	for e := range s.out {
+		s.sharedChannelsMu.RLock()
+		for _, shared := range s.sharedChannels {
+			select {
+			case shared.in <- e:
+				// TODO: Move db write code here
+			default: // Skip if full, listeners can catch up from disk later
+			}
+		}
+		s.sharedChannelsMu.RUnlock()
+	}
 }
 
 // Channel returns a channel with the given name. If no channel exists with that name, a new channel is created
@@ -122,10 +155,15 @@ func (s *Store) insert(e *eventstore.Event, setID bool) error {
 var (
 	// ErrChannelNotFound is returned when attempting to access a channel that has not been created
 	ErrChannelNotFound = errors.New("Attempted to read from a channel that does not exist")
+	// ErrKeyNotFound is returned when attempting to set event status for an event that does not exist
+	ErrKeyNotFound = errors.New("Key not found")
+	// ErrInternal is returned when an interanl error occurs
+	ErrInternal = errors.New("Internal error")
 )
 
 var (
 	sequenceKey   = []byte("__event-store-sequence-key__")
 	channelPrefix = []byte("C")
+	cursorPrefix  = []byte("c")
 	eventPrefix   = []byte("E")
 )

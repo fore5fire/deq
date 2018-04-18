@@ -8,6 +8,7 @@
     "ptypes",
     "ptypes/any",
     "ptypes/duration",
+    "ptypes/empty",
     "ptypes/timestamp"
   ]
   revision = "925541529c1fa6821df4e44ce2723319eb2be768"
@@ -87,6 +88,6 @@
 [solve-meta]
   analyzer-name = "dep"
   analyzer-version = 1
-  inputs-digest = "fe7ebfe5d12e28ce1d3aa032fce9686ee6d080a7f21ca94584f08cd74a5028de"
+  inputs-digest = "87779557ce815c3be73e6b46942442dc1ec6370b51a792c1c20c1797f31af840"
   solver-name = "gps-cdcl"
   solver-version = 1
