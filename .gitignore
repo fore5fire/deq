@@ -2,4 +2,3 @@ dist
 /charts/*/charts
 /pkg
 /bin
-bindata.go
