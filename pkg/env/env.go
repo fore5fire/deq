@@ -14,7 +14,4 @@ var (
 
 	// Dir is the database directory
 	Dir = os.Getenv("DATA_DIR")
-
-	// ProtobufType is the protobuf type enforced by the server
-	ProtobufType = os.Getenv("PROTOBUF_TYPE")
 )

@@ -3,7 +3,7 @@ package main_test
 import (
 	"context"
 	"fmt"
-	"github.com/golang/protobuf/ptypes"
+	"github.com/gogo/protobuf/types"
 	pb "gitlab.com/katcheCode/deqd/api/v1/deq"
 	"gitlab.com/katcheCode/deqd/pkg/test/model"
 	"google.golang.org/grpc"
@@ -45,7 +45,7 @@ func gatherTestModels(client pb.DEQClient, duration time.Duration) (result []mod
 
 		testModel := model.TestModel{}
 
-		err = ptypes.UnmarshalAny(response.GetPayload(), &testModel)
+		err = types.UnmarshalAny(response.GetPayload(), &testModel)
 		if err != nil {
 			return nil, err
 		}
@@ -58,7 +58,7 @@ func gatherTestModels(client pb.DEQClient, duration time.Duration) (result []mod
 }
 
 func createEvent(client pb.DEQClient, m model.TestModel, timeout time.Duration) (*pb.Event, error) {
-	payload, err := ptypes.MarshalAny(&m)
+	payload, err := types.MarshalAny(&m)
 	if err != nil {
 		return nil, err
 	}
@@ -106,7 +106,7 @@ func TestCreateAndReceive(t *testing.T) {
 		events, eventsErr = gatherTestModels(c, time.Second*5)
 	}()
 
-	payload, err := ptypes.MarshalAny(&model.TestModel{
+	payload, err := types.MarshalAny(&model.TestModel{
 		Msg: "Hello world!",
 	})
 	if err != nil {

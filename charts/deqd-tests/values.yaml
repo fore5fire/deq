@@ -15,4 +15,3 @@ deqd:
 
   debug: true
   develop: true
-  protobufType: "model.TestModel"

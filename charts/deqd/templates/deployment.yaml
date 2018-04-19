@@ -47,8 +47,6 @@ spec:
             value: "{{ .Values.develop }}"
           - name: DATA_DIR
             value: "{{ .Values.dataDir }}"
-          - name: PROTOBUF_TYPE
-            value: "{{ .Values.protobufType }}"
           ports:
             - containerPort: 80
           readinessProbe:

@@ -2,8 +2,7 @@ package eventstore
 
 import (
 	"context"
-	"github.com/golang/protobuf/ptypes"
-	"github.com/golang/protobuf/ptypes/empty"
+	"github.com/gogo/protobuf/types"
 	pb "gitlab.com/katcheCode/deqd/api/v1/deq"
 	"gitlab.com/katcheCode/deqd/pkg/eventstore"
 	"gitlab.com/katcheCode/deqd/pkg/logger"
@@ -39,17 +38,6 @@ func (s *Server) CreateEvent(ctx context.Context, in *pb.CreateEventRequest) (*p
 
 	if e == nil {
 		return nil, status.Error(codes.InvalidArgument, "Missing required argument 'event'")
-	}
-
-	recievedType, err := ptypes.AnyMessageName(e.GetPayload())
-
-	if err != nil {
-		createEventLog.Debug().Err(err).Msg("Error reading payload type")
-		return nil, status.Error(codes.InvalidArgument, "Payload type could not be identified")
-	}
-	if recievedType != s.payloadType {
-		createEventLog.Debug().Msg("Recieved incorrect payload type: " + recievedType)
-		return nil, status.Error(codes.InvalidArgument, "Payload type did not match store type")
 	}
 
 	// createEventLog.Debug().Interface("event", *e).Msg("creating event...")
@@ -284,7 +272,7 @@ func (s *Server) GetChannel(ctx context.Context, in *pb.GetChannelRequest) (*pb.
 }
 
 // EnsureChannel implements EventStore.EnsureChannel
-func (s *Server) EnsureChannel(ctx context.Context, in *pb.EnsureChannelRequest) (*empty.Empty, error) {
+func (s *Server) EnsureChannel(ctx context.Context, in *pb.EnsureChannelRequest) (*types.Empty, error) {
 
 	pbChannel := in.GetChannel()
 	if pbChannel == nil {
@@ -299,7 +287,7 @@ func (s *Server) EnsureChannel(ctx context.Context, in *pb.EnsureChannelRequest)
 	// channel := s.store.Channel(channelName)
 	// err := channel.EnsureSettings()
 
-	return new(empty.Empty), nil
+	return new(types.Empty), nil
 }
 
 // func (s *Server) ResetChannel(ctx context.Context, in *pb.ResetChannelRequest) (*pb.ResetChannelResponse, error) {

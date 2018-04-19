@@ -1,6 +1,5 @@
 ---
 
-# protobufType: ""
 dataDir: "/var/eventstore"
 
 image:
