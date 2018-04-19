@@ -71,16 +71,16 @@ package-charts:
 #     -   helm test $CHART
 #     - done
 
-lint-charts:
-  stage: test
-  image: katchecode/gcloud-kubernetes-helm
-  dependencies: []
-
-  script:
-    - |
-      for CHART in charts/*/; do
-        helm lint $CHART
-      done
+# lint-charts:
+#   stage: test
+#   image: katchecode/gcloud-kubernetes-helm
+#   dependencies: []
+#
+#   script:
+#     - |
+#       for CHART in charts/*/; do
+#         helm lint $CHART
+#       done
 
 
 deploy-charts:
