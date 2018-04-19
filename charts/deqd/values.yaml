@@ -9,6 +9,7 @@ image:
   pullPolicy: IfNotPresent
 
 tests:
+  enabled: true
   image:
     repository: registry.gitlab.com/katchecode/deqd/deqd-tests
     tag: v0.1.5
