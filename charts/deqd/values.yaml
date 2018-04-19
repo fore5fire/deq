@@ -4,14 +4,14 @@ dataDir: "/var/deqd"
 
 image:
   repository: registry.gitlab.com/katchecode/deqd/deqd
-  tag: '0.1.5'
+  tag: v0.1.5
   # pullSecret: docker-registry-auth
   pullPolicy: IfNotPresent
 
 tests:
   image:
     repository: registry.gitlab.com/katchecode/deqd/deqd-tests
-    tag: '0.1.5'
+    tag: v0.1.5
     # pullSecret: docker-registry-auth
     pullPolicy: IfNotPresent
   resources: {}
