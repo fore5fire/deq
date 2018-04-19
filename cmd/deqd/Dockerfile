@@ -6,7 +6,7 @@ RUN apk add --no-cache git ca-certificates
 # COPY Gopkg.lock Gopkg.toml ./
 # RUN dep ensure -vendor-only && mv -r vendor /go/src
 COPY vendor /go/src/
-RUN cd /go/src && go install -v ./...
+RUN cd /go/src && CGO_ENABLED=0 go install -v ./...
 
 COPY pkg ./pkg
 COPY api ./api

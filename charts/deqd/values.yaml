@@ -3,14 +3,14 @@
 dataDir: "/var/eventstore"
 
 image:
-  repository: registry.gitlab.com/katchecode/event-store/event-store
+  repository: registry.gitlab.com/katchecode/deq/deq
   tag: ''
   # pullSecret: docker-registry-auth
   pullPolicy: IfNotPresent
 
 tests:
   image:
-    repository: registry.gitlab.com/katchecode/event-store/event-store-tests
+    repository: registry.gitlab.com/katchecode/deq/deq-tests
     tag: ''
     # pullSecret: docker-registry-auth
     pullPolicy: IfNotPresent

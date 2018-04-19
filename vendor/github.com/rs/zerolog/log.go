@@ -82,6 +82,20 @@
 //     log.Warn().Msg("")
 //     // Output: {"level":"warn","severity":"warn"}
 //
+//
+// Caveats
+//
+// There is no fields deduplication out-of-the-box.
+// Using the same key multiple times creates new key in final JSON each time.
+//
+//     logger := zerolog.New(os.Stderr).With().Timestamp().Logger()
+//     logger.Info().
+//            Timestamp().
+//            Msg("dup")
+//     // Output: {"level":"info","time":1494567715,"time":1494567715,"message":"dup"}
+//
+// However, it’s not a big deal though as JSON accepts dup keys,
+// the last one prevails.
 package zerolog
 
 import (
@@ -344,11 +358,8 @@ func (l *Logger) newEvent(level Level, done func(string)) *Event {
 	if level != NoLevel {
 		e.Str(LevelFieldName, level.String())
 	}
-	if len(l.context) > 0 {
-		if len(e.buf) > 1 {
-			e.buf = append(e.buf, ',')
-		}
-		e.buf = append(e.buf, l.context...)
+	if l.context != nil && len(l.context) > 0 {
+		e.buf = appendObjectData(e.buf, l.context)
 	}
 	return e
 }

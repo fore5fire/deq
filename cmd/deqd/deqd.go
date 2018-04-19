@@ -29,7 +29,7 @@ func main() {
 	}
 	defer store.Close()
 
-	server := eventserver.NewServer(store, env.ProtobufType)
+	server := eventserver.NewServer(store)
 
 	var opts []grpc.ServerOption
 

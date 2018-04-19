@@ -22,13 +22,12 @@ var getChannelLog = log.With().Str("handler", "GetChannel").Logger()
 
 // Server represents the gRPC server
 type Server struct {
-	store       *eventstore.Store
-	payloadType string
+	store *eventstore.Store
 }
 
 // NewServer creates a new event store server initalized with a backing event store
-func NewServer(eventStore *eventstore.Store, payloadType string) *Server {
-	return &Server{eventStore, payloadType}
+func NewServer(eventStore *eventstore.Store) *Server {
+	return &Server{eventStore}
 }
 
 // CreateEvent implements eventstore.CreateEvent
