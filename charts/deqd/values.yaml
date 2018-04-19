@@ -1,17 +1,17 @@
 ---
 
-dataDir: "/var/eventstore"
+dataDir: "/var/deqd"
 
 image:
   repository: registry.gitlab.com/katchecode/deq/deq
-  tag: ''
+  tag: '28d73cf51b48ddaae00237ca8a8f882436a7356e'
   # pullSecret: docker-registry-auth
   pullPolicy: IfNotPresent
 
 tests:
   image:
     repository: registry.gitlab.com/katchecode/deq/deq-tests
-    tag: ''
+    tag: '28d73cf51b48ddaae00237ca8a8f882436a7356e'
     # pullSecret: docker-registry-auth
     pullPolicy: IfNotPresent
   resources: {}
