@@ -77,9 +77,9 @@ var ChannelSettingsDefaults = ChannelSettings{}
 func (c Channel) Follow() (eventc chan deq.Event, done chan struct{}) {
 
 	done = make(chan struct{})
-	go func() {
-
-	}()
+	// go func() {
+	// 	<-done
+	// }()
 
 	return c.out, done
 }
@@ -232,7 +232,7 @@ func (s *sharedChannel) catchUp(cursor []byte) ([]byte, error) {
 	var event deq.Event
 	var lastKey []byte
 
-	for it.Seek(cursor); it.ValidForPrefix(eventPrefix); it.Next() {
+	for it.Seek(append(eventPrefix, cursor...)); it.ValidForPrefix(eventPrefix); it.Next() {
 
 		item := it.Item()
 		lastKey = item.Key()

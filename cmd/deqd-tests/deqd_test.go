@@ -4,7 +4,7 @@ import (
 	"context"
 	"fmt"
 	"github.com/gogo/protobuf/types"
-	pb "gitlab.com/katcheCode/deqd/api/v1/deq"
+	"gitlab.com/katcheCode/deqd/api/v1/deq"
 	"gitlab.com/katcheCode/deqd/pkg/test/model"
 	"google.golang.org/grpc"
 	"google.golang.org/grpc/codes"
@@ -16,13 +16,13 @@ import (
 	"time"
 )
 
-func gatherTestModels(client pb.DEQClient, duration time.Duration) (result []model.TestModel, err error) {
+func gatherTestModels(client deq.DEQClient, duration time.Duration) (result []model.TestModel, err error) {
 	log.Println("Gathering Test Models")
 
 	ctx, cancel := context.WithTimeout(context.Background(), duration)
 	defer cancel()
 
-	stream, err := client.StreamEvents(ctx, &pb.StreamEventsRequest{
+	stream, err := client.StreamEvents(ctx, &deq.StreamEventsRequest{
 		Channel: "TestChannel1",
 	})
 	if err != nil {
@@ -57,7 +57,7 @@ func gatherTestModels(client pb.DEQClient, duration time.Duration) (result []mod
 	}
 }
 
-func createEvent(client pb.DEQClient, m model.TestModel, timeout time.Duration) (*pb.Event, error) {
+func createEvent(client deq.DEQClient, m model.TestModel, timeout time.Duration) (*deq.Event, error) {
 	payload, err := types.MarshalAny(&m)
 	if err != nil {
 		return nil, err
@@ -67,16 +67,11 @@ func createEvent(client pb.DEQClient, m model.TestModel, timeout time.Duration) 
 	defer cancel()
 
 	// log.Println("Creating event")
-	e, err := client.CreateEvent(ctx, &pb.CreateEventRequest{
-		Event: &pb.Event{
+	return client.CreateEvent(ctx, &deq.CreateEventRequest{
+		Event: &deq.Event{
 			Payload: payload,
 		},
 	})
-	if err != nil {
-		return nil, err
-	}
-
-	return e, nil
 }
 
 func TestCreateAndReceive(t *testing.T) {
@@ -88,7 +83,7 @@ func TestCreateAndReceive(t *testing.T) {
 	}
 	defer conn.Close()
 
-	c := pb.NewDEQClient(conn)
+	c := deq.NewDEQClient(conn)
 
 	events, err := gatherTestModels(c, time.Second)
 	if err == nil && len(events) > 0 {
@@ -116,14 +111,24 @@ func TestCreateAndReceive(t *testing.T) {
 	ctx, cancel := context.WithTimeout(context.Background(), time.Second*10)
 	defer cancel()
 
+	beforeTime := time.Now()
+
 	log.Println("Creating event")
-	_, err = c.CreateEvent(ctx, &pb.CreateEventRequest{
-		Event: &pb.Event{
+	e, err := c.CreateEvent(ctx, &deq.CreateEventRequest{
+		Event: &deq.Event{
 			Payload: payload,
 		},
 	})
 	if err != nil {
 		t.Fatalf("Error Creating Event: %v\n", err)
+	}
+
+	t.Logf("Event ID: %v", e.GetId())
+	createTime := deq.TimeFromID(e.GetId())
+	afterTime := time.Now()
+
+	if createTime.Before(beforeTime) || createTime.After(afterTime) {
+		t.Fatalf("Created event id has incorrect create time. Expected between %v and %v, got %v", beforeTime, afterTime, createTime)
 	}
 
 	wg.Wait()
@@ -148,7 +153,7 @@ func TestRequeueTimeout(t *testing.T) {
 	}
 	defer conn.Close()
 
-	c := pb.NewDEQClient(conn)
+	c := deq.NewDEQClient(conn)
 
 	for i := 0; i < 500; i++ {
 		_, err = createEvent(c, model.TestModel{

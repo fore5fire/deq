@@ -5,6 +5,7 @@ import (
 	"github.com/dgraph-io/badger"
 	"github.com/golang/protobuf/proto"
 	// "github.com/satori/go.uuid"
+	"encoding/binary"
 	"gitlab.com/katcheCode/deqd/api/v1/deq"
 	"sync"
 	"time"
@@ -93,13 +94,12 @@ func (s *Store) insert(e deq.Event) (deq.Event, error) {
 
 func (s *Store) startIn() {
 
-	counter := 0
+	var counter uint32
 
 	for promise := range s.in {
 
-		now := time.Now().UnixNano()
-
-		promise.event.Key = append(append(eventPrefix, string(now)...), string(counter)...)
+		promise.event.Key = GenerateID(counter)
+		counter++
 
 		if promise.event.Id == nil {
 			promise.event.Id = promise.event.Key
@@ -113,7 +113,7 @@ func (s *Store) startIn() {
 			promise.done <- err
 		}
 
-		txn.Set(promise.event.Key, data)
+		txn.Set(append(eventPrefix, promise.event.Key...), data)
 		err = txn.Commit(nil)
 		if err != nil {
 			promise.done <- err
@@ -121,7 +121,6 @@ func (s *Store) startIn() {
 
 		s.out <- *promise.event
 		close(promise.done)
-		counter++
 	}
 }
 
@@ -167,3 +166,12 @@ var (
 	cursorPrefix  = []byte("c")
 	eventPrefix   = []byte("E")
 )
+
+// GenerateID returns a new id using the current time
+func GenerateID(count uint32) []byte {
+	id := make([]byte, 10)
+	timePart := uint64(time.Now().UnixNano()) / uint64(time.Millisecond)
+	binary.BigEndian.PutUint64(id, timePart<<16)
+	binary.BigEndian.PutUint32(id[6:], count)
+	return id
+}
