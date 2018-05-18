@@ -94,7 +94,7 @@ func (c Channel) SetEventStatus(key []byte, status EventStatus) error {
 	txn := c.db.NewTransaction(true)
 	defer txn.Discard()
 
-	_, err := txn.Get(key)
+	_, err := txn.Get(append(eventPrefix, key...))
 	if err == badger.ErrKeyNotFound {
 		return ErrKeyNotFound
 	}
