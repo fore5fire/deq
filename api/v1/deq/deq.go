@@ -28,17 +28,17 @@ func NewClient(conn *grpc.ClientConn) *Client {
 
 // Handler is a handler for DEQ events.
 type Handler interface {
-	HandleEvent(context.Context, *Event, proto.Message) error
+	HandleEvent(context.Context, *Event, Message) error
 }
 
 // HandlerFunc is the function type that can be used for registering HandlerFuncs
-type HandlerFunc func(context.Context, *Event, proto.Message) error
+type HandlerFunc func(context.Context, *Event, Message) error
 
 type handler struct {
 	handlerFunc HandlerFunc
 }
 
-func (h *handler) HandleEvent(ctx context.Context, e *Event, m proto.Message) error {
+func (h *handler) HandleEvent(ctx context.Context, e *Event, m Message) error {
 	return h.handlerFunc(ctx, e, m)
 }
 
@@ -51,7 +51,7 @@ func (c *Client) Handle(typeURL string, h Handler) {
 }
 
 // HandleFunc registers the handler func for a given typeURL. If a handler already exists for the typeURL, HandleFunc panics
-func (c *Client) HandleFunc(typeURL string, handlerFunc func(context.Context, *Event, proto.Message) error) {
+func (c *Client) HandleFunc(typeURL string, handlerFunc func(context.Context, *Event, Message) error) {
 	c.Handle(typeURL, &handler{handlerFunc})
 }
 
@@ -82,7 +82,7 @@ func (c *Client) Stream(ctx context.Context, channel string) error {
 			continue
 		}
 		messageType := proto.MessageType(typeURL)
-		message := reflect.New(messageType).Interface().(proto.Message)
+		message := reflect.New(messageType).Interface().(Message)
 		err = types.UnmarshalAny(event.Payload, message)
 
 		status := Event_PROCESSED
