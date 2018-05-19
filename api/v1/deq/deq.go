@@ -8,12 +8,22 @@ import (
 	"fmt"
 	"github.com/gogo/protobuf/proto"
 	"github.com/gogo/protobuf/types"
+	"google.golang.org/grpc"
 	"reflect"
 )
 
+// Client provides a convience layer for DEQClient
 type Client struct {
 	DEQClient
 	handlers map[string]Handler
+}
+
+// NewClient creates a new Client
+func NewClient(conn *grpc.ClientConn) *Client {
+	return &Client{
+		NewDEQClient(conn),
+		map[string]Handler{},
+	}
 }
 
 // Handler is a handler for DEQ events.
