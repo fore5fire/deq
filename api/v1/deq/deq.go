@@ -31,8 +31,11 @@ type Handler interface {
 	HandleEvent(context.Context, *Event, proto.Message) error
 }
 
+// HandlerFunc is the function type that can be used for registering HandlerFuncs
+type HandlerFunc func(context.Context, *Event, proto.Message) error
+
 type handler struct {
-	handlerFunc func(context.Context, *Event, proto.Message) error
+	handlerFunc HandlerFunc
 }
 
 func (h *handler) HandleEvent(ctx context.Context, e *Event, m proto.Message) error {
@@ -81,19 +84,27 @@ func (c *Client) Stream(ctx context.Context, channel string) error {
 		messageType := proto.MessageType(typeURL)
 		message := reflect.New(messageType).Interface().(proto.Message)
 		err = types.UnmarshalAny(event.Payload, message)
+
+		status := Event_PROCESSED
 		err = handler.HandleEvent(ctx, event, message)
+		if err == ErrWillNotProcess {
+			status = Event_WILL_NOT_PROCESS
+		}
 		if err != nil {
+			// TODO: We probably need to give someone a chance to handle this
 			// log.Printf("Failed to reduce event of type %s: %v", event.GetPayload().GetTypeUrl(), err)
-			//  Not sure yet
-			continue
+			status = Event_PENDING
 		}
 		_, err = c.UpdateEventStatus(ctx, &UpdateEventStatusRequest{
 			Channel:     channel,
 			Key:         event.GetKey(),
-			EventStatus: Event_PROCESSED,
+			EventStatus: status,
 		})
 		if err != nil {
 			return errors.New("Failed to mark event as processed: " + err.Error())
 		}
 	}
 }
+
+// ErrWillNotProcess should be returned from a handler to indicate that the event status should be set to WILL_NOT_PROCESS instead of PROCESSED
+var ErrWillNotProcess = errors.New("will not process")
