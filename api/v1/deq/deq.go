@@ -108,3 +108,6 @@ func (c *Client) Stream(ctx context.Context, channel string) error {
 
 // ErrWillNotProcess should be returned from a handler to indicate that the event status should be set to WILL_NOT_PROCESS instead of PROCESSED
 var ErrWillNotProcess = errors.New("will not process")
+
+// Message is a message payload that is sent by deq
+type Message proto.Message
