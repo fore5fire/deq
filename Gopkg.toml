@@ -25,6 +25,7 @@
 #   unused-packages = true
 
 required = ["github.com/golang/protobuf/protoc-gen-go"]
+ignored = ["github.com/gogo/protobuf/proto"]
 
 [prune]
   go-tests = true

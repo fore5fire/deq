@@ -1,7 +1,7 @@
 FROM golang:alpine AS build
 
 WORKDIR /go/src/gitlab.com/katcheCode/deqd
-RUN apk add --no-cache git ca-certificates
+RUN apk add --no-cache git ca-certificates && go get github.com/gogo/protobuf/proto
 
 # COPY Gopkg.lock Gopkg.toml ./
 # RUN dep ensure -vendor-only && mv -r vendor /go/src
