@@ -59,58 +59,75 @@ func (c *Client) HandleFunc(typeURL string, handlerFunc func(context.Context, *E
 
 // Stream opens an event stream with deq and routes events to their designated handlers. Any event without a handler is marked WILL_NO_PROCESS
 func (c *Client) Stream(ctx context.Context, channel string) error {
+
+	ctx, cancel := context.WithCancel(ctx)
+	defer cancel()
+
+	errc := make(chan error)
+	go c.listen(ctx, channel, errc)
+
+	return <-errc
+}
+
+func (c *Client) listen(ctx context.Context, channel string, errc chan error) {
 	stream, err := c.StreamEvents(ctx, &StreamEventsRequest{
 		Channel: channel,
 		Follow:  true,
 	})
 	if err != nil {
-		return errors.New("DEQ: Failed to open event stream: " + err.Error())
+		errc <- errors.New("DEQ: Failed to open event stream: " + err.Error())
+		return
 	}
 	defer stream.CloseSend()
 
 	for {
 		event, err := stream.Recv()
 		if err != nil {
-			return errors.New("Event stream failed: " + err.Error())
+			errc <- errors.New("Event stream failed: " + err.Error())
+			return
 		}
-		typeURL := strings.TrimPrefix(event.GetPayload().GetTypeUrl(), "type.googleapis.com/")
-		handler := c.handlers[typeURL]
-		if handler == nil {
+		go func() {
+			typeURL := strings.TrimPrefix(event.GetPayload().GetTypeUrl(), "type.googleapis.com/")
+			handler := c.handlers[typeURL]
+			if handler == nil {
+				_, err = c.UpdateEventStatus(ctx, &UpdateEventStatusRequest{
+					Channel:     channel,
+					Key:         event.GetKey(),
+					EventStatus: Event_WILL_NOT_PROCESS,
+				})
+				return
+			}
+			messageType := proto.MessageType(typeURL)
+			if messageType == nil {
+				messageType = proto.MessageType("type.googleapis.com/" + typeURL)
+			}
+			if messageType == nil {
+				errc <- errors.New("deq: registered for handler not registered with protobuf: " + typeURL)
+				return
+			}
+			message := reflect.New(messageType.Elem()).Interface().(Message)
+			err = types.UnmarshalAny(event.Payload, message)
+
+			status := Event_PROCESSED
+			err = handler.HandleEvent(ctx, event, message)
+			if err == ErrWillNotProcess {
+				status = Event_WILL_NOT_PROCESS
+			}
+			if err != nil {
+				// TODO: We probably need to give someone a chance to handle this
+				// log.Printf("Failed to reduce event of type %s: %v", event.GetPayload().GetTypeUrl(), err)
+				status = Event_PENDING
+			}
 			_, err = c.UpdateEventStatus(ctx, &UpdateEventStatusRequest{
 				Channel:     channel,
 				Key:         event.GetKey(),
-				EventStatus: Event_WILL_NOT_PROCESS,
+				EventStatus: status,
 			})
-			continue
-		}
-		messageType := proto.MessageType(typeURL)
-		if messageType == nil {
-			messageType = proto.MessageType("type.googleapis.com/" + typeURL)
-		}
-		if messageType == nil {
-			return errors.New("deq: registered for handler not registered with protobuf: " + typeURL)
-		}
-		message := reflect.New(messageType.Elem()).Interface().(Message)
-		err = types.UnmarshalAny(event.Payload, message)
-
-		status := Event_PROCESSED
-		err = handler.HandleEvent(ctx, event, message)
-		if err == ErrWillNotProcess {
-			status = Event_WILL_NOT_PROCESS
-		}
-		if err != nil {
-			// TODO: We probably need to give someone a chance to handle this
-			// log.Printf("Failed to reduce event of type %s: %v", event.GetPayload().GetTypeUrl(), err)
-			status = Event_PENDING
-		}
-		_, err = c.UpdateEventStatus(ctx, &UpdateEventStatusRequest{
-			Channel:     channel,
-			Key:         event.GetKey(),
-			EventStatus: status,
-		})
-		if err != nil {
-			return errors.New("Failed to mark event as processed: " + err.Error())
-		}
+			if err != nil {
+				errc <- errors.New("Failed to mark event as processed: " + err.Error())
+				return
+			}
+		}()
 	}
 }
 
