@@ -10,6 +10,7 @@ import (
 	"github.com/gogo/protobuf/types"
 	"google.golang.org/grpc"
 	"reflect"
+	"strings"
 )
 
 // Client provides a convience layer for DEQClient
@@ -44,10 +45,11 @@ func (h *handler) HandleEvent(ctx context.Context, e *Event, m Message) error {
 
 // Handle registers the handler for a given typeURL. If a handler already exists for the typeURL, Handle panics
 func (c *Client) Handle(typeURL string, h Handler) {
-	if c.handlers[typeURL] != nil {
+	url := strings.TrimLeft(typeURL, "type.googleapis.com/")
+	if c.handlers[url] != nil {
 		panic(fmt.Sprintf("DEQ: Attempted to register a handler for type %s, which already has a registered handler.", typeURL))
 	}
-	c.handlers[typeURL] = h
+	c.handlers[url] = h
 }
 
 // HandleFunc registers the handler func for a given typeURL. If a handler already exists for the typeURL, HandleFunc panics
@@ -71,7 +73,7 @@ func (c *Client) Stream(ctx context.Context, channel string) error {
 		if err != nil {
 			return errors.New("Event stream failed: " + err.Error())
 		}
-		typeURL := event.GetPayload().GetTypeUrl()
+		typeURL := strings.TrimLeft(event.GetPayload().GetTypeUrl(), "type.googleapis.com/")
 		handler := c.handlers[typeURL]
 		if handler == nil {
 			_, err = c.UpdateEventStatus(ctx, &UpdateEventStatusRequest{
