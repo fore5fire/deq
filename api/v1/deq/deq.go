@@ -82,6 +82,9 @@ func (c *Client) Stream(ctx context.Context, channel string) error {
 			continue
 		}
 		messageType := proto.MessageType(typeURL)
+		if messageType == nil {
+			return errors.New("deq: registered for handler not registered with protobuf: " + typeURL)
+		}
 		message := reflect.New(messageType).Interface().(Message)
 		err = types.UnmarshalAny(event.Payload, message)
 
