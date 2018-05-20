@@ -45,7 +45,7 @@ func (h *handler) HandleEvent(ctx context.Context, e *Event, m Message) error {
 
 // Handle registers the handler for a given typeURL. If a handler already exists for the typeURL, Handle panics
 func (c *Client) Handle(typeURL string, h Handler) {
-	url := strings.TrimLeft(typeURL, "type.googleapis.com/")
+	url := strings.TrimPrefix(typeURL, "type.googleapis.com/")
 	if c.handlers[url] != nil {
 		panic(fmt.Sprintf("DEQ: Attempted to register a handler for type %s, which already has a registered handler.", typeURL))
 	}
@@ -73,7 +73,7 @@ func (c *Client) Stream(ctx context.Context, channel string) error {
 		if err != nil {
 			return errors.New("Event stream failed: " + err.Error())
 		}
-		typeURL := strings.TrimLeft(event.GetPayload().GetTypeUrl(), "type.googleapis.com/")
+		typeURL := strings.TrimPrefix(event.GetPayload().GetTypeUrl(), "type.googleapis.com/")
 		handler := c.handlers[typeURL]
 		if handler == nil {
 			_, err = c.UpdateEventStatus(ctx, &UpdateEventStatusRequest{
@@ -84,6 +84,9 @@ func (c *Client) Stream(ctx context.Context, channel string) error {
 			continue
 		}
 		messageType := proto.MessageType(typeURL)
+		if messageType == nil {
+			messageType = proto.MessageType("type.googleapis.com/" + typeURL)
+		}
 		if messageType == nil {
 			return errors.New("deq: registered for handler not registered with protobuf: " + typeURL)
 		}
