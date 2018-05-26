@@ -15,3 +15,11 @@ var (
 	// Dir is the database directory
 	Dir = os.Getenv("DATA_DIR")
 )
+
+func init() {
+	var ok bool
+	Dir, ok = os.LookupEnv("DATA_DIR")
+	if !ok {
+		Dir = "/var/deq/db"
+	}
+}
