@@ -29,6 +29,7 @@
 [[projects]]
   name = "github.com/gogo/protobuf"
   packages = [
+    "proto",
     "sortkeys",
     "types"
   ]
@@ -149,6 +150,6 @@
 [solve-meta]
   analyzer-name = "dep"
   analyzer-version = 1
-  inputs-digest = "887cda6449803de6dd6aca3479da149ffdb592f3a656a2beb5d619dbb65825a5"
+  inputs-digest = "4281eb75447ba1c3979d21300ef165f4fdd8ebc94829f0fae17208350834674d"
   solver-name = "gps-cdcl"
   solver-version = 1
