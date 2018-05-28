@@ -20,6 +20,6 @@ func init() {
 	var ok bool
 	Dir, ok = os.LookupEnv("DATA_DIR")
 	if !ok {
-		Dir = "/var/deq/db"
+		Dir = "/var/deqd"
 	}
 }
