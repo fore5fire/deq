@@ -53,7 +53,7 @@ func (c *Client) Handle(typeURL string, h Handler) {
 }
 
 // HandleFunc registers the handler func for a given typeURL. If a handler already exists for the typeURL, HandleFunc panics
-func (c *Client) HandleFunc(typeURL string, handlerFunc func(context.Context, *Event, Message) error) {
+func (c *Client) HandleFunc(typeURL string, handlerFunc HandlerFunc) {
 	c.Handle(typeURL, &handler{handlerFunc})
 }
 
