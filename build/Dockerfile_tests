@@ -1,0 +1,5 @@
+FROM scratch
+
+COPY ca-certificates.crt /etc/ssl/certs/ca-certificates.crt
+COPY deqd_tests.test /bin/deqd_tests.test
+ENTRYPOINT ["/bin/deqd_tests.test"]

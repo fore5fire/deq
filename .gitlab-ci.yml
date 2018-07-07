@@ -1,7 +1,5 @@
 
 variables:
-  PROJECT_NAME: deqd
-  CHART_REPO_BUCKET: charts.katchecode.com
   DOCKER_DRIVER: overlay2
 
 stages:
@@ -9,90 +7,42 @@ stages:
   - test
   - deploy
 
-build-images:
+build-server:
   stage: build
+  image: golang:1.10.3-alpine
+  variables:
+    GOPATH: /go
+    CGO_ENABLED: "0"
+    GOOS: linux
+  artifacts:
+    paths:
+    - build/deqd
+  before_script:
+  - mkdir -p /go/src/gitlab.com/katcheCode/charter-success
+  - ln -s $CI_PROJECT_DIR /go/src/gitlab.com/katcheCode/charter-success/deqd
+  - cd /go/src/gitlab.com/katcheCode/charter-success/deqd
+  script:
+  - apk add --no-cache git
+  - go get ./cmd/mailer
+  - go build -o build/deqd ./cmd/deqd
+
+# api-tests:
+#   stage: test
+#   image: golang:1.10.3-alpine
+#   variables:
+#     CGO_ENABLED: "0"
+#     GOOS: linux
+#   services:
+#     - docker:dind
+#   script:
+#     - go test gitlab.com/katcheCode/charter-success/deqd/cmd/deqd_tests
+
+deploy-server:
+  stage: deploy
   image: docker
   services:
     - docker:dind
   script:
-    - echo "$CI_JOB_TOKEN" | docker login -u gitlab-ci-token --password-stdin $CI_REGISTRY
-    - |
-      for IMAGE in cmd/*/; do
-        IMAGE_REPO=$CI_REGISTRY_IMAGE/$(basename $IMAGE)
-        IMAGE_TAG=$IMAGE_REPO:$CI_COMMIT_SHA
-        CACHE_REPO=$IMAGE_REPO/cache
-        ! docker pull $IMAGE_REPO:latest
-        ! docker pull $CACHE_REPO --all-tags
-        CACHE_ARGS=$(docker image ls --filter reference="$CACHE_REPO" --format="{{.Repository}}:{{.Tag}}" | tr '\n' ' ' | sed 's/^/ /' | sed -e 's/[[:space:]]*$//' | sed 's/ / --cache-from /g')
-        docker build . -f "$IMAGE"Dockerfile -t $IMAGE_TAG -t $IMAGE_REPO:latest --cache-from $IMAGE_REPO:latest $CACHE_ARGS
-        docker push $IMAGE_TAG
-        docker push $IMAGE_REPO:latest
-        if [ -n "$CI_COMMIT_TAG" ]; then
-          VERSION_TAG=$CI_REGISTRY_IMAGE/$(basename $IMAGE):$CI_COMMIT_TAG
-          docker tag $IMAGE_TAG $VERSION_TAG
-          docker push $VERSION_TAG
-        fi
-        INDEX=0
-        for STAGE in $(docker images --filter "dangling=true" --quiet); do
-          docker tag $STAGE $CACHE_REPO:$INDEX
-          docker push $CACHE_REPO:$INDEX
-          INDEX=$((INDEX+1))
-        done
-      done
-
-package-charts:
-  stage: build
-  image:
-    name: lachlanevenson/k8s-helm
-    entrypoint: ["/bin/sh", "-c"]
-  only:
-    - tags
-    - ^v(0|[1-9]\d*)\.(0|[1-9]\d*)\.(0|[1-9]\d*)(-(0|[1-9]\d*|\d*[a-zA-Z-][0-9a-zA-Z-]*)(\.(0|[1-9]\d*|\d*[a-zA-Z-][0-9a-zA-Z-]*))*)?(\+[0-9a-zA-Z-]+(\.[0-9a-zA-Z-]+)*)?$
-  artifacts:
-    paths:
-      - release/
-  script:
-  - helm init --client-only
-  - helm repo add kc https://charts.katchecode.com
-  - mkdir release
-  - |
-    for CHART in charts/*/; do
-      helm dep build $CHART
-      helm package $CHART -d release/ --app-version ${CI_COMMIT_TAG#v} --version ${CI_COMMIT_TAG#v} --save=false
-    done
-
-# chart_tests:
-#   stage: test
-#   image: lachlanevenson/k8s-helm
-#   script:
-#     - for CHART in charts/*/
-#     - do
-#     -   helm install $CHART --wait --devel --dep-up
-#     -   helm test $CHART
-#     - done
-
-# lint-charts:
-#   stage: test
-#   image: katchecode/gcloud-kubernetes-helm
-#   dependencies: []
-#
-#   script:
-#     - |
-#       for CHART in charts/*/; do
-#         helm lint $CHART
-#       done
-
-
-deploy-charts:
-  stage: deploy
-  image: google/cloud-sdk:alpine
-  dependencies:
-    - package-charts
-  only:
-    - tags
-    - ^v(0|[1-9]\d*)\.(0|[1-9]\d*)\.(0|[1-9]\d*)(-(0|[1-9]\d*|\d*[a-zA-Z-][0-9a-zA-Z-]*)(\.(0|[1-9]\d*|\d*[a-zA-Z-][0-9a-zA-Z-]*))*)?(\+[0-9a-zA-Z-]+(\.[0-9a-zA-Z-]+)*)?$
-  variables:
-    GIT_STRATEGY: none
-  script:
-  - echo "$GCLOUD_SERVICE_ACCOUNT_KEY" | gcloud auth activate-service-account --key-file=-
-  - gsutil cp -n -a public-read release/* gs://$CHART_REPO_BUCKET/
+  - echo "$CI_JOB_TOKEN" | docker login -u gitlab-ci-token --password-stdin $CI_REGISTRY
+  - docker build -t $CI_REGISTRY_IMAGE:$CI_COMMIT_REF_NAME build/
+  - docker push $CI_REGISTRY_IMAGE:$CI_COMMIT_REF_NAME

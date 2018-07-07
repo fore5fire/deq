@@ -1,6 +1,0 @@
-dependencies:
-- name: deqd
-  repository: file://../deqd
-  version: 0.1.0
-digest: sha256:046ee96d86fa46290f2c6b6e06b00ea0d133565b18d58f94837fd8d8681c4ee4
-generated: 2018-04-17T20:02:29.512978602-06:00
