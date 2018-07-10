@@ -23,7 +23,7 @@ build-server:
   - cd /go/src/gitlab.com/katcheCode/charter-success/deqd
   script:
   - apk add --no-cache git
-  - go get ./cmd/mailer
+  - go get ./cmd/deqd
   - go build -o build/deqd ./cmd/deqd
 
 # api-tests:
