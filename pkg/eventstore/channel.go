@@ -5,7 +5,7 @@ package eventstore
 import (
 	"errors"
 	"github.com/dgraph-io/badger"
-	"github.com/golang/protobuf/proto"
+	"github.com/gogo/protobuf/proto"
 	"gitlab.com/katcheCode/deqd/api/v1/deq"
 	"gitlab.com/katcheCode/deqd/pkg/logger"
 	"sync"

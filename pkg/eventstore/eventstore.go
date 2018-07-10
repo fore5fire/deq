@@ -3,7 +3,7 @@ package eventstore
 import (
 	"errors"
 	"github.com/dgraph-io/badger"
-	"github.com/golang/protobuf/proto"
+	"github.com/gogo/protobuf/proto"
 	// "github.com/satori/go.uuid"
 	"encoding/binary"
 	"gitlab.com/katcheCode/deqd/api/v1/deq"

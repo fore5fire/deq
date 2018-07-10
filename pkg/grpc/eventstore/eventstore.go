@@ -126,7 +126,7 @@ func (s *Server) StreamEvents(in *pb.StreamEventsRequest, stream pb.DEQ_StreamEv
 
 		// Poll to check if client closed connection
 		case <-time.After(time.Second * 5):
-			log.Debug().Msg("Polling for client disconnect")
+
 			err := stream.Context().Err()
 			if err == context.Canceled || err == context.DeadlineExceeded {
 				streamEventsLog.Debug().Msg("Client disconnected")
