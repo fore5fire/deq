@@ -46,6 +46,9 @@ func (h *handler) HandleEvent(ctx context.Context, e *Event, m Message) error {
 // Handle registers the handler for a given typeURL. If a handler already exists for the typeURL, Handle panics
 func (c *Client) Handle(typeURL string, h Handler) {
 	url := strings.TrimPrefix(typeURL, "type.googleapis.com/")
+	if typeURL == "" {
+		panic("deq: register handler: typeURL cannot not be empty")
+	}
 	if c.handlers[url] != nil {
 		panic(fmt.Sprintf("DEQ: Attempted to register a handler for type %s, which already has a registered handler.", typeURL))
 	}
