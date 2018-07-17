@@ -7,11 +7,8 @@ import (
 	"github.com/dgraph-io/badger"
 	"github.com/gogo/protobuf/proto"
 	"gitlab.com/katcheCode/deqd/api/v1/deq"
-	"gitlab.com/katcheCode/deqd/pkg/logger"
 	"sync"
 )
-
-var log = logger.With().Str("pkg", "gitlab.com/katcheCode/deqd/eventstore").Logger()
 
 // Channel allows multiple listeners to synchronize processing of events
 type Channel struct {
@@ -177,7 +174,6 @@ func (c Channel) SetSettings() error {
 
 // RequeueEvent adds the event back into the event queue for this channel
 func (c *Channel) RequeueEvent(e deq.Event) {
-	log.Debug().Interface("event", e).Msg("Requeuing event")
 	c.out <- e
 }
 

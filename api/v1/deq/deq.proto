@@ -1,76 +1,60 @@
 syntax = "proto3";
 package deq;
 
-import "google/protobuf/any.proto";
-import "google/protobuf/empty.proto";
-
 service DEQ {
-  rpc CreateEvent       (CreateEventRequest)       returns (Event);
-  rpc StreamEvents      (StreamEventsRequest)        returns (stream Event);
-  rpc UpdateEventStatus (UpdateEventStatusRequest) returns (UpdateEventStatusResponse);
-  rpc StreamingUpdateEventStatus (stream UpdateEventStatusRequest) returns (UpdateEventStatusResponse);
-  // rpc ResetChannel (ResetChannelRequest) returns (ResetChannelResponse);
-  rpc InsertEvents      (stream InsertEventsRequest) returns (InsertEventsResponse);
-  rpc GetChannel        (GetChannelRequest)    returns (Channel);
-  rpc EnsureChannel     (EnsureChannelRequest) returns (google.protobuf.Empty);
-}
-
-
-message Channel {
-  string name = 1;
-  // bool no_requeue = 2;
-  // bytes  min_id = 2;
-  // bytes  max_id = 3;
-  // uint32 requeue_limit = 4;
+  rpc Pub (PubRequest) returns (Event);
+  rpc Sub (SubRequest) returns (stream Event);
+  rpc Ack (AckRequest) returns (AckResponse);
 }
 
 message Event {
-  google.protobuf.Any payload = 1;
-  bytes               id = 2;
-  bytes               key = 3;
-
-  enum Status {
-    PENDING = 0;
-    PROCESSED = 1;
-    WILL_NOT_PROCESS = 2;
-  }
+  // Required.
+  bytes id = 1;
+  // Required.
+  string type_url = 2;
+  bytes payload = 3;
+  // bytes parent_event_id = 4;
+  // int32 min_retries = 4;
 }
 
-
-message CreateEventRequest {
+message PubRequest {
   Event event = 1;
+  string delay_queue_channel = 2;
+  uint32 delay_queue_miliseconds = 3;
 }
 
-
-message EnsureChannelRequest {
-  Channel channel = 1;
-}
-
-message GetChannelRequest {
-  string name = 1;
-}
-
-message StreamEventsRequest {
+message SubRequest {
+  // Required.
   string channel = 1;
-  bool   follow = 2;
-  uint32 requeue_delay_miliseconds = 3;
+  string type_url = 2;
+  string min_id = 3; // prefix ?
+  string max_id = 4;
+  bool   follow = 5;
+  // uint32 requeue_delay_miliseconds = 6;
 }
 
-message UpdateEventStatusRequest {
-  string       channel = 1;
-  bytes        key = 2;
-  Event.Status event_status = 3;
+message AckRequest {
+  // Required.
+  string channel = 1;
+  // Required.
+  bytes event_id = 2;
+  // Required.
+  AckCode code = 3;
 }
 
-message UpdateEventStatusResponse {
+enum AckCode {
+  UNSPECIFIED = 0;
 
+  DEQUEUE_PROCESSED = 1;
+  DEQUEUE_FAILED = 2;
+
+  REQUEUE_CONSTANT = 3;
+  REQUEUE_LINEAR = 4;
+  REQUEUE_EXPONENTIAL = 5;
+
+  TOUCH = 6;
 }
 
-
-message InsertEventsRequest {
-  Event event = 1;
-}
-
-message InsertEventsResponse {
+message AckResponse {
 
 }

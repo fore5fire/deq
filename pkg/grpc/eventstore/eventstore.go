@@ -2,23 +2,15 @@ package eventstore
 
 import (
 	"context"
-	"github.com/gogo/protobuf/types"
+	// "github.com/gogo/protobuf/types"
 	pb "gitlab.com/katcheCode/deqd/api/v1/deq"
 	"gitlab.com/katcheCode/deqd/pkg/eventstore"
-	"gitlab.com/katcheCode/deqd/pkg/logger"
 	"google.golang.org/grpc/codes"
 	"google.golang.org/grpc/status"
-	"io"
+	// "io"
+	"log"
 	"time"
 )
-
-var log = logger.With().Str("pkg", "gitlab.com/katcheCode/deqd/grpc/eventstore").Logger()
-var createEventLog = log.With().Str("handler", "CreateEvent").Logger()
-var streamEventsLog = log.With().Str("handler", "StreamEvents").Logger()
-var insertEventsLog = log.With().Str("handler", "InsertEvents").Logger()
-var updateEventStatusLog = log.With().Str("handler", "UpdateEvent").Logger()
-var ensureChannelLog = log.With().Str("handler", "EnsureChannel").Logger()
-var getChannelLog = log.With().Str("handler", "GetChannel").Logger()
 
 // Server represents the gRPC server
 type Server struct {
@@ -43,7 +35,7 @@ func (s *Server) CreateEvent(ctx context.Context, in *pb.CreateEventRequest) (*p
 
 	newEvent, err := s.store.Create(*e)
 	if err != nil {
-		createEventLog.Error().Err(err).Msg("Error creating event")
+		log.Printf("create event: %v", err)
 		return nil, status.Error(codes.Internal, "")
 	}
 
@@ -62,8 +54,6 @@ func (s *Server) StreamEvents(in *pb.StreamEventsRequest, stream pb.DEQ_StreamEv
 	if requeueDelay == 0 {
 		requeueDelay = 8000 * time.Millisecond
 	}
-
-	streamEventsLog.Debug().Msg("New client streaming events")
 
 	channel := s.store.Channel(in.GetChannel())
 	eventc, done := channel.Follow()
@@ -90,10 +80,11 @@ func (s *Server) StreamEvents(in *pb.StreamEventsRequest, stream pb.DEQ_StreamEv
 			if !ok {
 				// Event stream closed, shutting down...
 				if err := channel.Err(); err != nil {
-					streamEventsLog.Error().Err(err).Msg("Error fetching events")
+					log.Printf("fetch events: %v", err)
 					return status.Error(codes.Internal, "")
 				}
-				streamEventsLog.Debug().Msg("Upstream closed, shutting down...")
+				// Upstream closed, shut down
+				// TODO: expose running streams metric
 				return nil
 			}
 
@@ -104,19 +95,17 @@ func (s *Server) StreamEvents(in *pb.StreamEventsRequest, stream pb.DEQ_StreamEv
 			if status.Code(err) == codes.Canceled {
 				cancelRequeue <- struct{}{}
 				channel.RequeueEvent(e)
-				streamEventsLog.Debug().Msg("Client disconnected")
 				return nil
 			}
 			if status.Code(err) == codes.DeadlineExceeded {
 				cancelRequeue <- struct{}{}
 				channel.RequeueEvent(e)
-				streamEventsLog.Debug().Msg("Connection timed out")
 				return nil
 			}
 			if err != nil {
 				cancelRequeue <- struct{}{}
 				channel.RequeueEvent(e)
-				streamEventsLog.Error().Err(err).Msg("Error sending event")
+				log.Printf("send event: %v", err)
 				return status.Error(codes.Internal, "")
 			}
 
@@ -129,7 +118,6 @@ func (s *Server) StreamEvents(in *pb.StreamEventsRequest, stream pb.DEQ_StreamEv
 
 			err := stream.Context().Err()
 			if err == context.Canceled || err == context.DeadlineExceeded {
-				streamEventsLog.Debug().Msg("Client disconnected")
 				return nil
 			}
 		}
@@ -142,15 +130,12 @@ func (s *Server) InsertEvents(stream pb.DEQ_InsertEventsServer) error {
 	for {
 		// TODO: get a downstream done channel so we can end gracefully when the server shuts down
 		in, err := stream.Recv()
-
 		if status.Code(err) == codes.DeadlineExceeded || status.Code(err) == codes.Canceled {
-			insertEventsLog.Debug().Msg("Client disconnected")
 			return nil
 		}
-
 		if err != nil {
-			insertEventsLog.Debug().Err(err).Msg("Error processing event from client")
-			return status.Error(codes.InvalidArgument, "Event was not able to be processed")
+			log.Printf("insert event: recieve: %v", err)
+			return status.Error(codes.Internal, "")
 		}
 
 		e := in.GetEvent()
@@ -160,56 +145,53 @@ func (s *Server) InsertEvents(stream pb.DEQ_InsertEventsServer) error {
 
 		_, err = s.store.Insert(*e)
 		if err != nil {
-			insertEventsLog.Error().Err(err).Msg("Error inserting event to store")
+			log.Printf("insert event: %v", err)
 			return status.Error(codes.Internal, "")
 		}
 	}
 }
 
-// StreamingUpdateEventStatus implements DEQ.StreamingUpdateEventStatus
-func (s *Server) StreamingUpdateEventStatus(stream pb.DEQ_StreamingUpdateEventStatusServer) error {
-
-	for {
-		in, err := stream.Recv()
-		if err == io.EOF {
-			updateEventStatusLog.Debug().Msg("Got EOF receiving from client")
-			return nil
-		}
-		if err != nil {
-			updateEventStatusLog.Error().Err(err).Msg("Error receiving from client")
-			return status.Error(codes.Unknown, "")
-		}
-
-		channelName := in.GetChannel()
-		if channelName == "" {
-			return status.Error(codes.InvalidArgument, "Missing required argument 'channel'")
-		}
-
-		key := in.GetKey()
-		if len(key) == 0 {
-			return status.Error(codes.InvalidArgument, "Missing required argument 'key'")
-		}
-
-		var eventStatus eventstore.EventStatus
-		switch in.GetEventStatus() {
-		case pb.Event_PENDING:
-			eventStatus = eventstore.EventStatusPending
-		case pb.Event_PROCESSED:
-			eventStatus = eventstore.EventStatusPending
-		case pb.Event_WILL_NOT_PROCESS:
-			eventStatus = eventstore.EventStatusWillNotProcess
-		default:
-			updateEventStatusLog.Debug().Str("event_status", in.GetEventStatus().String()).Msg("Invalid argument 'event_status'")
-			return status.Error(codes.InvalidArgument, "Invalid value for argument 'event_status'")
-		}
-
-		err = s.store.Channel(channelName).SetEventStatus(key, eventStatus)
-		if err != nil {
-			updateEventStatusLog.Error().Err(err).Msg("Error setting event status")
-			return status.Error(codes.Internal, "")
-		}
-	}
-}
+//
+// // StreamingUpdateEventStatus implements DEQ.StreamingUpdateEventStatus
+// func (s *Server) StreamingUpdateEventStatus(stream pb.DEQ_StreamingUpdateEventStatusServer) error {
+//
+// 	for {
+// 		in, err := stream.Recv()
+// 		if err != nil {
+// 			log.Printf("streaming update event status receive from client")
+// 			return status.Error(codes.Unknown, "")
+// 		}
+//
+// 		channelName := in.GetChannel()
+// 		if channelName == "" {
+// 			return status.Error(codes.InvalidArgument, "Missing required argument 'channel'")
+// 		}
+//
+// 		key := in.GetKey()
+// 		if len(key) == 0 {
+// 			return status.Error(codes.InvalidArgument, "Missing required argument 'key'")
+// 		}
+//
+// 		var eventStatus eventstore.EventStatus
+// 		switch in.GetEventStatus() {
+// 		case pb.Event_PENDING:
+// 			eventStatus = eventstore.EventStatusPending
+// 		case pb.Event_PROCESSED:
+// 			eventStatus = eventstore.EventStatusPending
+// 		case pb.Event_WILL_NOT_PROCESS:
+// 			eventStatus = eventstore.EventStatusWillNotProcess
+// 		default:
+// 			updateEventStatusLog.Debug().Str("event_status", in.GetEventStatus().String()).Msg("Invalid argument 'event_status'")
+// 			return status.Error(codes.InvalidArgument, "Invalid value for argument 'event_status'")
+// 		}
+//
+// 		err = s.store.Channel(channelName).SetEventStatus(key, eventStatus)
+// 		if err != nil {
+// 			updateEventStatusLog.Error().Err(err).Msg("Error setting event status")
+// 			return status.Error(codes.Internal, "")
+// 		}
+// 	}
+// }
 
 // UpdateEventStatus implements DEQ.UpdateEventStatus
 func (s *Server) UpdateEventStatus(ctx context.Context, in *pb.UpdateEventStatusRequest) (*pb.UpdateEventStatusResponse, error) {
@@ -233,61 +215,61 @@ func (s *Server) UpdateEventStatus(ctx context.Context, in *pb.UpdateEventStatus
 	case pb.Event_WILL_NOT_PROCESS:
 		eventStatus = eventstore.EventStatusWillNotProcess
 	default:
-		updateEventStatusLog.Debug().Str("event_status", in.GetEventStatus().String()).Msg("Invalid argument 'event_status'")
 		return nil, status.Error(codes.InvalidArgument, "Invalid value for argument 'event_status'")
 	}
 
 	err := s.store.Channel(channelName).SetEventStatus(key, eventStatus)
 	if err != nil {
-		updateEventStatusLog.Error().Err(err).Msg("Error setting event status")
+		log.Printf("set event status: %v", err)
 		return nil, status.Error(codes.Internal, "")
 	}
 
 	return &pb.UpdateEventStatusResponse{}, nil
 }
 
-// GetChannel implements DEQ.GetChannel
-func (s *Server) GetChannel(ctx context.Context, in *pb.GetChannelRequest) (*pb.Channel, error) {
+//
+// // GetChannel implements DEQ.GetChannel
+// func (s *Server) GetChannel(ctx context.Context, in *pb.GetChannelRequest) (*pb.Channel, error) {
+//
+// 	channelName := in.GetName()
+// 	if channelName == "" {
+// 		return nil, status.Error(codes.InvalidArgument, "Missing required argument 'name'")
+// 	}
+//
+// 	// channel := s.store.Channel(channelName)
+// 	//
+// 	// settings, err := channel.Settings()
+// 	// if err != nil {
+// 	// 	log.Printf("Error getting channel: %v", err)
+// 	// 	return nil, status.Error(codes.Internal, "")
+// 	// }
+//
+// 	result := &pb.Channel{
+// 		Name: channelName,
+// 	}
+//
+// 	return result, nil
+// }
 
-	channelName := in.GetName()
-	if channelName == "" {
-		getChannelLog.Debug().Str("name", channelName).Msg("Missing required argument 'name'")
-		return nil, status.Error(codes.InvalidArgument, "Missing required argument 'name'")
-	}
-
-	// channel := s.store.Channel(channelName)
-	//
-	// settings, err := channel.Settings()
-	// if err != nil {
-	// 	getChannelLog.Error().Err(err).Msg("Error getting channel")
-	// 	return nil, status.Error(codes.Internal, "")
-	// }
-
-	result := &pb.Channel{
-		Name: channelName,
-	}
-
-	return result, nil
-}
-
-// EnsureChannel implements EventStore.EnsureChannel
-func (s *Server) EnsureChannel(ctx context.Context, in *pb.EnsureChannelRequest) (*types.Empty, error) {
-
-	pbChannel := in.GetChannel()
-	if pbChannel == nil {
-		return nil, status.Error(codes.InvalidArgument, "Missing required argument 'channel'")
-	}
-
-	channelName := pbChannel.GetName()
-	if channelName == "" {
-		return nil, status.Error(codes.InvalidArgument, "Missing required argument 'channel.name'")
-	}
-
-	// channel := s.store.Channel(channelName)
-	// err := channel.EnsureSettings()
-
-	return new(types.Empty), nil
-}
+//
+// // EnsureChannel implements EventStore.EnsureChannel
+// func (s *Server) EnsureChannel(ctx context.Context, in *pb.EnsureChannelRequest) (*types.Empty, error) {
+//
+// 	pbChannel := in.GetChannel()
+// 	if pbChannel == nil {
+// 		return nil, status.Error(codes.InvalidArgument, "Missing required argument 'channel'")
+// 	}
+//
+// 	channelName := pbChannel.GetName()
+// 	if channelName == "" {
+// 		return nil, status.Error(codes.InvalidArgument, "Missing required argument 'channel.name'")
+// 	}
+//
+// 	// channel := s.store.Channel(channelName)
+// 	// err := channel.EnsureSettings()
+//
+// 	return new(types.Empty), nil
+// }
 
 // func (s *Server) ResetChannel(ctx context.Context, in *pb.ResetChannelRequest) (*pb.ResetChannelResponse, error) {
 //

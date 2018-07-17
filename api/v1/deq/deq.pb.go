@@ -8,24 +8,17 @@
 		deq.proto
 
 	It has these top-level messages:
-		Channel
 		Event
-		CreateEventRequest
-		EnsureChannelRequest
-		GetChannelRequest
-		StreamEventsRequest
-		UpdateEventStatusRequest
-		UpdateEventStatusResponse
-		InsertEventsRequest
-		InsertEventsResponse
+		PubRequest
+		SubRequest
+		AckRequest
+		AckResponse
 */
 package deq
 
 import proto "github.com/gogo/protobuf/proto"
 import fmt "fmt"
 import math "math"
-import google_protobuf "github.com/gogo/protobuf/types"
-import google_protobuf1 "github.com/gogo/protobuf/types"
 
 import context "golang.org/x/net/context"
 import grpc "google.golang.org/grpc"
@@ -43,63 +36,54 @@ var _ = math.Inf
 // proto package needs to be updated.
 const _ = proto.GoGoProtoPackageIsVersion2 // please upgrade the proto package
 
-type Event_Status int32
+type AckCode int32
 
 const (
-	Event_PENDING          Event_Status = 0
-	Event_PROCESSED        Event_Status = 1
-	Event_WILL_NOT_PROCESS Event_Status = 2
+	AckCode_UNSPECIFIED         AckCode = 0
+	AckCode_DEQUEUE_PROCESSED   AckCode = 1
+	AckCode_DEQUEUE_FAILED      AckCode = 2
+	AckCode_REQUEUE_CONSTANT    AckCode = 3
+	AckCode_REQUEUE_LINEAR      AckCode = 4
+	AckCode_REQUEUE_EXPONENTIAL AckCode = 5
+	AckCode_TOUCH               AckCode = 6
 )
 
-var Event_Status_name = map[int32]string{
-	0: "PENDING",
-	1: "PROCESSED",
-	2: "WILL_NOT_PROCESS",
+var AckCode_name = map[int32]string{
+	0: "UNSPECIFIED",
+	1: "DEQUEUE_PROCESSED",
+	2: "DEQUEUE_FAILED",
+	3: "REQUEUE_CONSTANT",
+	4: "REQUEUE_LINEAR",
+	5: "REQUEUE_EXPONENTIAL",
+	6: "TOUCH",
 }
-var Event_Status_value = map[string]int32{
-	"PENDING":          0,
-	"PROCESSED":        1,
-	"WILL_NOT_PROCESS": 2,
+var AckCode_value = map[string]int32{
+	"UNSPECIFIED":         0,
+	"DEQUEUE_PROCESSED":   1,
+	"DEQUEUE_FAILED":      2,
+	"REQUEUE_CONSTANT":    3,
+	"REQUEUE_LINEAR":      4,
+	"REQUEUE_EXPONENTIAL": 5,
+	"TOUCH":               6,
 }
 
-func (x Event_Status) String() string {
-	return proto.EnumName(Event_Status_name, int32(x))
+func (x AckCode) String() string {
+	return proto.EnumName(AckCode_name, int32(x))
 }
-func (Event_Status) EnumDescriptor() ([]byte, []int) { return fileDescriptorDeq, []int{1, 0} }
-
-type Channel struct {
-	Name string `protobuf:"bytes,1,opt,name=name,proto3" json:"name,omitempty"`
-}
-
-func (m *Channel) Reset()                    { *m = Channel{} }
-func (m *Channel) String() string            { return proto.CompactTextString(m) }
-func (*Channel) ProtoMessage()               {}
-func (*Channel) Descriptor() ([]byte, []int) { return fileDescriptorDeq, []int{0} }
-
-func (m *Channel) GetName() string {
-	if m != nil {
-		return m.Name
-	}
-	return ""
-}
+func (AckCode) EnumDescriptor() ([]byte, []int) { return fileDescriptorDeq, []int{0} }
 
 type Event struct {
-	Payload *google_protobuf.Any `protobuf:"bytes,1,opt,name=payload" json:"payload,omitempty"`
-	Id      []byte               `protobuf:"bytes,2,opt,name=id,proto3" json:"id,omitempty"`
-	Key     []byte               `protobuf:"bytes,3,opt,name=key,proto3" json:"key,omitempty"`
+	// Required.
+	Id []byte `protobuf:"bytes,1,opt,name=id,proto3" json:"id,omitempty"`
+	// Required.
+	TypeUrl string `protobuf:"bytes,2,opt,name=type_url,json=typeUrl,proto3" json:"type_url,omitempty"`
+	Payload []byte `protobuf:"bytes,3,opt,name=payload,proto3" json:"payload,omitempty"`
 }
 
 func (m *Event) Reset()                    { *m = Event{} }
 func (m *Event) String() string            { return proto.CompactTextString(m) }
 func (*Event) ProtoMessage()               {}
-func (*Event) Descriptor() ([]byte, []int) { return fileDescriptorDeq, []int{1} }
-
-func (m *Event) GetPayload() *google_protobuf.Any {
-	if m != nil {
-		return m.Payload
-	}
-	return nil
-}
+func (*Event) Descriptor() ([]byte, []int) { return fileDescriptorDeq, []int{0} }
 
 func (m *Event) GetId() []byte {
 	if m != nil {
@@ -108,169 +92,151 @@ func (m *Event) GetId() []byte {
 	return nil
 }
 
-func (m *Event) GetKey() []byte {
+func (m *Event) GetTypeUrl() string {
 	if m != nil {
-		return m.Key
+		return m.TypeUrl
+	}
+	return ""
+}
+
+func (m *Event) GetPayload() []byte {
+	if m != nil {
+		return m.Payload
 	}
 	return nil
 }
 
-type CreateEventRequest struct {
-	Event *Event `protobuf:"bytes,1,opt,name=event" json:"event,omitempty"`
+type PubRequest struct {
+	Event                 *Event `protobuf:"bytes,1,opt,name=event" json:"event,omitempty"`
+	DelayQueueChannel     string `protobuf:"bytes,2,opt,name=delay_queue_channel,json=delayQueueChannel,proto3" json:"delay_queue_channel,omitempty"`
+	DelayQueueMiliseconds uint32 `protobuf:"varint,3,opt,name=delay_queue_miliseconds,json=delayQueueMiliseconds,proto3" json:"delay_queue_miliseconds,omitempty"`
 }
 
-func (m *CreateEventRequest) Reset()                    { *m = CreateEventRequest{} }
-func (m *CreateEventRequest) String() string            { return proto.CompactTextString(m) }
-func (*CreateEventRequest) ProtoMessage()               {}
-func (*CreateEventRequest) Descriptor() ([]byte, []int) { return fileDescriptorDeq, []int{2} }
+func (m *PubRequest) Reset()                    { *m = PubRequest{} }
+func (m *PubRequest) String() string            { return proto.CompactTextString(m) }
+func (*PubRequest) ProtoMessage()               {}
+func (*PubRequest) Descriptor() ([]byte, []int) { return fileDescriptorDeq, []int{1} }
 
-func (m *CreateEventRequest) GetEvent() *Event {
+func (m *PubRequest) GetEvent() *Event {
 	if m != nil {
 		return m.Event
 	}
 	return nil
 }
 
-type EnsureChannelRequest struct {
-	Channel *Channel `protobuf:"bytes,1,opt,name=channel" json:"channel,omitempty"`
-}
-
-func (m *EnsureChannelRequest) Reset()                    { *m = EnsureChannelRequest{} }
-func (m *EnsureChannelRequest) String() string            { return proto.CompactTextString(m) }
-func (*EnsureChannelRequest) ProtoMessage()               {}
-func (*EnsureChannelRequest) Descriptor() ([]byte, []int) { return fileDescriptorDeq, []int{3} }
-
-func (m *EnsureChannelRequest) GetChannel() *Channel {
+func (m *PubRequest) GetDelayQueueChannel() string {
 	if m != nil {
-		return m.Channel
-	}
-	return nil
-}
-
-type GetChannelRequest struct {
-	Name string `protobuf:"bytes,1,opt,name=name,proto3" json:"name,omitempty"`
-}
-
-func (m *GetChannelRequest) Reset()                    { *m = GetChannelRequest{} }
-func (m *GetChannelRequest) String() string            { return proto.CompactTextString(m) }
-func (*GetChannelRequest) ProtoMessage()               {}
-func (*GetChannelRequest) Descriptor() ([]byte, []int) { return fileDescriptorDeq, []int{4} }
-
-func (m *GetChannelRequest) GetName() string {
-	if m != nil {
-		return m.Name
+		return m.DelayQueueChannel
 	}
 	return ""
 }
 
-type StreamEventsRequest struct {
-	Channel                 string `protobuf:"bytes,1,opt,name=channel,proto3" json:"channel,omitempty"`
-	Follow                  bool   `protobuf:"varint,2,opt,name=follow,proto3" json:"follow,omitempty"`
-	RequeueDelayMiliseconds uint32 `protobuf:"varint,3,opt,name=requeue_delay_miliseconds,json=requeueDelayMiliseconds,proto3" json:"requeue_delay_miliseconds,omitempty"`
+func (m *PubRequest) GetDelayQueueMiliseconds() uint32 {
+	if m != nil {
+		return m.DelayQueueMiliseconds
+	}
+	return 0
 }
 
-func (m *StreamEventsRequest) Reset()                    { *m = StreamEventsRequest{} }
-func (m *StreamEventsRequest) String() string            { return proto.CompactTextString(m) }
-func (*StreamEventsRequest) ProtoMessage()               {}
-func (*StreamEventsRequest) Descriptor() ([]byte, []int) { return fileDescriptorDeq, []int{5} }
+type SubRequest struct {
+	// Required.
+	Channel string `protobuf:"bytes,1,opt,name=channel,proto3" json:"channel,omitempty"`
+	TypeUrl string `protobuf:"bytes,2,opt,name=type_url,json=typeUrl,proto3" json:"type_url,omitempty"`
+	MinId   string `protobuf:"bytes,3,opt,name=min_id,json=minId,proto3" json:"min_id,omitempty"`
+	MaxId   string `protobuf:"bytes,4,opt,name=max_id,json=maxId,proto3" json:"max_id,omitempty"`
+	Follow  bool   `protobuf:"varint,5,opt,name=follow,proto3" json:"follow,omitempty"`
+}
 
-func (m *StreamEventsRequest) GetChannel() string {
+func (m *SubRequest) Reset()                    { *m = SubRequest{} }
+func (m *SubRequest) String() string            { return proto.CompactTextString(m) }
+func (*SubRequest) ProtoMessage()               {}
+func (*SubRequest) Descriptor() ([]byte, []int) { return fileDescriptorDeq, []int{2} }
+
+func (m *SubRequest) GetChannel() string {
 	if m != nil {
 		return m.Channel
 	}
 	return ""
 }
 
-func (m *StreamEventsRequest) GetFollow() bool {
+func (m *SubRequest) GetTypeUrl() string {
+	if m != nil {
+		return m.TypeUrl
+	}
+	return ""
+}
+
+func (m *SubRequest) GetMinId() string {
+	if m != nil {
+		return m.MinId
+	}
+	return ""
+}
+
+func (m *SubRequest) GetMaxId() string {
+	if m != nil {
+		return m.MaxId
+	}
+	return ""
+}
+
+func (m *SubRequest) GetFollow() bool {
 	if m != nil {
 		return m.Follow
 	}
 	return false
 }
 
-func (m *StreamEventsRequest) GetRequeueDelayMiliseconds() uint32 {
-	if m != nil {
-		return m.RequeueDelayMiliseconds
-	}
-	return 0
+type AckRequest struct {
+	// Required.
+	Channel string `protobuf:"bytes,1,opt,name=channel,proto3" json:"channel,omitempty"`
+	// Required.
+	EventId []byte `protobuf:"bytes,2,opt,name=event_id,json=eventId,proto3" json:"event_id,omitempty"`
+	// Required.
+	Code AckCode `protobuf:"varint,3,opt,name=code,proto3,enum=deq.AckCode" json:"code,omitempty"`
 }
 
-type UpdateEventStatusRequest struct {
-	Channel     string       `protobuf:"bytes,1,opt,name=channel,proto3" json:"channel,omitempty"`
-	Key         []byte       `protobuf:"bytes,2,opt,name=key,proto3" json:"key,omitempty"`
-	EventStatus Event_Status `protobuf:"varint,3,opt,name=event_status,json=eventStatus,proto3,enum=deq.Event_Status" json:"event_status,omitempty"`
-}
+func (m *AckRequest) Reset()                    { *m = AckRequest{} }
+func (m *AckRequest) String() string            { return proto.CompactTextString(m) }
+func (*AckRequest) ProtoMessage()               {}
+func (*AckRequest) Descriptor() ([]byte, []int) { return fileDescriptorDeq, []int{3} }
 
-func (m *UpdateEventStatusRequest) Reset()                    { *m = UpdateEventStatusRequest{} }
-func (m *UpdateEventStatusRequest) String() string            { return proto.CompactTextString(m) }
-func (*UpdateEventStatusRequest) ProtoMessage()               {}
-func (*UpdateEventStatusRequest) Descriptor() ([]byte, []int) { return fileDescriptorDeq, []int{6} }
-
-func (m *UpdateEventStatusRequest) GetChannel() string {
+func (m *AckRequest) GetChannel() string {
 	if m != nil {
 		return m.Channel
 	}
 	return ""
 }
 
-func (m *UpdateEventStatusRequest) GetKey() []byte {
+func (m *AckRequest) GetEventId() []byte {
 	if m != nil {
-		return m.Key
+		return m.EventId
 	}
 	return nil
 }
 
-func (m *UpdateEventStatusRequest) GetEventStatus() Event_Status {
+func (m *AckRequest) GetCode() AckCode {
 	if m != nil {
-		return m.EventStatus
+		return m.Code
 	}
-	return Event_PENDING
+	return AckCode_UNSPECIFIED
 }
 
-type UpdateEventStatusResponse struct {
+type AckResponse struct {
 }
 
-func (m *UpdateEventStatusResponse) Reset()                    { *m = UpdateEventStatusResponse{} }
-func (m *UpdateEventStatusResponse) String() string            { return proto.CompactTextString(m) }
-func (*UpdateEventStatusResponse) ProtoMessage()               {}
-func (*UpdateEventStatusResponse) Descriptor() ([]byte, []int) { return fileDescriptorDeq, []int{7} }
-
-type InsertEventsRequest struct {
-	Event *Event `protobuf:"bytes,1,opt,name=event" json:"event,omitempty"`
-}
-
-func (m *InsertEventsRequest) Reset()                    { *m = InsertEventsRequest{} }
-func (m *InsertEventsRequest) String() string            { return proto.CompactTextString(m) }
-func (*InsertEventsRequest) ProtoMessage()               {}
-func (*InsertEventsRequest) Descriptor() ([]byte, []int) { return fileDescriptorDeq, []int{8} }
-
-func (m *InsertEventsRequest) GetEvent() *Event {
-	if m != nil {
-		return m.Event
-	}
-	return nil
-}
-
-type InsertEventsResponse struct {
-}
-
-func (m *InsertEventsResponse) Reset()                    { *m = InsertEventsResponse{} }
-func (m *InsertEventsResponse) String() string            { return proto.CompactTextString(m) }
-func (*InsertEventsResponse) ProtoMessage()               {}
-func (*InsertEventsResponse) Descriptor() ([]byte, []int) { return fileDescriptorDeq, []int{9} }
+func (m *AckResponse) Reset()                    { *m = AckResponse{} }
+func (m *AckResponse) String() string            { return proto.CompactTextString(m) }
+func (*AckResponse) ProtoMessage()               {}
+func (*AckResponse) Descriptor() ([]byte, []int) { return fileDescriptorDeq, []int{4} }
 
 func init() {
-	proto.RegisterType((*Channel)(nil), "deq.Channel")
 	proto.RegisterType((*Event)(nil), "deq.Event")
-	proto.RegisterType((*CreateEventRequest)(nil), "deq.CreateEventRequest")
-	proto.RegisterType((*EnsureChannelRequest)(nil), "deq.EnsureChannelRequest")
-	proto.RegisterType((*GetChannelRequest)(nil), "deq.GetChannelRequest")
-	proto.RegisterType((*StreamEventsRequest)(nil), "deq.StreamEventsRequest")
-	proto.RegisterType((*UpdateEventStatusRequest)(nil), "deq.UpdateEventStatusRequest")
-	proto.RegisterType((*UpdateEventStatusResponse)(nil), "deq.UpdateEventStatusResponse")
-	proto.RegisterType((*InsertEventsRequest)(nil), "deq.InsertEventsRequest")
-	proto.RegisterType((*InsertEventsResponse)(nil), "deq.InsertEventsResponse")
-	proto.RegisterEnum("deq.Event_Status", Event_Status_name, Event_Status_value)
+	proto.RegisterType((*PubRequest)(nil), "deq.PubRequest")
+	proto.RegisterType((*SubRequest)(nil), "deq.SubRequest")
+	proto.RegisterType((*AckRequest)(nil), "deq.AckRequest")
+	proto.RegisterType((*AckResponse)(nil), "deq.AckResponse")
+	proto.RegisterEnum("deq.AckCode", AckCode_name, AckCode_value)
 }
 
 // Reference imports to suppress errors if they are not otherwise used.
@@ -284,14 +250,10 @@ const _ = grpc.SupportPackageIsVersion4
 // Client API for DEQ service
 
 type DEQClient interface {
-	CreateEvent(ctx context.Context, in *CreateEventRequest, opts ...grpc.CallOption) (*Event, error)
-	StreamEvents(ctx context.Context, in *StreamEventsRequest, opts ...grpc.CallOption) (DEQ_StreamEventsClient, error)
-	UpdateEventStatus(ctx context.Context, in *UpdateEventStatusRequest, opts ...grpc.CallOption) (*UpdateEventStatusResponse, error)
-	StreamingUpdateEventStatus(ctx context.Context, opts ...grpc.CallOption) (DEQ_StreamingUpdateEventStatusClient, error)
-	// rpc ResetChannel (ResetChannelRequest) returns (ResetChannelResponse);
-	InsertEvents(ctx context.Context, opts ...grpc.CallOption) (DEQ_InsertEventsClient, error)
-	GetChannel(ctx context.Context, in *GetChannelRequest, opts ...grpc.CallOption) (*Channel, error)
-	EnsureChannel(ctx context.Context, in *EnsureChannelRequest, opts ...grpc.CallOption) (*google_protobuf1.Empty, error)
+	Pub(ctx context.Context, in *PubRequest, opts ...grpc.CallOption) (*Event, error)
+	Sub(ctx context.Context, in *SubRequest, opts ...grpc.CallOption) (DEQ_SubClient, error)
+	Ack(ctx context.Context, in *AckRequest, opts ...grpc.CallOption) (*AckResponse, error)
+	Sync(ctx context.Context, opts ...grpc.CallOption) (DEQ_SyncClient, error)
 }
 
 type dEQClient struct {
@@ -302,21 +264,21 @@ func NewDEQClient(cc *grpc.ClientConn) DEQClient {
 	return &dEQClient{cc}
 }
 
-func (c *dEQClient) CreateEvent(ctx context.Context, in *CreateEventRequest, opts ...grpc.CallOption) (*Event, error) {
+func (c *dEQClient) Pub(ctx context.Context, in *PubRequest, opts ...grpc.CallOption) (*Event, error) {
 	out := new(Event)
-	err := grpc.Invoke(ctx, "/deq.DEQ/CreateEvent", in, out, c.cc, opts...)
+	err := grpc.Invoke(ctx, "/deq.DEQ/Pub", in, out, c.cc, opts...)
 	if err != nil {
 		return nil, err
 	}
 	return out, nil
 }
 
-func (c *dEQClient) StreamEvents(ctx context.Context, in *StreamEventsRequest, opts ...grpc.CallOption) (DEQ_StreamEventsClient, error) {
-	stream, err := grpc.NewClientStream(ctx, &_DEQ_serviceDesc.Streams[0], c.cc, "/deq.DEQ/StreamEvents", opts...)
+func (c *dEQClient) Sub(ctx context.Context, in *SubRequest, opts ...grpc.CallOption) (DEQ_SubClient, error) {
+	stream, err := grpc.NewClientStream(ctx, &_DEQ_serviceDesc.Streams[0], c.cc, "/deq.DEQ/Sub", opts...)
 	if err != nil {
 		return nil, err
 	}
-	x := &dEQStreamEventsClient{stream}
+	x := &dEQSubClient{stream}
 	if err := x.ClientStream.SendMsg(in); err != nil {
 		return nil, err
 	}
@@ -326,16 +288,16 @@ func (c *dEQClient) StreamEvents(ctx context.Context, in *StreamEventsRequest, o
 	return x, nil
 }
 
-type DEQ_StreamEventsClient interface {
+type DEQ_SubClient interface {
 	Recv() (*Event, error)
 	grpc.ClientStream
 }
 
-type dEQStreamEventsClient struct {
+type dEQSubClient struct {
 	grpc.ClientStream
 }
 
-func (x *dEQStreamEventsClient) Recv() (*Event, error) {
+func (x *dEQSubClient) Recv() (*Event, error) {
 	m := new(Event)
 	if err := x.ClientStream.RecvMsg(m); err != nil {
 		return nil, err
@@ -343,261 +305,140 @@ func (x *dEQStreamEventsClient) Recv() (*Event, error) {
 	return m, nil
 }
 
-func (c *dEQClient) UpdateEventStatus(ctx context.Context, in *UpdateEventStatusRequest, opts ...grpc.CallOption) (*UpdateEventStatusResponse, error) {
-	out := new(UpdateEventStatusResponse)
-	err := grpc.Invoke(ctx, "/deq.DEQ/UpdateEventStatus", in, out, c.cc, opts...)
+func (c *dEQClient) Ack(ctx context.Context, in *AckRequest, opts ...grpc.CallOption) (*AckResponse, error) {
+	out := new(AckResponse)
+	err := grpc.Invoke(ctx, "/deq.DEQ/Ack", in, out, c.cc, opts...)
 	if err != nil {
 		return nil, err
 	}
 	return out, nil
 }
 
-func (c *dEQClient) StreamingUpdateEventStatus(ctx context.Context, opts ...grpc.CallOption) (DEQ_StreamingUpdateEventStatusClient, error) {
-	stream, err := grpc.NewClientStream(ctx, &_DEQ_serviceDesc.Streams[1], c.cc, "/deq.DEQ/StreamingUpdateEventStatus", opts...)
+func (c *dEQClient) Sync(ctx context.Context, opts ...grpc.CallOption) (DEQ_SyncClient, error) {
+	stream, err := grpc.NewClientStream(ctx, &_DEQ_serviceDesc.Streams[1], c.cc, "/deq.DEQ/Sync", opts...)
 	if err != nil {
 		return nil, err
 	}
-	x := &dEQStreamingUpdateEventStatusClient{stream}
+	x := &dEQSyncClient{stream}
 	return x, nil
 }
 
-type DEQ_StreamingUpdateEventStatusClient interface {
-	Send(*UpdateEventStatusRequest) error
-	CloseAndRecv() (*UpdateEventStatusResponse, error)
+type DEQ_SyncClient interface {
+	Send(*Event) error
+	Recv() (*Event, error)
 	grpc.ClientStream
 }
 
-type dEQStreamingUpdateEventStatusClient struct {
+type dEQSyncClient struct {
 	grpc.ClientStream
 }
 
-func (x *dEQStreamingUpdateEventStatusClient) Send(m *UpdateEventStatusRequest) error {
+func (x *dEQSyncClient) Send(m *Event) error {
 	return x.ClientStream.SendMsg(m)
 }
 
-func (x *dEQStreamingUpdateEventStatusClient) CloseAndRecv() (*UpdateEventStatusResponse, error) {
-	if err := x.ClientStream.CloseSend(); err != nil {
-		return nil, err
-	}
-	m := new(UpdateEventStatusResponse)
+func (x *dEQSyncClient) Recv() (*Event, error) {
+	m := new(Event)
 	if err := x.ClientStream.RecvMsg(m); err != nil {
 		return nil, err
 	}
 	return m, nil
-}
-
-func (c *dEQClient) InsertEvents(ctx context.Context, opts ...grpc.CallOption) (DEQ_InsertEventsClient, error) {
-	stream, err := grpc.NewClientStream(ctx, &_DEQ_serviceDesc.Streams[2], c.cc, "/deq.DEQ/InsertEvents", opts...)
-	if err != nil {
-		return nil, err
-	}
-	x := &dEQInsertEventsClient{stream}
-	return x, nil
-}
-
-type DEQ_InsertEventsClient interface {
-	Send(*InsertEventsRequest) error
-	CloseAndRecv() (*InsertEventsResponse, error)
-	grpc.ClientStream
-}
-
-type dEQInsertEventsClient struct {
-	grpc.ClientStream
-}
-
-func (x *dEQInsertEventsClient) Send(m *InsertEventsRequest) error {
-	return x.ClientStream.SendMsg(m)
-}
-
-func (x *dEQInsertEventsClient) CloseAndRecv() (*InsertEventsResponse, error) {
-	if err := x.ClientStream.CloseSend(); err != nil {
-		return nil, err
-	}
-	m := new(InsertEventsResponse)
-	if err := x.ClientStream.RecvMsg(m); err != nil {
-		return nil, err
-	}
-	return m, nil
-}
-
-func (c *dEQClient) GetChannel(ctx context.Context, in *GetChannelRequest, opts ...grpc.CallOption) (*Channel, error) {
-	out := new(Channel)
-	err := grpc.Invoke(ctx, "/deq.DEQ/GetChannel", in, out, c.cc, opts...)
-	if err != nil {
-		return nil, err
-	}
-	return out, nil
-}
-
-func (c *dEQClient) EnsureChannel(ctx context.Context, in *EnsureChannelRequest, opts ...grpc.CallOption) (*google_protobuf1.Empty, error) {
-	out := new(google_protobuf1.Empty)
-	err := grpc.Invoke(ctx, "/deq.DEQ/EnsureChannel", in, out, c.cc, opts...)
-	if err != nil {
-		return nil, err
-	}
-	return out, nil
 }
 
 // Server API for DEQ service
 
 type DEQServer interface {
-	CreateEvent(context.Context, *CreateEventRequest) (*Event, error)
-	StreamEvents(*StreamEventsRequest, DEQ_StreamEventsServer) error
-	UpdateEventStatus(context.Context, *UpdateEventStatusRequest) (*UpdateEventStatusResponse, error)
-	StreamingUpdateEventStatus(DEQ_StreamingUpdateEventStatusServer) error
-	// rpc ResetChannel (ResetChannelRequest) returns (ResetChannelResponse);
-	InsertEvents(DEQ_InsertEventsServer) error
-	GetChannel(context.Context, *GetChannelRequest) (*Channel, error)
-	EnsureChannel(context.Context, *EnsureChannelRequest) (*google_protobuf1.Empty, error)
+	Pub(context.Context, *PubRequest) (*Event, error)
+	Sub(*SubRequest, DEQ_SubServer) error
+	Ack(context.Context, *AckRequest) (*AckResponse, error)
+	Sync(DEQ_SyncServer) error
 }
 
 func RegisterDEQServer(s *grpc.Server, srv DEQServer) {
 	s.RegisterService(&_DEQ_serviceDesc, srv)
 }
 
-func _DEQ_CreateEvent_Handler(srv interface{}, ctx context.Context, dec func(interface{}) error, interceptor grpc.UnaryServerInterceptor) (interface{}, error) {
-	in := new(CreateEventRequest)
+func _DEQ_Pub_Handler(srv interface{}, ctx context.Context, dec func(interface{}) error, interceptor grpc.UnaryServerInterceptor) (interface{}, error) {
+	in := new(PubRequest)
 	if err := dec(in); err != nil {
 		return nil, err
 	}
 	if interceptor == nil {
-		return srv.(DEQServer).CreateEvent(ctx, in)
+		return srv.(DEQServer).Pub(ctx, in)
 	}
 	info := &grpc.UnaryServerInfo{
 		Server:     srv,
-		FullMethod: "/deq.DEQ/CreateEvent",
+		FullMethod: "/deq.DEQ/Pub",
 	}
 	handler := func(ctx context.Context, req interface{}) (interface{}, error) {
-		return srv.(DEQServer).CreateEvent(ctx, req.(*CreateEventRequest))
+		return srv.(DEQServer).Pub(ctx, req.(*PubRequest))
 	}
 	return interceptor(ctx, in, info, handler)
 }
 
-func _DEQ_StreamEvents_Handler(srv interface{}, stream grpc.ServerStream) error {
-	m := new(StreamEventsRequest)
+func _DEQ_Sub_Handler(srv interface{}, stream grpc.ServerStream) error {
+	m := new(SubRequest)
 	if err := stream.RecvMsg(m); err != nil {
 		return err
 	}
-	return srv.(DEQServer).StreamEvents(m, &dEQStreamEventsServer{stream})
+	return srv.(DEQServer).Sub(m, &dEQSubServer{stream})
 }
 
-type DEQ_StreamEventsServer interface {
+type DEQ_SubServer interface {
 	Send(*Event) error
 	grpc.ServerStream
 }
 
-type dEQStreamEventsServer struct {
+type dEQSubServer struct {
 	grpc.ServerStream
 }
 
-func (x *dEQStreamEventsServer) Send(m *Event) error {
+func (x *dEQSubServer) Send(m *Event) error {
 	return x.ServerStream.SendMsg(m)
 }
 
-func _DEQ_UpdateEventStatus_Handler(srv interface{}, ctx context.Context, dec func(interface{}) error, interceptor grpc.UnaryServerInterceptor) (interface{}, error) {
-	in := new(UpdateEventStatusRequest)
+func _DEQ_Ack_Handler(srv interface{}, ctx context.Context, dec func(interface{}) error, interceptor grpc.UnaryServerInterceptor) (interface{}, error) {
+	in := new(AckRequest)
 	if err := dec(in); err != nil {
 		return nil, err
 	}
 	if interceptor == nil {
-		return srv.(DEQServer).UpdateEventStatus(ctx, in)
+		return srv.(DEQServer).Ack(ctx, in)
 	}
 	info := &grpc.UnaryServerInfo{
 		Server:     srv,
-		FullMethod: "/deq.DEQ/UpdateEventStatus",
+		FullMethod: "/deq.DEQ/Ack",
 	}
 	handler := func(ctx context.Context, req interface{}) (interface{}, error) {
-		return srv.(DEQServer).UpdateEventStatus(ctx, req.(*UpdateEventStatusRequest))
+		return srv.(DEQServer).Ack(ctx, req.(*AckRequest))
 	}
 	return interceptor(ctx, in, info, handler)
 }
 
-func _DEQ_StreamingUpdateEventStatus_Handler(srv interface{}, stream grpc.ServerStream) error {
-	return srv.(DEQServer).StreamingUpdateEventStatus(&dEQStreamingUpdateEventStatusServer{stream})
+func _DEQ_Sync_Handler(srv interface{}, stream grpc.ServerStream) error {
+	return srv.(DEQServer).Sync(&dEQSyncServer{stream})
 }
 
-type DEQ_StreamingUpdateEventStatusServer interface {
-	SendAndClose(*UpdateEventStatusResponse) error
-	Recv() (*UpdateEventStatusRequest, error)
+type DEQ_SyncServer interface {
+	Send(*Event) error
+	Recv() (*Event, error)
 	grpc.ServerStream
 }
 
-type dEQStreamingUpdateEventStatusServer struct {
+type dEQSyncServer struct {
 	grpc.ServerStream
 }
 
-func (x *dEQStreamingUpdateEventStatusServer) SendAndClose(m *UpdateEventStatusResponse) error {
+func (x *dEQSyncServer) Send(m *Event) error {
 	return x.ServerStream.SendMsg(m)
 }
 
-func (x *dEQStreamingUpdateEventStatusServer) Recv() (*UpdateEventStatusRequest, error) {
-	m := new(UpdateEventStatusRequest)
+func (x *dEQSyncServer) Recv() (*Event, error) {
+	m := new(Event)
 	if err := x.ServerStream.RecvMsg(m); err != nil {
 		return nil, err
 	}
 	return m, nil
-}
-
-func _DEQ_InsertEvents_Handler(srv interface{}, stream grpc.ServerStream) error {
-	return srv.(DEQServer).InsertEvents(&dEQInsertEventsServer{stream})
-}
-
-type DEQ_InsertEventsServer interface {
-	SendAndClose(*InsertEventsResponse) error
-	Recv() (*InsertEventsRequest, error)
-	grpc.ServerStream
-}
-
-type dEQInsertEventsServer struct {
-	grpc.ServerStream
-}
-
-func (x *dEQInsertEventsServer) SendAndClose(m *InsertEventsResponse) error {
-	return x.ServerStream.SendMsg(m)
-}
-
-func (x *dEQInsertEventsServer) Recv() (*InsertEventsRequest, error) {
-	m := new(InsertEventsRequest)
-	if err := x.ServerStream.RecvMsg(m); err != nil {
-		return nil, err
-	}
-	return m, nil
-}
-
-func _DEQ_GetChannel_Handler(srv interface{}, ctx context.Context, dec func(interface{}) error, interceptor grpc.UnaryServerInterceptor) (interface{}, error) {
-	in := new(GetChannelRequest)
-	if err := dec(in); err != nil {
-		return nil, err
-	}
-	if interceptor == nil {
-		return srv.(DEQServer).GetChannel(ctx, in)
-	}
-	info := &grpc.UnaryServerInfo{
-		Server:     srv,
-		FullMethod: "/deq.DEQ/GetChannel",
-	}
-	handler := func(ctx context.Context, req interface{}) (interface{}, error) {
-		return srv.(DEQServer).GetChannel(ctx, req.(*GetChannelRequest))
-	}
-	return interceptor(ctx, in, info, handler)
-}
-
-func _DEQ_EnsureChannel_Handler(srv interface{}, ctx context.Context, dec func(interface{}) error, interceptor grpc.UnaryServerInterceptor) (interface{}, error) {
-	in := new(EnsureChannelRequest)
-	if err := dec(in); err != nil {
-		return nil, err
-	}
-	if interceptor == nil {
-		return srv.(DEQServer).EnsureChannel(ctx, in)
-	}
-	info := &grpc.UnaryServerInfo{
-		Server:     srv,
-		FullMethod: "/deq.DEQ/EnsureChannel",
-	}
-	handler := func(ctx context.Context, req interface{}) (interface{}, error) {
-		return srv.(DEQServer).EnsureChannel(ctx, req.(*EnsureChannelRequest))
-	}
-	return interceptor(ctx, in, info, handler)
 }
 
 var _DEQ_serviceDesc = grpc.ServiceDesc{
@@ -605,64 +446,28 @@ var _DEQ_serviceDesc = grpc.ServiceDesc{
 	HandlerType: (*DEQServer)(nil),
 	Methods: []grpc.MethodDesc{
 		{
-			MethodName: "CreateEvent",
-			Handler:    _DEQ_CreateEvent_Handler,
+			MethodName: "Pub",
+			Handler:    _DEQ_Pub_Handler,
 		},
 		{
-			MethodName: "UpdateEventStatus",
-			Handler:    _DEQ_UpdateEventStatus_Handler,
-		},
-		{
-			MethodName: "GetChannel",
-			Handler:    _DEQ_GetChannel_Handler,
-		},
-		{
-			MethodName: "EnsureChannel",
-			Handler:    _DEQ_EnsureChannel_Handler,
+			MethodName: "Ack",
+			Handler:    _DEQ_Ack_Handler,
 		},
 	},
 	Streams: []grpc.StreamDesc{
 		{
-			StreamName:    "StreamEvents",
-			Handler:       _DEQ_StreamEvents_Handler,
+			StreamName:    "Sub",
+			Handler:       _DEQ_Sub_Handler,
 			ServerStreams: true,
 		},
 		{
-			StreamName:    "StreamingUpdateEventStatus",
-			Handler:       _DEQ_StreamingUpdateEventStatus_Handler,
-			ClientStreams: true,
-		},
-		{
-			StreamName:    "InsertEvents",
-			Handler:       _DEQ_InsertEvents_Handler,
+			StreamName:    "Sync",
+			Handler:       _DEQ_Sync_Handler,
+			ServerStreams: true,
 			ClientStreams: true,
 		},
 	},
 	Metadata: "deq.proto",
-}
-
-func (m *Channel) Marshal() (dAtA []byte, err error) {
-	size := m.Size()
-	dAtA = make([]byte, size)
-	n, err := m.MarshalTo(dAtA)
-	if err != nil {
-		return nil, err
-	}
-	return dAtA[:n], nil
-}
-
-func (m *Channel) MarshalTo(dAtA []byte) (int, error) {
-	var i int
-	_ = i
-	var l int
-	_ = l
-	if len(m.Name) > 0 {
-		dAtA[i] = 0xa
-		i++
-		i = encodeVarintDeq(dAtA, i, uint64(len(m.Name)))
-		i += copy(dAtA[i:], m.Name)
-	}
-	return i, nil
 }
 
 func (m *Event) Marshal() (dAtA []byte, err error) {
@@ -680,32 +485,28 @@ func (m *Event) MarshalTo(dAtA []byte) (int, error) {
 	_ = i
 	var l int
 	_ = l
-	if m.Payload != nil {
-		dAtA[i] = 0xa
-		i++
-		i = encodeVarintDeq(dAtA, i, uint64(m.Payload.Size()))
-		n1, err := m.Payload.MarshalTo(dAtA[i:])
-		if err != nil {
-			return 0, err
-		}
-		i += n1
-	}
 	if len(m.Id) > 0 {
-		dAtA[i] = 0x12
+		dAtA[i] = 0xa
 		i++
 		i = encodeVarintDeq(dAtA, i, uint64(len(m.Id)))
 		i += copy(dAtA[i:], m.Id)
 	}
-	if len(m.Key) > 0 {
+	if len(m.TypeUrl) > 0 {
+		dAtA[i] = 0x12
+		i++
+		i = encodeVarintDeq(dAtA, i, uint64(len(m.TypeUrl)))
+		i += copy(dAtA[i:], m.TypeUrl)
+	}
+	if len(m.Payload) > 0 {
 		dAtA[i] = 0x1a
 		i++
-		i = encodeVarintDeq(dAtA, i, uint64(len(m.Key)))
-		i += copy(dAtA[i:], m.Key)
+		i = encodeVarintDeq(dAtA, i, uint64(len(m.Payload)))
+		i += copy(dAtA[i:], m.Payload)
 	}
 	return i, nil
 }
 
-func (m *CreateEventRequest) Marshal() (dAtA []byte, err error) {
+func (m *PubRequest) Marshal() (dAtA []byte, err error) {
 	size := m.Size()
 	dAtA = make([]byte, size)
 	n, err := m.MarshalTo(dAtA)
@@ -715,7 +516,7 @@ func (m *CreateEventRequest) Marshal() (dAtA []byte, err error) {
 	return dAtA[:n], nil
 }
 
-func (m *CreateEventRequest) MarshalTo(dAtA []byte) (int, error) {
+func (m *PubRequest) MarshalTo(dAtA []byte) (int, error) {
 	var i int
 	_ = i
 	var l int
@@ -724,68 +525,27 @@ func (m *CreateEventRequest) MarshalTo(dAtA []byte) (int, error) {
 		dAtA[i] = 0xa
 		i++
 		i = encodeVarintDeq(dAtA, i, uint64(m.Event.Size()))
-		n2, err := m.Event.MarshalTo(dAtA[i:])
+		n1, err := m.Event.MarshalTo(dAtA[i:])
 		if err != nil {
 			return 0, err
 		}
-		i += n2
+		i += n1
 	}
-	return i, nil
-}
-
-func (m *EnsureChannelRequest) Marshal() (dAtA []byte, err error) {
-	size := m.Size()
-	dAtA = make([]byte, size)
-	n, err := m.MarshalTo(dAtA)
-	if err != nil {
-		return nil, err
-	}
-	return dAtA[:n], nil
-}
-
-func (m *EnsureChannelRequest) MarshalTo(dAtA []byte) (int, error) {
-	var i int
-	_ = i
-	var l int
-	_ = l
-	if m.Channel != nil {
-		dAtA[i] = 0xa
+	if len(m.DelayQueueChannel) > 0 {
+		dAtA[i] = 0x12
 		i++
-		i = encodeVarintDeq(dAtA, i, uint64(m.Channel.Size()))
-		n3, err := m.Channel.MarshalTo(dAtA[i:])
-		if err != nil {
-			return 0, err
-		}
-		i += n3
+		i = encodeVarintDeq(dAtA, i, uint64(len(m.DelayQueueChannel)))
+		i += copy(dAtA[i:], m.DelayQueueChannel)
 	}
-	return i, nil
-}
-
-func (m *GetChannelRequest) Marshal() (dAtA []byte, err error) {
-	size := m.Size()
-	dAtA = make([]byte, size)
-	n, err := m.MarshalTo(dAtA)
-	if err != nil {
-		return nil, err
-	}
-	return dAtA[:n], nil
-}
-
-func (m *GetChannelRequest) MarshalTo(dAtA []byte) (int, error) {
-	var i int
-	_ = i
-	var l int
-	_ = l
-	if len(m.Name) > 0 {
-		dAtA[i] = 0xa
+	if m.DelayQueueMiliseconds != 0 {
+		dAtA[i] = 0x18
 		i++
-		i = encodeVarintDeq(dAtA, i, uint64(len(m.Name)))
-		i += copy(dAtA[i:], m.Name)
+		i = encodeVarintDeq(dAtA, i, uint64(m.DelayQueueMiliseconds))
 	}
 	return i, nil
 }
 
-func (m *StreamEventsRequest) Marshal() (dAtA []byte, err error) {
+func (m *SubRequest) Marshal() (dAtA []byte, err error) {
 	size := m.Size()
 	dAtA = make([]byte, size)
 	n, err := m.MarshalTo(dAtA)
@@ -795,7 +555,7 @@ func (m *StreamEventsRequest) Marshal() (dAtA []byte, err error) {
 	return dAtA[:n], nil
 }
 
-func (m *StreamEventsRequest) MarshalTo(dAtA []byte) (int, error) {
+func (m *SubRequest) MarshalTo(dAtA []byte) (int, error) {
 	var i int
 	_ = i
 	var l int
@@ -806,8 +566,26 @@ func (m *StreamEventsRequest) MarshalTo(dAtA []byte) (int, error) {
 		i = encodeVarintDeq(dAtA, i, uint64(len(m.Channel)))
 		i += copy(dAtA[i:], m.Channel)
 	}
+	if len(m.TypeUrl) > 0 {
+		dAtA[i] = 0x12
+		i++
+		i = encodeVarintDeq(dAtA, i, uint64(len(m.TypeUrl)))
+		i += copy(dAtA[i:], m.TypeUrl)
+	}
+	if len(m.MinId) > 0 {
+		dAtA[i] = 0x1a
+		i++
+		i = encodeVarintDeq(dAtA, i, uint64(len(m.MinId)))
+		i += copy(dAtA[i:], m.MinId)
+	}
+	if len(m.MaxId) > 0 {
+		dAtA[i] = 0x22
+		i++
+		i = encodeVarintDeq(dAtA, i, uint64(len(m.MaxId)))
+		i += copy(dAtA[i:], m.MaxId)
+	}
 	if m.Follow {
-		dAtA[i] = 0x10
+		dAtA[i] = 0x28
 		i++
 		if m.Follow {
 			dAtA[i] = 1
@@ -816,15 +594,10 @@ func (m *StreamEventsRequest) MarshalTo(dAtA []byte) (int, error) {
 		}
 		i++
 	}
-	if m.RequeueDelayMiliseconds != 0 {
-		dAtA[i] = 0x18
-		i++
-		i = encodeVarintDeq(dAtA, i, uint64(m.RequeueDelayMiliseconds))
-	}
 	return i, nil
 }
 
-func (m *UpdateEventStatusRequest) Marshal() (dAtA []byte, err error) {
+func (m *AckRequest) Marshal() (dAtA []byte, err error) {
 	size := m.Size()
 	dAtA = make([]byte, size)
 	n, err := m.MarshalTo(dAtA)
@@ -834,7 +607,7 @@ func (m *UpdateEventStatusRequest) Marshal() (dAtA []byte, err error) {
 	return dAtA[:n], nil
 }
 
-func (m *UpdateEventStatusRequest) MarshalTo(dAtA []byte) (int, error) {
+func (m *AckRequest) MarshalTo(dAtA []byte) (int, error) {
 	var i int
 	_ = i
 	var l int
@@ -845,21 +618,21 @@ func (m *UpdateEventStatusRequest) MarshalTo(dAtA []byte) (int, error) {
 		i = encodeVarintDeq(dAtA, i, uint64(len(m.Channel)))
 		i += copy(dAtA[i:], m.Channel)
 	}
-	if len(m.Key) > 0 {
+	if len(m.EventId) > 0 {
 		dAtA[i] = 0x12
 		i++
-		i = encodeVarintDeq(dAtA, i, uint64(len(m.Key)))
-		i += copy(dAtA[i:], m.Key)
+		i = encodeVarintDeq(dAtA, i, uint64(len(m.EventId)))
+		i += copy(dAtA[i:], m.EventId)
 	}
-	if m.EventStatus != 0 {
+	if m.Code != 0 {
 		dAtA[i] = 0x18
 		i++
-		i = encodeVarintDeq(dAtA, i, uint64(m.EventStatus))
+		i = encodeVarintDeq(dAtA, i, uint64(m.Code))
 	}
 	return i, nil
 }
 
-func (m *UpdateEventStatusResponse) Marshal() (dAtA []byte, err error) {
+func (m *AckResponse) Marshal() (dAtA []byte, err error) {
 	size := m.Size()
 	dAtA = make([]byte, size)
 	n, err := m.MarshalTo(dAtA)
@@ -869,53 +642,7 @@ func (m *UpdateEventStatusResponse) Marshal() (dAtA []byte, err error) {
 	return dAtA[:n], nil
 }
 
-func (m *UpdateEventStatusResponse) MarshalTo(dAtA []byte) (int, error) {
-	var i int
-	_ = i
-	var l int
-	_ = l
-	return i, nil
-}
-
-func (m *InsertEventsRequest) Marshal() (dAtA []byte, err error) {
-	size := m.Size()
-	dAtA = make([]byte, size)
-	n, err := m.MarshalTo(dAtA)
-	if err != nil {
-		return nil, err
-	}
-	return dAtA[:n], nil
-}
-
-func (m *InsertEventsRequest) MarshalTo(dAtA []byte) (int, error) {
-	var i int
-	_ = i
-	var l int
-	_ = l
-	if m.Event != nil {
-		dAtA[i] = 0xa
-		i++
-		i = encodeVarintDeq(dAtA, i, uint64(m.Event.Size()))
-		n4, err := m.Event.MarshalTo(dAtA[i:])
-		if err != nil {
-			return 0, err
-		}
-		i += n4
-	}
-	return i, nil
-}
-
-func (m *InsertEventsResponse) Marshal() (dAtA []byte, err error) {
-	size := m.Size()
-	dAtA = make([]byte, size)
-	n, err := m.MarshalTo(dAtA)
-	if err != nil {
-		return nil, err
-	}
-	return dAtA[:n], nil
-}
-
-func (m *InsertEventsResponse) MarshalTo(dAtA []byte) (int, error) {
+func (m *AckResponse) MarshalTo(dAtA []byte) (int, error) {
 	var i int
 	_ = i
 	var l int
@@ -932,114 +659,84 @@ func encodeVarintDeq(dAtA []byte, offset int, v uint64) int {
 	dAtA[offset] = uint8(v)
 	return offset + 1
 }
-func (m *Channel) Size() (n int) {
-	var l int
-	_ = l
-	l = len(m.Name)
-	if l > 0 {
-		n += 1 + l + sovDeq(uint64(l))
-	}
-	return n
-}
-
 func (m *Event) Size() (n int) {
 	var l int
 	_ = l
-	if m.Payload != nil {
-		l = m.Payload.Size()
-		n += 1 + l + sovDeq(uint64(l))
-	}
 	l = len(m.Id)
 	if l > 0 {
 		n += 1 + l + sovDeq(uint64(l))
 	}
-	l = len(m.Key)
+	l = len(m.TypeUrl)
+	if l > 0 {
+		n += 1 + l + sovDeq(uint64(l))
+	}
+	l = len(m.Payload)
 	if l > 0 {
 		n += 1 + l + sovDeq(uint64(l))
 	}
 	return n
 }
 
-func (m *CreateEventRequest) Size() (n int) {
+func (m *PubRequest) Size() (n int) {
 	var l int
 	_ = l
 	if m.Event != nil {
 		l = m.Event.Size()
 		n += 1 + l + sovDeq(uint64(l))
 	}
-	return n
-}
-
-func (m *EnsureChannelRequest) Size() (n int) {
-	var l int
-	_ = l
-	if m.Channel != nil {
-		l = m.Channel.Size()
-		n += 1 + l + sovDeq(uint64(l))
-	}
-	return n
-}
-
-func (m *GetChannelRequest) Size() (n int) {
-	var l int
-	_ = l
-	l = len(m.Name)
+	l = len(m.DelayQueueChannel)
 	if l > 0 {
 		n += 1 + l + sovDeq(uint64(l))
 	}
+	if m.DelayQueueMiliseconds != 0 {
+		n += 1 + sovDeq(uint64(m.DelayQueueMiliseconds))
+	}
 	return n
 }
 
-func (m *StreamEventsRequest) Size() (n int) {
+func (m *SubRequest) Size() (n int) {
 	var l int
 	_ = l
 	l = len(m.Channel)
+	if l > 0 {
+		n += 1 + l + sovDeq(uint64(l))
+	}
+	l = len(m.TypeUrl)
+	if l > 0 {
+		n += 1 + l + sovDeq(uint64(l))
+	}
+	l = len(m.MinId)
+	if l > 0 {
+		n += 1 + l + sovDeq(uint64(l))
+	}
+	l = len(m.MaxId)
 	if l > 0 {
 		n += 1 + l + sovDeq(uint64(l))
 	}
 	if m.Follow {
 		n += 2
 	}
-	if m.RequeueDelayMiliseconds != 0 {
-		n += 1 + sovDeq(uint64(m.RequeueDelayMiliseconds))
-	}
 	return n
 }
 
-func (m *UpdateEventStatusRequest) Size() (n int) {
+func (m *AckRequest) Size() (n int) {
 	var l int
 	_ = l
 	l = len(m.Channel)
 	if l > 0 {
 		n += 1 + l + sovDeq(uint64(l))
 	}
-	l = len(m.Key)
+	l = len(m.EventId)
 	if l > 0 {
 		n += 1 + l + sovDeq(uint64(l))
 	}
-	if m.EventStatus != 0 {
-		n += 1 + sovDeq(uint64(m.EventStatus))
+	if m.Code != 0 {
+		n += 1 + sovDeq(uint64(m.Code))
 	}
 	return n
 }
 
-func (m *UpdateEventStatusResponse) Size() (n int) {
-	var l int
-	_ = l
-	return n
-}
-
-func (m *InsertEventsRequest) Size() (n int) {
-	var l int
-	_ = l
-	if m.Event != nil {
-		l = m.Event.Size()
-		n += 1 + l + sovDeq(uint64(l))
-	}
-	return n
-}
-
-func (m *InsertEventsResponse) Size() (n int) {
+func (m *AckResponse) Size() (n int) {
 	var l int
 	_ = l
 	return n
@@ -1057,85 +754,6 @@ func sovDeq(x uint64) (n int) {
 }
 func sozDeq(x uint64) (n int) {
 	return sovDeq(uint64((x << 1) ^ uint64((int64(x) >> 63))))
-}
-func (m *Channel) Unmarshal(dAtA []byte) error {
-	l := len(dAtA)
-	iNdEx := 0
-	for iNdEx < l {
-		preIndex := iNdEx
-		var wire uint64
-		for shift := uint(0); ; shift += 7 {
-			if shift >= 64 {
-				return ErrIntOverflowDeq
-			}
-			if iNdEx >= l {
-				return io.ErrUnexpectedEOF
-			}
-			b := dAtA[iNdEx]
-			iNdEx++
-			wire |= (uint64(b) & 0x7F) << shift
-			if b < 0x80 {
-				break
-			}
-		}
-		fieldNum := int32(wire >> 3)
-		wireType := int(wire & 0x7)
-		if wireType == 4 {
-			return fmt.Errorf("proto: Channel: wiretype end group for non-group")
-		}
-		if fieldNum <= 0 {
-			return fmt.Errorf("proto: Channel: illegal tag %d (wire type %d)", fieldNum, wire)
-		}
-		switch fieldNum {
-		case 1:
-			if wireType != 2 {
-				return fmt.Errorf("proto: wrong wireType = %d for field Name", wireType)
-			}
-			var stringLen uint64
-			for shift := uint(0); ; shift += 7 {
-				if shift >= 64 {
-					return ErrIntOverflowDeq
-				}
-				if iNdEx >= l {
-					return io.ErrUnexpectedEOF
-				}
-				b := dAtA[iNdEx]
-				iNdEx++
-				stringLen |= (uint64(b) & 0x7F) << shift
-				if b < 0x80 {
-					break
-				}
-			}
-			intStringLen := int(stringLen)
-			if intStringLen < 0 {
-				return ErrInvalidLengthDeq
-			}
-			postIndex := iNdEx + intStringLen
-			if postIndex > l {
-				return io.ErrUnexpectedEOF
-			}
-			m.Name = string(dAtA[iNdEx:postIndex])
-			iNdEx = postIndex
-		default:
-			iNdEx = preIndex
-			skippy, err := skipDeq(dAtA[iNdEx:])
-			if err != nil {
-				return err
-			}
-			if skippy < 0 {
-				return ErrInvalidLengthDeq
-			}
-			if (iNdEx + skippy) > l {
-				return io.ErrUnexpectedEOF
-			}
-			iNdEx += skippy
-		}
-	}
-
-	if iNdEx > l {
-		return io.ErrUnexpectedEOF
-	}
-	return nil
 }
 func (m *Event) Unmarshal(dAtA []byte) error {
 	l := len(dAtA)
@@ -1168,39 +786,6 @@ func (m *Event) Unmarshal(dAtA []byte) error {
 		switch fieldNum {
 		case 1:
 			if wireType != 2 {
-				return fmt.Errorf("proto: wrong wireType = %d for field Payload", wireType)
-			}
-			var msglen int
-			for shift := uint(0); ; shift += 7 {
-				if shift >= 64 {
-					return ErrIntOverflowDeq
-				}
-				if iNdEx >= l {
-					return io.ErrUnexpectedEOF
-				}
-				b := dAtA[iNdEx]
-				iNdEx++
-				msglen |= (int(b) & 0x7F) << shift
-				if b < 0x80 {
-					break
-				}
-			}
-			if msglen < 0 {
-				return ErrInvalidLengthDeq
-			}
-			postIndex := iNdEx + msglen
-			if postIndex > l {
-				return io.ErrUnexpectedEOF
-			}
-			if m.Payload == nil {
-				m.Payload = &google_protobuf.Any{}
-			}
-			if err := m.Payload.Unmarshal(dAtA[iNdEx:postIndex]); err != nil {
-				return err
-			}
-			iNdEx = postIndex
-		case 2:
-			if wireType != 2 {
 				return fmt.Errorf("proto: wrong wireType = %d for field Id", wireType)
 			}
 			var byteLen int
@@ -1230,9 +815,38 @@ func (m *Event) Unmarshal(dAtA []byte) error {
 				m.Id = []byte{}
 			}
 			iNdEx = postIndex
+		case 2:
+			if wireType != 2 {
+				return fmt.Errorf("proto: wrong wireType = %d for field TypeUrl", wireType)
+			}
+			var stringLen uint64
+			for shift := uint(0); ; shift += 7 {
+				if shift >= 64 {
+					return ErrIntOverflowDeq
+				}
+				if iNdEx >= l {
+					return io.ErrUnexpectedEOF
+				}
+				b := dAtA[iNdEx]
+				iNdEx++
+				stringLen |= (uint64(b) & 0x7F) << shift
+				if b < 0x80 {
+					break
+				}
+			}
+			intStringLen := int(stringLen)
+			if intStringLen < 0 {
+				return ErrInvalidLengthDeq
+			}
+			postIndex := iNdEx + intStringLen
+			if postIndex > l {
+				return io.ErrUnexpectedEOF
+			}
+			m.TypeUrl = string(dAtA[iNdEx:postIndex])
+			iNdEx = postIndex
 		case 3:
 			if wireType != 2 {
-				return fmt.Errorf("proto: wrong wireType = %d for field Key", wireType)
+				return fmt.Errorf("proto: wrong wireType = %d for field Payload", wireType)
 			}
 			var byteLen int
 			for shift := uint(0); ; shift += 7 {
@@ -1256,9 +870,9 @@ func (m *Event) Unmarshal(dAtA []byte) error {
 			if postIndex > l {
 				return io.ErrUnexpectedEOF
 			}
-			m.Key = append(m.Key[:0], dAtA[iNdEx:postIndex]...)
-			if m.Key == nil {
-				m.Key = []byte{}
+			m.Payload = append(m.Payload[:0], dAtA[iNdEx:postIndex]...)
+			if m.Payload == nil {
+				m.Payload = []byte{}
 			}
 			iNdEx = postIndex
 		default:
@@ -1282,7 +896,7 @@ func (m *Event) Unmarshal(dAtA []byte) error {
 	}
 	return nil
 }
-func (m *CreateEventRequest) Unmarshal(dAtA []byte) error {
+func (m *PubRequest) Unmarshal(dAtA []byte) error {
 	l := len(dAtA)
 	iNdEx := 0
 	for iNdEx < l {
@@ -1305,10 +919,10 @@ func (m *CreateEventRequest) Unmarshal(dAtA []byte) error {
 		fieldNum := int32(wire >> 3)
 		wireType := int(wire & 0x7)
 		if wireType == 4 {
-			return fmt.Errorf("proto: CreateEventRequest: wiretype end group for non-group")
+			return fmt.Errorf("proto: PubRequest: wiretype end group for non-group")
 		}
 		if fieldNum <= 0 {
-			return fmt.Errorf("proto: CreateEventRequest: illegal tag %d (wire type %d)", fieldNum, wire)
+			return fmt.Errorf("proto: PubRequest: illegal tag %d (wire type %d)", fieldNum, wire)
 		}
 		switch fieldNum {
 		case 1:
@@ -1344,142 +958,9 @@ func (m *CreateEventRequest) Unmarshal(dAtA []byte) error {
 				return err
 			}
 			iNdEx = postIndex
-		default:
-			iNdEx = preIndex
-			skippy, err := skipDeq(dAtA[iNdEx:])
-			if err != nil {
-				return err
-			}
-			if skippy < 0 {
-				return ErrInvalidLengthDeq
-			}
-			if (iNdEx + skippy) > l {
-				return io.ErrUnexpectedEOF
-			}
-			iNdEx += skippy
-		}
-	}
-
-	if iNdEx > l {
-		return io.ErrUnexpectedEOF
-	}
-	return nil
-}
-func (m *EnsureChannelRequest) Unmarshal(dAtA []byte) error {
-	l := len(dAtA)
-	iNdEx := 0
-	for iNdEx < l {
-		preIndex := iNdEx
-		var wire uint64
-		for shift := uint(0); ; shift += 7 {
-			if shift >= 64 {
-				return ErrIntOverflowDeq
-			}
-			if iNdEx >= l {
-				return io.ErrUnexpectedEOF
-			}
-			b := dAtA[iNdEx]
-			iNdEx++
-			wire |= (uint64(b) & 0x7F) << shift
-			if b < 0x80 {
-				break
-			}
-		}
-		fieldNum := int32(wire >> 3)
-		wireType := int(wire & 0x7)
-		if wireType == 4 {
-			return fmt.Errorf("proto: EnsureChannelRequest: wiretype end group for non-group")
-		}
-		if fieldNum <= 0 {
-			return fmt.Errorf("proto: EnsureChannelRequest: illegal tag %d (wire type %d)", fieldNum, wire)
-		}
-		switch fieldNum {
-		case 1:
+		case 2:
 			if wireType != 2 {
-				return fmt.Errorf("proto: wrong wireType = %d for field Channel", wireType)
-			}
-			var msglen int
-			for shift := uint(0); ; shift += 7 {
-				if shift >= 64 {
-					return ErrIntOverflowDeq
-				}
-				if iNdEx >= l {
-					return io.ErrUnexpectedEOF
-				}
-				b := dAtA[iNdEx]
-				iNdEx++
-				msglen |= (int(b) & 0x7F) << shift
-				if b < 0x80 {
-					break
-				}
-			}
-			if msglen < 0 {
-				return ErrInvalidLengthDeq
-			}
-			postIndex := iNdEx + msglen
-			if postIndex > l {
-				return io.ErrUnexpectedEOF
-			}
-			if m.Channel == nil {
-				m.Channel = &Channel{}
-			}
-			if err := m.Channel.Unmarshal(dAtA[iNdEx:postIndex]); err != nil {
-				return err
-			}
-			iNdEx = postIndex
-		default:
-			iNdEx = preIndex
-			skippy, err := skipDeq(dAtA[iNdEx:])
-			if err != nil {
-				return err
-			}
-			if skippy < 0 {
-				return ErrInvalidLengthDeq
-			}
-			if (iNdEx + skippy) > l {
-				return io.ErrUnexpectedEOF
-			}
-			iNdEx += skippy
-		}
-	}
-
-	if iNdEx > l {
-		return io.ErrUnexpectedEOF
-	}
-	return nil
-}
-func (m *GetChannelRequest) Unmarshal(dAtA []byte) error {
-	l := len(dAtA)
-	iNdEx := 0
-	for iNdEx < l {
-		preIndex := iNdEx
-		var wire uint64
-		for shift := uint(0); ; shift += 7 {
-			if shift >= 64 {
-				return ErrIntOverflowDeq
-			}
-			if iNdEx >= l {
-				return io.ErrUnexpectedEOF
-			}
-			b := dAtA[iNdEx]
-			iNdEx++
-			wire |= (uint64(b) & 0x7F) << shift
-			if b < 0x80 {
-				break
-			}
-		}
-		fieldNum := int32(wire >> 3)
-		wireType := int(wire & 0x7)
-		if wireType == 4 {
-			return fmt.Errorf("proto: GetChannelRequest: wiretype end group for non-group")
-		}
-		if fieldNum <= 0 {
-			return fmt.Errorf("proto: GetChannelRequest: illegal tag %d (wire type %d)", fieldNum, wire)
-		}
-		switch fieldNum {
-		case 1:
-			if wireType != 2 {
-				return fmt.Errorf("proto: wrong wireType = %d for field Name", wireType)
+				return fmt.Errorf("proto: wrong wireType = %d for field DelayQueueChannel", wireType)
 			}
 			var stringLen uint64
 			for shift := uint(0); ; shift += 7 {
@@ -1504,8 +985,27 @@ func (m *GetChannelRequest) Unmarshal(dAtA []byte) error {
 			if postIndex > l {
 				return io.ErrUnexpectedEOF
 			}
-			m.Name = string(dAtA[iNdEx:postIndex])
+			m.DelayQueueChannel = string(dAtA[iNdEx:postIndex])
 			iNdEx = postIndex
+		case 3:
+			if wireType != 0 {
+				return fmt.Errorf("proto: wrong wireType = %d for field DelayQueueMiliseconds", wireType)
+			}
+			m.DelayQueueMiliseconds = 0
+			for shift := uint(0); ; shift += 7 {
+				if shift >= 64 {
+					return ErrIntOverflowDeq
+				}
+				if iNdEx >= l {
+					return io.ErrUnexpectedEOF
+				}
+				b := dAtA[iNdEx]
+				iNdEx++
+				m.DelayQueueMiliseconds |= (uint32(b) & 0x7F) << shift
+				if b < 0x80 {
+					break
+				}
+			}
 		default:
 			iNdEx = preIndex
 			skippy, err := skipDeq(dAtA[iNdEx:])
@@ -1527,7 +1027,7 @@ func (m *GetChannelRequest) Unmarshal(dAtA []byte) error {
 	}
 	return nil
 }
-func (m *StreamEventsRequest) Unmarshal(dAtA []byte) error {
+func (m *SubRequest) Unmarshal(dAtA []byte) error {
 	l := len(dAtA)
 	iNdEx := 0
 	for iNdEx < l {
@@ -1550,10 +1050,10 @@ func (m *StreamEventsRequest) Unmarshal(dAtA []byte) error {
 		fieldNum := int32(wire >> 3)
 		wireType := int(wire & 0x7)
 		if wireType == 4 {
-			return fmt.Errorf("proto: StreamEventsRequest: wiretype end group for non-group")
+			return fmt.Errorf("proto: SubRequest: wiretype end group for non-group")
 		}
 		if fieldNum <= 0 {
-			return fmt.Errorf("proto: StreamEventsRequest: illegal tag %d (wire type %d)", fieldNum, wire)
+			return fmt.Errorf("proto: SubRequest: illegal tag %d (wire type %d)", fieldNum, wire)
 		}
 		switch fieldNum {
 		case 1:
@@ -1586,6 +1086,93 @@ func (m *StreamEventsRequest) Unmarshal(dAtA []byte) error {
 			m.Channel = string(dAtA[iNdEx:postIndex])
 			iNdEx = postIndex
 		case 2:
+			if wireType != 2 {
+				return fmt.Errorf("proto: wrong wireType = %d for field TypeUrl", wireType)
+			}
+			var stringLen uint64
+			for shift := uint(0); ; shift += 7 {
+				if shift >= 64 {
+					return ErrIntOverflowDeq
+				}
+				if iNdEx >= l {
+					return io.ErrUnexpectedEOF
+				}
+				b := dAtA[iNdEx]
+				iNdEx++
+				stringLen |= (uint64(b) & 0x7F) << shift
+				if b < 0x80 {
+					break
+				}
+			}
+			intStringLen := int(stringLen)
+			if intStringLen < 0 {
+				return ErrInvalidLengthDeq
+			}
+			postIndex := iNdEx + intStringLen
+			if postIndex > l {
+				return io.ErrUnexpectedEOF
+			}
+			m.TypeUrl = string(dAtA[iNdEx:postIndex])
+			iNdEx = postIndex
+		case 3:
+			if wireType != 2 {
+				return fmt.Errorf("proto: wrong wireType = %d for field MinId", wireType)
+			}
+			var stringLen uint64
+			for shift := uint(0); ; shift += 7 {
+				if shift >= 64 {
+					return ErrIntOverflowDeq
+				}
+				if iNdEx >= l {
+					return io.ErrUnexpectedEOF
+				}
+				b := dAtA[iNdEx]
+				iNdEx++
+				stringLen |= (uint64(b) & 0x7F) << shift
+				if b < 0x80 {
+					break
+				}
+			}
+			intStringLen := int(stringLen)
+			if intStringLen < 0 {
+				return ErrInvalidLengthDeq
+			}
+			postIndex := iNdEx + intStringLen
+			if postIndex > l {
+				return io.ErrUnexpectedEOF
+			}
+			m.MinId = string(dAtA[iNdEx:postIndex])
+			iNdEx = postIndex
+		case 4:
+			if wireType != 2 {
+				return fmt.Errorf("proto: wrong wireType = %d for field MaxId", wireType)
+			}
+			var stringLen uint64
+			for shift := uint(0); ; shift += 7 {
+				if shift >= 64 {
+					return ErrIntOverflowDeq
+				}
+				if iNdEx >= l {
+					return io.ErrUnexpectedEOF
+				}
+				b := dAtA[iNdEx]
+				iNdEx++
+				stringLen |= (uint64(b) & 0x7F) << shift
+				if b < 0x80 {
+					break
+				}
+			}
+			intStringLen := int(stringLen)
+			if intStringLen < 0 {
+				return ErrInvalidLengthDeq
+			}
+			postIndex := iNdEx + intStringLen
+			if postIndex > l {
+				return io.ErrUnexpectedEOF
+			}
+			m.MaxId = string(dAtA[iNdEx:postIndex])
+			iNdEx = postIndex
+		case 5:
 			if wireType != 0 {
 				return fmt.Errorf("proto: wrong wireType = %d for field Follow", wireType)
 			}
@@ -1605,25 +1192,6 @@ func (m *StreamEventsRequest) Unmarshal(dAtA []byte) error {
 				}
 			}
 			m.Follow = bool(v != 0)
-		case 3:
-			if wireType != 0 {
-				return fmt.Errorf("proto: wrong wireType = %d for field RequeueDelayMiliseconds", wireType)
-			}
-			m.RequeueDelayMiliseconds = 0
-			for shift := uint(0); ; shift += 7 {
-				if shift >= 64 {
-					return ErrIntOverflowDeq
-				}
-				if iNdEx >= l {
-					return io.ErrUnexpectedEOF
-				}
-				b := dAtA[iNdEx]
-				iNdEx++
-				m.RequeueDelayMiliseconds |= (uint32(b) & 0x7F) << shift
-				if b < 0x80 {
-					break
-				}
-			}
 		default:
 			iNdEx = preIndex
 			skippy, err := skipDeq(dAtA[iNdEx:])
@@ -1645,7 +1213,7 @@ func (m *StreamEventsRequest) Unmarshal(dAtA []byte) error {
 	}
 	return nil
 }
-func (m *UpdateEventStatusRequest) Unmarshal(dAtA []byte) error {
+func (m *AckRequest) Unmarshal(dAtA []byte) error {
 	l := len(dAtA)
 	iNdEx := 0
 	for iNdEx < l {
@@ -1668,10 +1236,10 @@ func (m *UpdateEventStatusRequest) Unmarshal(dAtA []byte) error {
 		fieldNum := int32(wire >> 3)
 		wireType := int(wire & 0x7)
 		if wireType == 4 {
-			return fmt.Errorf("proto: UpdateEventStatusRequest: wiretype end group for non-group")
+			return fmt.Errorf("proto: AckRequest: wiretype end group for non-group")
 		}
 		if fieldNum <= 0 {
-			return fmt.Errorf("proto: UpdateEventStatusRequest: illegal tag %d (wire type %d)", fieldNum, wire)
+			return fmt.Errorf("proto: AckRequest: illegal tag %d (wire type %d)", fieldNum, wire)
 		}
 		switch fieldNum {
 		case 1:
@@ -1705,7 +1273,7 @@ func (m *UpdateEventStatusRequest) Unmarshal(dAtA []byte) error {
 			iNdEx = postIndex
 		case 2:
 			if wireType != 2 {
-				return fmt.Errorf("proto: wrong wireType = %d for field Key", wireType)
+				return fmt.Errorf("proto: wrong wireType = %d for field EventId", wireType)
 			}
 			var byteLen int
 			for shift := uint(0); ; shift += 7 {
@@ -1729,16 +1297,16 @@ func (m *UpdateEventStatusRequest) Unmarshal(dAtA []byte) error {
 			if postIndex > l {
 				return io.ErrUnexpectedEOF
 			}
-			m.Key = append(m.Key[:0], dAtA[iNdEx:postIndex]...)
-			if m.Key == nil {
-				m.Key = []byte{}
+			m.EventId = append(m.EventId[:0], dAtA[iNdEx:postIndex]...)
+			if m.EventId == nil {
+				m.EventId = []byte{}
 			}
 			iNdEx = postIndex
 		case 3:
 			if wireType != 0 {
-				return fmt.Errorf("proto: wrong wireType = %d for field EventStatus", wireType)
+				return fmt.Errorf("proto: wrong wireType = %d for field Code", wireType)
 			}
-			m.EventStatus = 0
+			m.Code = 0
 			for shift := uint(0); ; shift += 7 {
 				if shift >= 64 {
 					return ErrIntOverflowDeq
@@ -1748,7 +1316,7 @@ func (m *UpdateEventStatusRequest) Unmarshal(dAtA []byte) error {
 				}
 				b := dAtA[iNdEx]
 				iNdEx++
-				m.EventStatus |= (Event_Status(b) & 0x7F) << shift
+				m.Code |= (AckCode(b) & 0x7F) << shift
 				if b < 0x80 {
 					break
 				}
@@ -1774,7 +1342,7 @@ func (m *UpdateEventStatusRequest) Unmarshal(dAtA []byte) error {
 	}
 	return nil
 }
-func (m *UpdateEventStatusResponse) Unmarshal(dAtA []byte) error {
+func (m *AckResponse) Unmarshal(dAtA []byte) error {
 	l := len(dAtA)
 	iNdEx := 0
 	for iNdEx < l {
@@ -1797,143 +1365,10 @@ func (m *UpdateEventStatusResponse) Unmarshal(dAtA []byte) error {
 		fieldNum := int32(wire >> 3)
 		wireType := int(wire & 0x7)
 		if wireType == 4 {
-			return fmt.Errorf("proto: UpdateEventStatusResponse: wiretype end group for non-group")
+			return fmt.Errorf("proto: AckResponse: wiretype end group for non-group")
 		}
 		if fieldNum <= 0 {
-			return fmt.Errorf("proto: UpdateEventStatusResponse: illegal tag %d (wire type %d)", fieldNum, wire)
-		}
-		switch fieldNum {
-		default:
-			iNdEx = preIndex
-			skippy, err := skipDeq(dAtA[iNdEx:])
-			if err != nil {
-				return err
-			}
-			if skippy < 0 {
-				return ErrInvalidLengthDeq
-			}
-			if (iNdEx + skippy) > l {
-				return io.ErrUnexpectedEOF
-			}
-			iNdEx += skippy
-		}
-	}
-
-	if iNdEx > l {
-		return io.ErrUnexpectedEOF
-	}
-	return nil
-}
-func (m *InsertEventsRequest) Unmarshal(dAtA []byte) error {
-	l := len(dAtA)
-	iNdEx := 0
-	for iNdEx < l {
-		preIndex := iNdEx
-		var wire uint64
-		for shift := uint(0); ; shift += 7 {
-			if shift >= 64 {
-				return ErrIntOverflowDeq
-			}
-			if iNdEx >= l {
-				return io.ErrUnexpectedEOF
-			}
-			b := dAtA[iNdEx]
-			iNdEx++
-			wire |= (uint64(b) & 0x7F) << shift
-			if b < 0x80 {
-				break
-			}
-		}
-		fieldNum := int32(wire >> 3)
-		wireType := int(wire & 0x7)
-		if wireType == 4 {
-			return fmt.Errorf("proto: InsertEventsRequest: wiretype end group for non-group")
-		}
-		if fieldNum <= 0 {
-			return fmt.Errorf("proto: InsertEventsRequest: illegal tag %d (wire type %d)", fieldNum, wire)
-		}
-		switch fieldNum {
-		case 1:
-			if wireType != 2 {
-				return fmt.Errorf("proto: wrong wireType = %d for field Event", wireType)
-			}
-			var msglen int
-			for shift := uint(0); ; shift += 7 {
-				if shift >= 64 {
-					return ErrIntOverflowDeq
-				}
-				if iNdEx >= l {
-					return io.ErrUnexpectedEOF
-				}
-				b := dAtA[iNdEx]
-				iNdEx++
-				msglen |= (int(b) & 0x7F) << shift
-				if b < 0x80 {
-					break
-				}
-			}
-			if msglen < 0 {
-				return ErrInvalidLengthDeq
-			}
-			postIndex := iNdEx + msglen
-			if postIndex > l {
-				return io.ErrUnexpectedEOF
-			}
-			if m.Event == nil {
-				m.Event = &Event{}
-			}
-			if err := m.Event.Unmarshal(dAtA[iNdEx:postIndex]); err != nil {
-				return err
-			}
-			iNdEx = postIndex
-		default:
-			iNdEx = preIndex
-			skippy, err := skipDeq(dAtA[iNdEx:])
-			if err != nil {
-				return err
-			}
-			if skippy < 0 {
-				return ErrInvalidLengthDeq
-			}
-			if (iNdEx + skippy) > l {
-				return io.ErrUnexpectedEOF
-			}
-			iNdEx += skippy
-		}
-	}
-
-	if iNdEx > l {
-		return io.ErrUnexpectedEOF
-	}
-	return nil
-}
-func (m *InsertEventsResponse) Unmarshal(dAtA []byte) error {
-	l := len(dAtA)
-	iNdEx := 0
-	for iNdEx < l {
-		preIndex := iNdEx
-		var wire uint64
-		for shift := uint(0); ; shift += 7 {
-			if shift >= 64 {
-				return ErrIntOverflowDeq
-			}
-			if iNdEx >= l {
-				return io.ErrUnexpectedEOF
-			}
-			b := dAtA[iNdEx]
-			iNdEx++
-			wire |= (uint64(b) & 0x7F) << shift
-			if b < 0x80 {
-				break
-			}
-		}
-		fieldNum := int32(wire >> 3)
-		wireType := int(wire & 0x7)
-		if wireType == 4 {
-			return fmt.Errorf("proto: InsertEventsResponse: wiretype end group for non-group")
-		}
-		if fieldNum <= 0 {
-			return fmt.Errorf("proto: InsertEventsResponse: illegal tag %d (wire type %d)", fieldNum, wire)
+			return fmt.Errorf("proto: AckResponse: illegal tag %d (wire type %d)", fieldNum, wire)
 		}
 		switch fieldNum {
 		default:
@@ -2065,41 +1500,37 @@ var (
 func init() { proto.RegisterFile("deq.proto", fileDescriptorDeq) }
 
 var fileDescriptorDeq = []byte{
-	// 576 bytes of a gzipped FileDescriptorProto
-	0x1f, 0x8b, 0x08, 0x00, 0x00, 0x00, 0x00, 0x00, 0x02, 0xff, 0xac, 0x54, 0xcf, 0x6e, 0xda, 0x4e,
-	0x10, 0xce, 0xc2, 0x2f, 0xe1, 0xc7, 0x40, 0x22, 0x33, 0x41, 0xc4, 0x38, 0x0a, 0x42, 0x3e, 0xb4,
-	0x9c, 0x9c, 0x8a, 0x56, 0xa9, 0x94, 0x43, 0xa5, 0x06, 0xac, 0x08, 0x29, 0x25, 0xa9, 0x69, 0xd5,
-	0x53, 0x85, 0x9c, 0x78, 0x42, 0x51, 0xcd, 0x1a, 0x6c, 0xd3, 0x0a, 0xa9, 0xb7, 0xbe, 0x40, 0x2f,
-	0x7d, 0xa7, 0x1e, 0xfb, 0x08, 0x15, 0x79, 0x91, 0xca, 0xbb, 0x36, 0x7f, 0x82, 0xa3, 0x5c, 0x7a,
-	0xb3, 0xe7, 0xfb, 0xe6, 0x9b, 0x9d, 0x6f, 0x76, 0x16, 0xf2, 0x0e, 0x4d, 0x8c, 0xb1, 0xef, 0x85,
-	0x1e, 0x66, 0x1d, 0x9a, 0x68, 0xd5, 0x81, 0xe7, 0x0d, 0x5c, 0x3a, 0x16, 0xa1, 0xeb, 0xe9, 0xed,
-	0xb1, 0xcd, 0x67, 0x12, 0xd7, 0x0e, 0xef, 0x43, 0x34, 0x1a, 0x87, 0x31, 0xa8, 0x1f, 0x41, 0xae,
-	0xf5, 0xc9, 0xe6, 0x9c, 0x5c, 0x44, 0xf8, 0x8f, 0xdb, 0x23, 0x52, 0x59, 0x9d, 0x35, 0xf2, 0x96,
-	0xf8, 0xd6, 0x7f, 0x32, 0xd8, 0x36, 0xbf, 0x10, 0x0f, 0xd1, 0x80, 0xdc, 0xd8, 0x9e, 0xb9, 0x9e,
-	0xed, 0x08, 0x42, 0xa1, 0x59, 0x36, 0xa4, 0xae, 0x91, 0xe8, 0x1a, 0xaf, 0xf9, 0xcc, 0x4a, 0x48,
-	0xb8, 0x07, 0x99, 0xa1, 0xa3, 0x66, 0xea, 0xac, 0x51, 0xb4, 0x32, 0x43, 0x07, 0x15, 0xc8, 0x7e,
-	0xa6, 0x99, 0x9a, 0x15, 0x81, 0xe8, 0x53, 0x3f, 0x85, 0x9d, 0x5e, 0x68, 0x87, 0xd3, 0x00, 0x0b,
-	0x90, 0xbb, 0x32, 0xbb, 0xed, 0x4e, 0xf7, 0x5c, 0xd9, 0xc2, 0x5d, 0xc8, 0x5f, 0x59, 0x97, 0x2d,
-	0xb3, 0xd7, 0x33, 0xdb, 0x0a, 0xc3, 0x32, 0x28, 0x1f, 0x3a, 0x17, 0x17, 0xfd, 0xee, 0xe5, 0xbb,
-	0x7e, 0x1c, 0x57, 0x32, 0xfa, 0x09, 0x60, 0xcb, 0x27, 0x3b, 0x24, 0x71, 0x38, 0x8b, 0x26, 0x53,
-	0x0a, 0x42, 0xac, 0xc3, 0x36, 0x45, 0xff, 0xf1, 0x09, 0xc1, 0x88, 0x4c, 0x92, 0x0c, 0x09, 0xe8,
-	0xaf, 0xa0, 0x6c, 0xf2, 0x60, 0xea, 0x53, 0xdc, 0x74, 0x92, 0xf9, 0x04, 0x72, 0x37, 0x32, 0x12,
-	0xe7, 0x16, 0x45, 0x6e, 0xc2, 0x4a, 0x40, 0xfd, 0x29, 0x94, 0xce, 0x29, 0xbc, 0x97, 0x9c, 0x66,
-	0xdc, 0x77, 0x06, 0xfb, 0xbd, 0xd0, 0x27, 0x7b, 0x24, 0xea, 0x07, 0x09, 0x57, 0x5d, 0x2f, 0x94,
-	0x5f, 0x48, 0x63, 0x05, 0x76, 0x6e, 0x3d, 0xd7, 0xf5, 0xbe, 0x0a, 0xd3, 0xfe, 0xb7, 0xe2, 0x3f,
-	0x3c, 0x85, 0xaa, 0x1f, 0x25, 0x4f, 0xa9, 0xef, 0x90, 0x6b, 0xcf, 0xfa, 0xa3, 0xa1, 0x3b, 0x0c,
-	0xe8, 0xc6, 0xe3, 0x4e, 0x20, 0xec, 0xdc, 0xb5, 0x0e, 0x62, 0x42, 0x3b, 0xc2, 0xdf, 0x2c, 0x61,
-	0xfd, 0x1b, 0xa8, 0xef, 0xc7, 0x4e, 0x62, 0x93, 0x74, 0xfb, 0xf1, 0x93, 0xc4, 0xa3, 0xca, 0x2c,
-	0x46, 0x85, 0x2f, 0xa0, 0x28, 0xfc, 0xeb, 0x07, 0x42, 0x42, 0x94, 0xdd, 0x6b, 0x96, 0x96, 0xfe,
-	0x1a, 0xb1, 0x76, 0x81, 0x96, 0x85, 0xf4, 0x43, 0xa8, 0xa6, 0x54, 0x0f, 0xc6, 0x1e, 0x0f, 0x48,
-	0x7f, 0x09, 0xfb, 0x1d, 0x1e, 0x90, 0x1f, 0xae, 0xfb, 0xf3, 0xf8, 0x08, 0x2b, 0x50, 0x5e, 0x4f,
-	0x94, 0x82, 0xcd, 0xbb, 0x2c, 0x64, 0xdb, 0xe6, 0x5b, 0x6c, 0x42, 0x61, 0xe5, 0x6a, 0xe0, 0x81,
-	0x1c, 0xe4, 0xc6, 0x65, 0xd1, 0x56, 0xa4, 0xf1, 0x04, 0x8a, 0xab, 0xc3, 0x42, 0x55, 0x60, 0x29,
-	0xf3, 0x5b, 0xcd, 0x7a, 0xc6, 0xd0, 0x82, 0xd2, 0x46, 0x87, 0x78, 0x24, 0x28, 0x0f, 0xf9, 0xae,
-	0xd5, 0x1e, 0x82, 0x65, 0x1f, 0xf8, 0x11, 0x34, 0x59, 0x78, 0xc8, 0x07, 0xff, 0x5a, 0xbc, 0xc1,
-	0xd0, 0x84, 0xe2, 0xaa, 0x7d, 0x71, 0xab, 0x29, 0xa3, 0xd0, 0xaa, 0x29, 0xc8, 0x42, 0xa6, 0x09,
-	0xb0, 0x5c, 0x04, 0xac, 0x08, 0xea, 0xc6, 0x66, 0x68, 0x6b, 0x5b, 0x84, 0x67, 0xb0, 0xbb, 0xb6,
-	0x7c, 0x28, 0x2b, 0xa4, 0x2d, 0xa4, 0x56, 0xd9, 0x78, 0x5d, 0xcc, 0xe8, 0xd5, 0x3a, 0x53, 0x7e,
-	0xcd, 0x6b, 0xec, 0xf7, 0xbc, 0xc6, 0xfe, 0xcc, 0x6b, 0xec, 0xc7, 0x5d, 0x6d, 0xeb, 0x7a, 0x47,
-	0x30, 0x9e, 0xff, 0x0d, 0x00, 0x00, 0xff, 0xff, 0x10, 0xf6, 0x61, 0x35, 0x12, 0x05, 0x00, 0x00,
+	// 510 bytes of a gzipped FileDescriptorProto
+	0x1f, 0x8b, 0x08, 0x00, 0x00, 0x00, 0x00, 0x00, 0x02, 0xff, 0x8c, 0x53, 0x4d, 0x8f, 0xd2, 0x5c,
+	0x14, 0x9e, 0x4b, 0x29, 0x0c, 0x67, 0xbe, 0x3a, 0x67, 0x5e, 0xde, 0xa9, 0xb3, 0x20, 0xa4, 0x71,
+	0x41, 0x5c, 0x90, 0x09, 0x26, 0xee, 0x6b, 0xb9, 0x13, 0x9b, 0x60, 0x81, 0x5b, 0x48, 0xdc, 0x91,
+	0xd2, 0x7b, 0x8d, 0x0d, 0xa5, 0xe5, 0xab, 0x3a, 0xfc, 0x02, 0xb7, 0x26, 0x26, 0xee, 0xfc, 0x3f,
+	0x2e, 0xfd, 0x09, 0x06, 0xff, 0x88, 0xe9, 0x6d, 0x6b, 0x59, 0x18, 0xe3, 0xf2, 0xf9, 0xe8, 0x79,
+	0xce, 0x79, 0x72, 0x0b, 0x0d, 0x2e, 0xd6, 0xdd, 0xd5, 0x26, 0xde, 0xc5, 0xa8, 0x70, 0xb1, 0x36,
+	0x06, 0xa0, 0xd2, 0xf7, 0x22, 0xda, 0xe1, 0x25, 0x54, 0x02, 0xae, 0x93, 0x36, 0xe9, 0x9c, 0xb3,
+	0x4a, 0xc0, 0xf1, 0x09, 0x9c, 0xee, 0xf6, 0x2b, 0x31, 0x4b, 0x36, 0xa1, 0x5e, 0x69, 0x93, 0x4e,
+	0x83, 0xd5, 0x53, 0x3c, 0xdd, 0x84, 0xa8, 0x43, 0x7d, 0xe5, 0xed, 0xc3, 0xd8, 0xe3, 0xba, 0x22,
+	0xfd, 0x05, 0x34, 0xbe, 0x10, 0x80, 0x51, 0x32, 0x67, 0x62, 0x9d, 0x88, 0xed, 0x0e, 0xdb, 0xa0,
+	0x8a, 0x74, 0xb8, 0x1c, 0x7b, 0xd6, 0x83, 0x6e, 0x1a, 0x2e, 0xe3, 0x58, 0x26, 0x60, 0x17, 0x6e,
+	0xb8, 0x08, 0xbd, 0xfd, 0x6c, 0x9d, 0x88, 0x44, 0xcc, 0xfc, 0x77, 0x5e, 0x14, 0x89, 0x22, 0xf0,
+	0x5a, 0x4a, 0xe3, 0x54, 0xb1, 0x32, 0x01, 0x5f, 0xc0, 0xed, 0xb1, 0x7f, 0x19, 0x84, 0xc1, 0x56,
+	0xf8, 0x71, 0xc4, 0xb7, 0x72, 0x95, 0x0b, 0xd6, 0x2c, 0xbf, 0x79, 0x5d, 0x8a, 0xc6, 0x47, 0x02,
+	0xe0, 0x96, 0x8b, 0xe9, 0x50, 0x2f, 0xa2, 0x48, 0x76, 0x5b, 0x0e, 0xff, 0x76, 0x76, 0x13, 0x6a,
+	0xcb, 0x20, 0x9a, 0x05, 0xd9, 0xd5, 0x0d, 0xa6, 0x2e, 0x83, 0xc8, 0xe6, 0x92, 0xf6, 0x1e, 0x53,
+	0xba, 0x9a, 0xd3, 0xde, 0xa3, 0xcd, 0xf1, 0x7f, 0xa8, 0xbd, 0x8d, 0xc3, 0x30, 0xfe, 0xa0, 0xab,
+	0x6d, 0xd2, 0x39, 0x65, 0x39, 0x32, 0x7c, 0x00, 0xd3, 0x5f, 0xfc, 0xd3, 0x22, 0xb2, 0xa2, 0x74,
+	0x70, 0x25, 0x6b, 0x59, 0x62, 0x9b, 0x63, 0x1b, 0xaa, 0x7e, 0xcc, 0x85, 0x5c, 0xe3, 0xb2, 0x77,
+	0x2e, 0x5b, 0x35, 0xfd, 0x85, 0x15, 0x73, 0xc1, 0xa4, 0x62, 0x5c, 0xc0, 0x99, 0x0c, 0xd9, 0xae,
+	0xe2, 0x68, 0x2b, 0x9e, 0x7d, 0x26, 0x50, 0xcf, 0x0d, 0x78, 0x05, 0x67, 0x53, 0xc7, 0x1d, 0x51,
+	0xcb, 0x7e, 0xb0, 0x69, 0x5f, 0x3b, 0xc1, 0x26, 0x5c, 0xf7, 0xe9, 0x78, 0x4a, 0xa7, 0x74, 0x36,
+	0x62, 0x43, 0x8b, 0xba, 0x2e, 0xed, 0x6b, 0x04, 0x11, 0x2e, 0x0b, 0xfa, 0xc1, 0xb4, 0x07, 0xb4,
+	0xaf, 0x55, 0xf0, 0x3f, 0xd0, 0x58, 0xce, 0x59, 0x43, 0xc7, 0x9d, 0x98, 0xce, 0x44, 0x53, 0x52,
+	0x67, 0xc1, 0x0e, 0x6c, 0x87, 0x9a, 0x4c, 0xab, 0xe2, 0x2d, 0xdc, 0x14, 0x1c, 0x7d, 0x33, 0x1a,
+	0x3a, 0xd4, 0x99, 0xd8, 0xe6, 0x40, 0x53, 0xb1, 0x01, 0xea, 0x64, 0x38, 0xb5, 0x5e, 0x69, 0xb5,
+	0xde, 0x57, 0x02, 0x4a, 0x9f, 0x8e, 0xd1, 0x00, 0x65, 0x94, 0xcc, 0xf1, 0x4a, 0xde, 0x51, 0xbe,
+	0x9e, 0xbb, 0xa3, 0xe7, 0x82, 0x4f, 0x41, 0x71, 0x7f, 0x7b, 0xdc, 0x3f, 0x7a, 0xee, 0x09, 0x76,
+	0x40, 0x31, 0xfd, 0x45, 0xee, 0x2a, 0x5b, 0xbe, 0xd3, 0x4a, 0x22, 0x6b, 0x04, 0x0d, 0xa8, 0xba,
+	0xfb, 0xc8, 0xc7, 0xa3, 0xef, 0x8f, 0x67, 0x75, 0xc8, 0x3d, 0x79, 0xa9, 0x7d, 0x3b, 0xb4, 0xc8,
+	0xf7, 0x43, 0x8b, 0xfc, 0x38, 0xb4, 0xc8, 0xa7, 0x9f, 0xad, 0x93, 0x79, 0x4d, 0xfe, 0x38, 0xcf,
+	0x7f, 0x05, 0x00, 0x00, 0xff, 0xff, 0x1f, 0x00, 0xa5, 0x3b, 0x45, 0x03, 0x00, 0x00,
 }
