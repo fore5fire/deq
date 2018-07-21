@@ -1,13 +1,12 @@
 package eventstore
 
-//go:generate stringer -type=EventStatus
-
 import (
 	"errors"
+	"sync"
+
 	"github.com/dgraph-io/badger"
 	"github.com/gogo/protobuf/proto"
 	"gitlab.com/katcheCode/deqd/api/v1/deq"
-	"sync"
 )
 
 // Channel allows multiple listeners to synchronize processing of events

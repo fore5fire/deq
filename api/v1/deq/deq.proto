@@ -12,15 +12,19 @@ message Event {
   bytes id = 1;
   // Required.
   string type_url = 2;
+
   bytes payload = 3;
   // bytes parent_event_id = 4;
   // int32 min_retries = 4;
 }
 
 message PubRequest {
+  // Required.
   Event event = 1;
-  string delay_queue_channel = 2;
-  uint32 delay_queue_miliseconds = 3;
+  // If set, the request will not complete until the published event has been processed by this channel
+  string await_channel = 2;
+  // Miliseconds to await before timing out. 0 indicates server default.
+  uint32 await_milliseconds = 3;
 }
 
 message SubRequest {

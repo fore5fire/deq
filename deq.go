@@ -3,31 +3,35 @@ package deq
 import (
 	"context"
 	"errors"
-	"fmt"
+
 	"github.com/gogo/protobuf/proto"
 	api "gitlab.com/katcheCode/deqd/api/v1/deq"
 	"google.golang.org/grpc"
-	"reflect"
 )
 
-// Client provides a convience layer for DEQClient
-type Client struct {
-	api.DEQClient
-	// handlers map[string]Handler
+// Consumer allows subscribing to events of particular types
+type Consumer struct {
+	client api.DEQClient
+	opts   ConsumerOptions
 }
 
-// NewClient creates a new Client
-func NewClient(conn *grpc.ClientConn) *Client {
-	return &Client{
-		api.NewDEQClient(conn),
-		// map[string]Handler{},
-	}
+type ConsumerOptions struct {
+	Channel string
+	MinID   string
+	MaxID   string
+	Follow  bool
 }
 
-// // Handler is a handler for DEQ events.
-// type Handler interface {
-// 	HandleEvent(context.Context, Event) error
-// }
+// NewConsumer creates a new Consumer
+func NewConsumer(conn *grpc.ClientConn, opts ConsumerOptions) *Consumer {
+	return &Consumer{api.NewDEQClient(conn), opts}
+}
+
+// Handler is a handler for DEQ events.
+type Handler interface {
+	HandleEvent(context.Context, Event) api.AckCode
+	NewMessage() Message
+}
 
 // HandlerFunc is the function type that can be used for registering HandlerFuncs
 type HandlerFunc func(context.Context, Event) api.AckCode
@@ -37,17 +41,14 @@ type HandlerFunc func(context.Context, Event) api.AckCode
 // }
 
 // Sub begins listening for events on the requested channel
-func (c *Consumer) Sub(ctx context.Context, req *api.SubRequest, hf HandlerFunc) error {
+func (c *Consumer) Sub(ctx context.Context, handler Handler) error {
 
-	msgType := proto.MessageType(req.TypeUrl)
-	if msgType == nil {
-		return fmt.Errorf("typeURL %s has no registered type with gogo/protobuf", req.TypeUrl)
-	}
-
-	ctx, cancel := context.WithCancel(ctx)
-	defer cancel()
-
-	stream, err := c.DEQClient.Sub(ctx, req)
+	stream, err := c.client.Sub(ctx, &api.SubRequest{
+		Channel: c.opts.Channel,
+		MinId:   c.opts.MinID,
+		MaxId:   c.opts.MaxID,
+		Follow:  c.opts.Follow,
+	})
 	if err != nil {
 		return err
 	}
@@ -58,11 +59,12 @@ func (c *Consumer) Sub(ctx context.Context, req *api.SubRequest, hf HandlerFunc)
 			return err
 		}
 		go func() {
-			msg := reflect.New(msgType.Elem()).Interface().(Message)
+			// msg := reflect.New(msgType.Elem()).Interface().(Message)
+			msg := handler.NewMessage()
 			err := proto.Unmarshal(event.Payload, msg)
 			if err != nil {
-				_, err = c.Ack(ctx, &api.AckRequest{
-					Channel: req.Channel,
+				_, err = c.client.Ack(ctx, &api.AckRequest{
+					Channel: c.opts.Channel,
 					EventId: event.Id,
 					Code:    api.AckCode_DEQUEUE_FAILED,
 				})
@@ -72,26 +74,52 @@ func (c *Consumer) Sub(ctx context.Context, req *api.SubRequest, hf HandlerFunc)
 				return
 			}
 
-			code := hf(ctx, Event{
+			code := handler.HandleEvent(ctx, Event{
 				ID:      event.Id,
 				TypeURL: event.TypeUrl,
 				Message: msg,
 			})
 
-			_, err = c.Ack(ctx, &api.AckRequest{
-				Channel: req.Channel,
+			_, err = c.client.Ack(ctx, &api.AckRequest{
+				Channel: c.opts.Channel,
 				EventId: event.Id,
 				Code:    code,
 			})
 			if err != nil {
 				// How to expose error?
+				return
 			}
 		}()
 	}
 }
 
-func (c *Producer) Pub(ctx context.Context, e Event) {
+type Producer struct {
+	client api.DEQClient
+	opts   ProducerOptions
+}
 
+type ProducerOptions struct {
+	// Number of miliseconds to wait before queueing on this channel
+	AwaitChannel      string
+	AwaitMilliseconds uint32
+}
+
+func NewProducer(conn *grpc.ClientConn, opts ProducerOptions) *Producer {
+	return &Producer{api.NewDEQClient(conn), opts}
+}
+
+func (p *Producer) Pub(ctx context.Context, e Event) error {
+
+	_, err := p.client.Pub(ctx, &api.PubRequest{
+		Event:             &api.Event{},
+		AwaitChannel:      p.opts.AwaitChannel,
+		AwaitMilliseconds: p.opts.AwaitMilliseconds,
+	})
+	if err != nil {
+		return err
+	}
+
+	return nil
 }
 
 //
