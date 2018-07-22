@@ -3,6 +3,10 @@ package deq
 import (
 	"context"
 	"errors"
+	"fmt"
+	"reflect"
+
+	"log"
 
 	"github.com/gogo/protobuf/proto"
 	api "gitlab.com/katcheCode/deqd/api/v1/deq"
@@ -15,6 +19,7 @@ type Consumer struct {
 	opts   ConsumerOptions
 }
 
+// ConsumerOptions are options for a Consumer
 type ConsumerOptions struct {
 	Channel string
 	MinID   string
@@ -22,32 +27,44 @@ type ConsumerOptions struct {
 	Follow  bool
 }
 
-// NewConsumer creates a new Consumer
+// NewConsumer creates a new Consumer.
+// conn can be used by multiple Producers and Consumers in parallel
 func NewConsumer(conn *grpc.ClientConn, opts ConsumerOptions) *Consumer {
 	return &Consumer{api.NewDEQClient(conn), opts}
 }
 
 // Handler is a handler for DEQ events.
 type Handler interface {
-	HandleEvent(context.Context, Event) api.AckCode
-	NewMessage() Message
+	HandleEvent(context.Context, Event) AckCode
+	// NewMessage() Message
 }
 
 // HandlerFunc is the function type that can be used for registering HandlerFuncs
-type HandlerFunc func(context.Context, Event) api.AckCode
+type HandlerFunc func(context.Context, Event) AckCode
+
+// HandleEvent implements the Handler interface
+func (f HandlerFunc) HandleEvent(ctx context.Context, e Event) AckCode {
+	return f(ctx, e)
+}
 
 // type handler struct {
 // 	handlerFunc HandlerFunc
 // }
 
-// Sub begins listening for events on the requested channel
-func (c *Consumer) Sub(ctx context.Context, handler Handler) error {
+// Sub begins listening for events on the requested channel.
+// m is used to determine the subscribed type url. All messages passed to handler are guarenteed to be of the same concrete type as m
+// Because github.com/gogo/protobuf is used to lookup the typeURL and concrete type of m, m must be a registered type with the same instance of gogo/proto as this binary (ie. no vendoring or github.com/golang/protobuf)
+func (c *Consumer) Sub(ctx context.Context, m Message, handler Handler) error {
+
+	typeURL := proto.MessageName(m)
+	msgType := proto.MessageType(typeURL)
 
 	stream, err := c.client.Sub(ctx, &api.SubRequest{
 		Channel: c.opts.Channel,
 		MinId:   c.opts.MinID,
 		MaxId:   c.opts.MaxID,
 		Follow:  c.opts.Follow,
+		TypeUrl: typeURL,
 	})
 	if err != nil {
 		return err
@@ -59,8 +76,7 @@ func (c *Consumer) Sub(ctx context.Context, handler Handler) error {
 			return err
 		}
 		go func() {
-			// msg := reflect.New(msgType.Elem()).Interface().(Message)
-			msg := handler.NewMessage()
+			msg := reflect.New(msgType.Elem()).Interface().(Message)
 			err := proto.Unmarshal(event.Payload, msg)
 			if err != nil {
 				_, err = c.client.Ack(ctx, &api.AckRequest{
@@ -69,49 +85,65 @@ func (c *Consumer) Sub(ctx context.Context, handler Handler) error {
 					Code:    api.AckCode_DEQUEUE_FAILED,
 				})
 				if err != nil {
-					// how to expose error?
+					// TODO: how to expose error?
+					log.Printf("deq: unmarshal message failed: ack: %v", err)
 				}
 				return
 			}
 
 			code := handler.HandleEvent(ctx, Event{
-				ID:      event.Id,
-				TypeURL: event.TypeUrl,
-				Message: msg,
+				ID:       event.Id,
+				TypeURL:  event.TypeUrl,
+				Message:  msg,
+				consumer: c,
 			})
 
 			_, err = c.client.Ack(ctx, &api.AckRequest{
 				Channel: c.opts.Channel,
 				EventId: event.Id,
-				Code:    code,
+				Code:    api.AckCode(code),
 			})
 			if err != nil {
-				// How to expose error?
+				// TODO: How to expose error?
+				log.Printf("deq: event handled: ack: %v", err)
 				return
 			}
 		}()
 	}
 }
 
+// Producer publishes events via the Pub method
 type Producer struct {
 	client api.DEQClient
 	opts   ProducerOptions
 }
 
+// ProducerOptions provides options used by a Producer
 type ProducerOptions struct {
-	// Number of miliseconds to wait before queueing on this channel
 	AwaitChannel      string
 	AwaitMilliseconds uint32
 }
 
+// NewProducer constructs a new Producer.
+// conn can be used by multiple Producers and Consumers in parallel
 func NewProducer(conn *grpc.ClientConn, opts ProducerOptions) *Producer {
 	return &Producer{api.NewDEQClient(conn), opts}
 }
 
+// Pub publishes a new event.
 func (p *Producer) Pub(ctx context.Context, e Event) error {
 
-	_, err := p.client.Pub(ctx, &api.PubRequest{
-		Event:             &api.Event{},
+	payload, err := proto.Marshal(e.Message)
+	if err != nil {
+		return fmt.Errorf("marshal payload: %v", err)
+	}
+
+	_, err = p.client.Pub(ctx, &api.PubRequest{
+		Event: &api.Event{
+			Id:      e.ID,
+			TypeUrl: e.TypeURL,
+			Payload: payload,
+		},
 		AwaitChannel:      p.opts.AwaitChannel,
 		AwaitMilliseconds: p.opts.AwaitMilliseconds,
 	})
@@ -122,59 +154,48 @@ func (p *Producer) Pub(ctx context.Context, e Event) error {
 	return nil
 }
 
-//
-// func (c *Client) handle(ctx context.Context, errc chan error) error {
-//
-// 	for {
-//
-// 		go func() {
-// 			typeURL := strings.TrimPrefix(event.GetPayload().GetTypeUrl(), "type.googleapis.com/")
-// 			handler := c.handlers[typeURL]
-// 			if handler == nil {
-//
-// 				return
-// 			}
-// 			if messageType == nil {
-// 				messageType = proto.MessageType("type.googleapis.com/" + typeURL)
-// 			}
-// 			if messageType == nil {
-// 				errc <- errors.New("deq: registered for handler not registered with protobuf: " + typeURL)
-// 				return
-// 			}
-// 			message := reflect.New(messageType.Elem()).Interface().(Message)
-// 			err = types.UnmarshalAny(event.Payload, message)
-//
-// 			status := api.Acknowledgment_DEQUEUE // Special Skip ?
-// 			err = handler.HandleEvent(ctx, event, message)
-// 			if err == ErrWillNotProcess {
-// 				status = Event_WILL_NOT_PROCESS
-// 			}
-// 			if err != nil {
-// 				// TODO: We probably need to give someone a chance to handle this
-// 				// log.Printf("Failed to reduce event of type %s: %v", event.GetPayload().GetTypeUrl(), err)
-// 				status = Event_PENDING
-// 			}
-// 			_, err = c.UpdateEventStatus(ctx, &UpdateEventStatusRequest{
-// 				Channel:     channel,
-// 				Key:         event.GetKey(),
-// 				EventStatus: status,
-// 			})
-// 			if err != nil {
-// 				errc <- errors.New("Failed to mark event as processed: " + err.Error())
-// 				return
-// 			}
-// 		}()
-// 	}
-// }
-
+// Event is a deserialized event that is sent to or recieved from deq.
 type Event struct {
-	ID      []byte
-	TypeURL string
-	Message Message
+	ID       []byte
+	TypeURL  string
+	Message  Message
+	consumer *Consumer
 }
 
-// ErrWillNotProcess should be returned from a handler to indicate that the event status should be set to WILL_NOT_PROCESS instead of PROCESSED
-var ErrWillNotProcess = errors.New("will not process")
+// ResetTimeout sends a reset timeout request to the
+func (e *Event) ResetTimeout(ctx context.Context) error {
+	if e.consumer == nil {
+		return errors.New("ResetTimeout is only valid for events created by a consumer")
+	}
+
+	_, err := e.consumer.client.Ack(ctx, &api.AckRequest{
+		Channel: e.consumer.opts.Channel,
+		EventId: e.ID,
+		Code:    api.AckCode_RESET_TIMEOUT,
+	})
+	if err != nil {
+		return err
+	}
+
+	return nil
+}
+
+// AckCode is a code used when acknowledging an event
+type AckCode api.AckCode
+
+var (
+	// AckCodeDequeueProcessed dequeues an event, indicating it was processed successfully
+	AckCodeDequeueProcessed = api.AckCode_DEQUEUE_PROCESSED
+	// AckCodeDequeueFailed dequeues an event, indicating it was not processed successfully
+	AckCodeDequeueFailed = api.AckCode_DEQUEUE_FAILED
+
+	// AckCodeRequeueConstant requeues an event with no backoff
+	AckCodeRequeueConstant = api.AckCode_REQUEUE_CONSTANT
+	// AckCodeRequeueLinear requires an event with a linear backoff
+	AckCodeRequeueLinear = api.AckCode_REQUEUE_LINEAR
+	// AckCodeRequeueExponential requeues an event with an exponential backoff
+	AckCodeRequeueExponential = api.AckCode_REQUEUE_EXPONENTIAL
+)
 
 // Message is a message payload that is sent by deq
 type Message proto.Message

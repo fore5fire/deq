@@ -21,7 +21,7 @@ message Event {
 message PubRequest {
   // Required.
   Event event = 1;
-  // If set, the request will not complete until the published event has been processed by this channel
+  // If set, the request will not complete until the published event has been dequeued by this channel
   string await_channel = 2;
   // Miliseconds to await before timing out. 0 indicates server default.
   uint32 await_milliseconds = 3;
@@ -31,7 +31,7 @@ message SubRequest {
   // Required.
   string channel = 1;
   string type_url = 2;
-  string min_id = 3; // prefix ?
+  string min_id = 3;
   string max_id = 4;
   bool   follow = 5;
   // uint32 requeue_delay_miliseconds = 6;
@@ -56,7 +56,7 @@ enum AckCode {
   REQUEUE_LINEAR = 4;
   REQUEUE_EXPONENTIAL = 5;
 
-  TOUCH = 6;
+  RESET_TIMEOUT = 6;
 }
 
 message AckResponse {
