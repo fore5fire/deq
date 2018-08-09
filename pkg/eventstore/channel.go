@@ -4,11 +4,12 @@ package eventstore
 
 import (
 	"errors"
+	"sync"
+
 	"github.com/dgraph-io/badger"
 	"github.com/gogo/protobuf/proto"
 	"gitlab.com/katcheCode/deqd/api/v1/deq"
 	"gitlab.com/katcheCode/deqd/pkg/logger"
-	"sync"
 )
 
 var log = logger.With().Str("pkg", "gitlab.com/katcheCode/deqd/eventstore").Logger()
@@ -17,6 +18,7 @@ var log = logger.With().Str("pkg", "gitlab.com/katcheCode/deqd/eventstore").Logg
 type Channel struct {
 	name string
 	out  chan deq.Event
+	idle chan struct{}
 	done chan error
 	err  error
 	db   *badger.DB
@@ -27,6 +29,7 @@ type sharedChannel struct {
 	in        chan deq.Event
 	out       chan deq.Event
 	done      chan error
+	idleChans []chan struct{}
 	doneChans []chan error
 	db        *badger.DB
 }
@@ -52,14 +55,17 @@ func (s *Store) Channel(name string) Channel {
 
 	// DON'T FORGET TO ADD CHECK FOR FAILED CHANNEL
 
+	idle := make(chan struct{}, 1)
 	done := make(chan error, 1)
 	shared.Lock()
 	defer shared.Unlock()
+	shared.idleChans = append(shared.idleChans, idle)
 	shared.doneChans = append(shared.doneChans, done)
 
 	return Channel{
 		name: name,
 		out:  shared.out,
+		idle: idle,
 		done: done,
 		db:   s.db,
 	}
@@ -74,14 +80,14 @@ type ChannelSettings struct {
 var ChannelSettingsDefaults = ChannelSettings{}
 
 // Follow returns
-func (c Channel) Follow() (eventc chan deq.Event, done chan struct{}) {
+func (c Channel) Follow() (eventc chan deq.Event, idle chan struct{}, done chan struct{}) {
 
 	done = make(chan struct{})
 	// go func() {
 	// 	<-done
 	// }()
 
-	return c.out, done
+	return c.out, c.idle, done
 }
 
 // Err returns the error that caused this channel to fail, or nil if the channel closed cleanly
@@ -196,7 +202,9 @@ func (s *sharedChannel) start(channelName string) {
 		if err != nil {
 			s.broadcastErr(err)
 		}
-
+		for _, idle := range s.idleChans {
+			idle <- struct{}{}
+		}
 		for len(s.in) < cap(s.in) {
 			// No event overflow since last read, we're all caught up
 			e := <-s.in

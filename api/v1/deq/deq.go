@@ -6,11 +6,12 @@ import (
 	"context"
 	"errors"
 	"fmt"
+	"reflect"
+	"strings"
+
 	"github.com/gogo/protobuf/proto"
 	"github.com/gogo/protobuf/types"
 	"google.golang.org/grpc"
-	"reflect"
-	"strings"
 )
 
 // Client provides a convience layer for DEQClient
@@ -61,21 +62,21 @@ func (c *Client) HandleFunc(typeURL string, handlerFunc HandlerFunc) {
 }
 
 // Stream opens an event stream with deq and routes events to their designated handlers. Any event without a handler is marked WILL_NO_PROCESS
-func (c *Client) Stream(ctx context.Context, channel string) error {
+func (c *Client) Stream(ctx context.Context, follow bool, channel string) error {
 
 	ctx, cancel := context.WithCancel(ctx)
 	defer cancel()
 
 	errc := make(chan error)
-	go c.listen(ctx, channel, errc)
+	go c.listen(ctx, follow, channel, errc)
 
 	return <-errc
 }
 
-func (c *Client) listen(ctx context.Context, channel string, errc chan error) {
+func (c *Client) listen(ctx context.Context, follow bool, channel string, errc chan error) {
 	stream, err := c.StreamEvents(ctx, &StreamEventsRequest{
 		Channel: channel,
-		Follow:  true,
+		Follow:  follow,
 	})
 	if err != nil {
 		errc <- errors.New("DEQ: Failed to open event stream: " + err.Error())

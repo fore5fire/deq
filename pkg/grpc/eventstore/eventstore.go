@@ -2,14 +2,15 @@ package eventstore
 
 import (
 	"context"
+	"io"
+	"time"
+
 	"github.com/gogo/protobuf/types"
 	pb "gitlab.com/katcheCode/deqd/api/v1/deq"
 	"gitlab.com/katcheCode/deqd/pkg/eventstore"
 	"gitlab.com/katcheCode/deqd/pkg/logger"
 	"google.golang.org/grpc/codes"
 	"google.golang.org/grpc/status"
-	"io"
-	"time"
 )
 
 var log = logger.With().Str("pkg", "gitlab.com/katcheCode/deqd/grpc/eventstore").Logger()
@@ -66,7 +67,7 @@ func (s *Server) StreamEvents(in *pb.StreamEventsRequest, stream pb.DEQ_StreamEv
 	streamEventsLog.Debug().Msg("New client streaming events")
 
 	channel := s.store.Channel(in.GetChannel())
-	eventc, done := channel.Follow()
+	eventc, idle, done := channel.Follow()
 	defer close(done)
 
 	requeue := make(chan pb.Event, 1)
@@ -123,6 +124,12 @@ func (s *Server) StreamEvents(in *pb.StreamEventsRequest, stream pb.DEQ_StreamEv
 			cancelRequeue <- struct{}{}
 
 			// streamEventsLog.Debug().Interface("event", e).Msg("Event sent!")
+
+			// Disconnect on idle if not following
+		case <-idle:
+			if !in.Follow {
+				return nil
+			}
 
 		// Poll to check if client closed connection
 		case <-time.After(time.Second * 5):
