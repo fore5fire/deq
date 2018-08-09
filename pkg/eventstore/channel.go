@@ -4,6 +4,7 @@ package eventstore
 
 import (
 	"errors"
+	"log"
 	"sync"
 	"time"
 
@@ -54,7 +55,7 @@ func (s *Store) Channel(name string) Channel {
 
 	// DON'T FORGET TO ADD CHECK FOR FAILED CHANNEL
 
-	idle := make(chan struct{}, 1)
+	idle := make(chan struct{})
 	done := make(chan error, 1)
 	shared.Lock()
 	defer shared.Unlock()
@@ -79,14 +80,18 @@ type ChannelSettings struct {
 var ChannelSettingsDefaults = ChannelSettings{}
 
 // Follow returns
-func (c Channel) Follow() (eventc chan deq.Event, idle chan struct{}, done chan struct{}) {
+func (c Channel) Follow() (eventc chan deq.Event, idle chan struct{}) {
 
-	done = make(chan struct{})
 	// go func() {
 	// 	<-done
 	// }()
 
-	return c.out, c.idle, done
+	return c.out, c.idle
+}
+
+// Close cleans up resources for this Channel
+func (c Channel) Close() {
+	// TODO: clean up sharedChannel stuff
 }
 
 // Err returns the error that caused this channel to fail, or nil if the channel closed cleanly
@@ -200,14 +205,20 @@ func (s *sharedChannel) start(channelName string) {
 		if err != nil {
 			s.broadcastErr(err)
 		}
+
+		// As long as s.in hasn't filled up...
 		for len(s.in) < cap(s.in) {
-			// No event overflow since last read, we're all caught up
+
 			select {
 			// Periodically poll idle so newly connected clients will know
 			case <-time.After(time.Second / 2):
 				s.Lock()
 				for _, idle := range s.idleChans {
-					idle <- struct{}{}
+					select {
+					case idle <- struct{}{}:
+					default:
+						// Don't block if idle isn't ready - we'll signal it next time around
+					}
 				}
 				s.Unlock()
 			// We've got a new event, lets publish it
@@ -222,6 +233,7 @@ func (s *sharedChannel) start(channelName string) {
 		// We'll read these off the disk, so it's ok to discard them
 		s.Lock()
 		for len(s.in) > 0 {
+			log.Println(s.in)
 			<-s.in
 		}
 		s.Unlock()

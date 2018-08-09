@@ -59,8 +59,8 @@ func (s *Server) StreamEvents(in *pb.StreamEventsRequest, stream pb.DEQ_StreamEv
 	log.Println("New client streaming events")
 
 	channel := s.store.Channel(in.GetChannel())
-	eventc, idle, done := channel.Follow()
-	defer close(done)
+	eventc, idle := channel.Follow()
+	defer channel.Close()
 
 	requeue := make(chan pb.Event, 1)
 	cancelRequeue := make(chan struct{}, 1)
@@ -105,6 +105,7 @@ func (s *Server) StreamEvents(in *pb.StreamEventsRequest, stream pb.DEQ_StreamEv
 
 			// Disconnect on idle if not following
 		case <-idle:
+			log.Printf("idle")
 			if !in.Follow {
 				return nil
 			}
