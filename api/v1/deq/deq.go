@@ -6,6 +6,7 @@ import (
 	"context"
 	"errors"
 	"fmt"
+	"io"
 	"reflect"
 	"strings"
 
@@ -86,6 +87,10 @@ func (c *Client) listen(ctx context.Context, follow bool, channel string, errc c
 
 	for {
 		event, err := stream.Recv()
+		if err == io.EOF {
+			close(errc)
+			return
+		}
 		if err != nil {
 			errc <- errors.New("Event stream failed: " + err.Error())
 			return

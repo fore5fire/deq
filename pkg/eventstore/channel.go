@@ -5,14 +5,12 @@ package eventstore
 import (
 	"errors"
 	"sync"
+	"time"
 
 	"github.com/dgraph-io/badger"
 	"github.com/gogo/protobuf/proto"
 	"gitlab.com/katcheCode/deqd/api/v1/deq"
-	"gitlab.com/katcheCode/deqd/pkg/logger"
 )
-
-var log = logger.With().Str("pkg", "gitlab.com/katcheCode/deqd/eventstore").Logger()
 
 // Channel allows multiple listeners to synchronize processing of events
 type Channel struct {
@@ -25,6 +23,7 @@ type Channel struct {
 }
 
 type sharedChannel struct {
+	// Mutex protects idelChans and doneChans
 	sync.Mutex
 	in        chan deq.Event
 	out       chan deq.Event
@@ -183,7 +182,6 @@ func (c Channel) SetSettings() error {
 
 // RequeueEvent adds the event back into the event queue for this channel
 func (c *Channel) RequeueEvent(e deq.Event) {
-	log.Debug().Interface("event", e).Msg("Requeuing event")
 	c.out <- e
 }
 
@@ -202,21 +200,31 @@ func (s *sharedChannel) start(channelName string) {
 		if err != nil {
 			s.broadcastErr(err)
 		}
-		for _, idle := range s.idleChans {
-			idle <- struct{}{}
-		}
 		for len(s.in) < cap(s.in) {
 			// No event overflow since last read, we're all caught up
-			e := <-s.in
-			s.out <- e
-			current = e.Key
+			select {
+			// Periodically poll idle so newly connected clients will know
+			case <-time.After(time.Second / 2):
+				s.Lock()
+				for _, idle := range s.idleChans {
+					idle <- struct{}{}
+				}
+				s.Unlock()
+			// We've got a new event, lets publish it
+			case e := <-s.in:
+				s.out <- e
+				current = e.Key
+			}
 		}
 
-		// We might have missed an event, lets go back to reading from disk
-		// First let's drain some events so we can tell if we've missed any more
-		for i := 0; i < len(s.in); i++ {
+		// We might have missed an event, lets go back to reading from disk.
+		// First let's drain some events so we can tell if we've missed any more.
+		// We'll read these off the disk, so it's ok to discard them
+		s.Lock()
+		for len(s.in) > 0 {
 			<-s.in
 		}
+		s.Unlock()
 	}
 }
 

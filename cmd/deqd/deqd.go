@@ -1,31 +1,35 @@
 package main
 
 import (
+	"log"
+	"net"
+	"os"
+
 	pb "gitlab.com/katcheCode/deqd/api/v1/deq"
 	"gitlab.com/katcheCode/deqd/pkg/env"
 	"gitlab.com/katcheCode/deqd/pkg/eventstore"
 	eventserver "gitlab.com/katcheCode/deqd/pkg/grpc/eventstore"
-	"gitlab.com/katcheCode/deqd/pkg/logger"
 	"google.golang.org/grpc"
-	"net"
-	"os"
 )
 
-var log = logger.Logger
+func init() {
+	log.SetFlags(log.Ldate | log.Ltime | log.Lshortfile | log.LUTC)
+	log.SetPrefix("")
+}
 
 func main() {
-	log.Info().Msg("Starting up")
+	log.Println("Starting up")
 
 	err := os.MkdirAll(env.Dir, os.ModePerm)
 	if err != nil {
-		log.Fatal().Err(err).Msg("Error creating data directory")
+		log.Fatalf("Error creating data directory: %v", err)
 	}
 
 	store, err := eventstore.Open(eventstore.Options{
 		Dir: env.Dir,
 	})
 	if err != nil {
-		log.Fatal().Str("directory", env.Dir).Msg("Database could not be opened")
+		log.Fatalf("Database directory %s could not be opened", env.Dir)
 	}
 	defer store.Close()
 
@@ -38,13 +42,13 @@ func main() {
 
 	lis, err := net.Listen("tcp", ":"+env.Port)
 	if err != nil {
-		log.Fatal().Str("port", env.Port).Msg("Error binding port")
+		log.Fatalf("Error binding port %s", env.Port)
 	}
 
-	log.Info().Str("port", env.Port).Msg("gRPC server listening")
+	log.Printf("gRPC server listening on port %s", env.Port)
 
 	if err := grpcServer.Serve(lis); err != nil {
-		log.Fatal().Err(err).Msg("gRPC server failed")
+		log.Fatalf("gRPC server failed: %v", err)
 	}
 
 	// handler.HandleFunc("/graphql", serveHTTP)
