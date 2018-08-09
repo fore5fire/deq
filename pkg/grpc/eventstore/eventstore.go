@@ -105,7 +105,6 @@ func (s *Server) StreamEvents(in *pb.StreamEventsRequest, stream pb.DEQ_StreamEv
 
 			// Disconnect on idle if not following
 		case <-idle:
-			log.Printf("idle")
 			if !in.Follow {
 				return nil
 			}
