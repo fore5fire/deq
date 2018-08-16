@@ -82,13 +82,13 @@ func TestCreateAndReceive(t *testing.T) {
 
 	c := deq.NewDEQClient(conn)
 
-	events, err := gatherTestModels(c, time.Second)
-	if err == nil && len(events) > 0 {
-		t.Fatalf("Received event when none was created: %v\n", events)
-	}
-	if err != nil {
-		t.Fatalf("Error streaming events: %v", err)
-	}
+	// events, err := gatherTestModels(c, time.Second)
+	// if err == nil && len(events) > 0 {
+	// 	t.Fatalf("Received event when none was created: %v\n", events)
+	// }
+	// if err != nil {
+	// 	t.Fatalf("Error streaming events: %v", err)
+	// }
 
 	payload, err := types.MarshalAny(&model.TestModel{
 		Msg: "Hello world!",
@@ -121,7 +121,7 @@ func TestCreateAndReceive(t *testing.T) {
 	// 	t.Fatalf("Created event id has incorrect create time. Expected between %v and %v, got %v", beforeTime, afterTime, createTime)
 	// }
 
-	events, err = gatherTestModels(c, time.Second)
+	events, err := gatherTestModels(c, time.Second)
 	if err != nil {
 		t.Fatalf("Error streaming events: %v", err)
 	}

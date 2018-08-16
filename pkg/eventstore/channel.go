@@ -198,10 +198,9 @@ func (s *sharedChannel) start(channelName string) {
 		return
 	}
 
-	current := prefixEvent(cursor)
-
+	log.Println(string(cursor))
 	for {
-		current, err = s.catchUp(current)
+		cursor, err = s.catchUp(cursor)
 		if err != nil {
 			s.broadcastErr(err)
 		}
@@ -224,7 +223,7 @@ func (s *sharedChannel) start(channelName string) {
 			// We've got a new event, lets publish it
 			case e := <-s.in:
 				s.out <- e
-				current = e.Key
+				cursor = prefixEvent(e.Key)
 			}
 		}
 
@@ -233,7 +232,6 @@ func (s *sharedChannel) start(channelName string) {
 		// We'll read these off the disk, so it's ok to discard them
 		s.Lock()
 		for len(s.in) > 0 {
-			log.Println(s.in)
 			<-s.in
 		}
 		s.Unlock()
