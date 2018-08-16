@@ -3,6 +3,7 @@ package main_test
 import (
 	"context"
 	"fmt"
+	"io"
 	"log"
 	"os"
 	"sync"
@@ -13,8 +14,6 @@ import (
 	"gitlab.com/katcheCode/deqd/api/v1/deq"
 	"gitlab.com/katcheCode/deqd/pkg/test/model"
 	"google.golang.org/grpc"
-	"google.golang.org/grpc/codes"
-	"google.golang.org/grpc/status"
 )
 
 func gatherTestModels(client deq.DEQClient, duration time.Duration) (result []model.TestModel, err error) {
@@ -25,7 +24,7 @@ func gatherTestModels(client deq.DEQClient, duration time.Duration) (result []mo
 
 	stream, err := client.StreamEvents(ctx, &deq.StreamEventsRequest{
 		Channel: "TestChannel1",
-		Follow:  true,
+		Follow:  false,
 	})
 	if err != nil {
 		return nil, err
@@ -34,11 +33,7 @@ func gatherTestModels(client deq.DEQClient, duration time.Duration) (result []mo
 	for {
 		// log.Println("Receiving events...")
 		response, err := stream.Recv()
-		if status.Code(err) == codes.DeadlineExceeded {
-			err = stream.CloseSend()
-			if err != nil {
-				return nil, err
-			}
+		if err == io.EOF {
 			return result, nil
 		}
 		if err != nil {
@@ -95,14 +90,6 @@ func TestCreateAndReceive(t *testing.T) {
 		t.Fatalf("Error streaming events: %v", err)
 	}
 
-	wg := sync.WaitGroup{}
-	var eventsErr error
-	wg.Add(1)
-	go func() {
-		defer wg.Done()
-		events, eventsErr = gatherTestModels(c, time.Second*5)
-	}()
-
 	payload, err := types.MarshalAny(&model.TestModel{
 		Msg: "Hello world!",
 	})
@@ -134,9 +121,8 @@ func TestCreateAndReceive(t *testing.T) {
 	// 	t.Fatalf("Created event id has incorrect create time. Expected between %v and %v, got %v", beforeTime, afterTime, createTime)
 	// }
 
-	wg.Wait()
-
-	if eventsErr != nil {
+	events, err = gatherTestModels(c, time.Second)
+	if err != nil {
 		t.Fatalf("Error streaming events: %v", err)
 	}
 	if len(events) == 0 {

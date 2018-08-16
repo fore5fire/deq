@@ -104,7 +104,7 @@ func (c Channel) SetEventStatus(key []byte, status EventStatus) error {
 	txn := c.db.NewTransaction(true)
 	defer txn.Discard()
 
-	_, err := txn.Get(append(eventPrefix, key...))
+	_, err := txn.Get(prefixEvent(key))
 	if err == badger.ErrKeyNotFound {
 		return ErrKeyNotFound
 	}
@@ -198,10 +198,10 @@ func (s *sharedChannel) start(channelName string) {
 		return
 	}
 
-	current := append(eventPrefix, cursor...)
+	current := prefixEvent(cursor)
 
 	for {
-		current, err = s.catchUp(append(current, "\uffff"...))
+		current, err = s.catchUp(current)
 		if err != nil {
 			s.broadcastErr(err)
 		}
@@ -260,10 +260,14 @@ func (s *sharedChannel) catchUp(cursor []byte) ([]byte, error) {
 	var event deq.Event
 	var lastKey []byte
 
-	for it.Seek(append(eventPrefix, cursor...)); it.ValidForPrefix(eventPrefix); it.Next() {
+	start := make([]byte, len(cursor)+len("\uffff"))
+	copy(start, cursor)
+	copy(start[len(cursor):], []byte("\uffff"))
+
+	for it.Seek(cursor); it.ValidForPrefix(eventPrefix); it.Next() {
 
 		item := it.Item()
-		lastKey = item.Key()
+		lastKey = item.KeyCopy(lastKey)
 		buffer, err := item.Value()
 
 		if err != nil {
@@ -278,14 +282,14 @@ func (s *sharedChannel) catchUp(cursor []byte) ([]byte, error) {
 		s.out <- event
 	}
 
-	return append(cursor[:0], lastKey...), nil
+	return lastKey, nil
 }
 
 func (s *sharedChannel) getCursor(channelName string) ([]byte, error) {
 	txn := s.db.NewTransaction(false)
 	defer txn.Discard()
 
-	item, err := txn.Get(append(cursorPrefix, channelName...))
+	item, err := txn.Get(prefixCursor([]byte(channelName)))
 	if err == badger.ErrKeyNotFound {
 		return eventPrefix, nil
 	}

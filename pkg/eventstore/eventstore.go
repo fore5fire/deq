@@ -2,13 +2,16 @@ package eventstore
 
 import (
 	"errors"
+
 	"github.com/dgraph-io/badger"
 	"github.com/gogo/protobuf/proto"
+
 	// "github.com/satori/go.uuid"
 	"encoding/binary"
-	"gitlab.com/katcheCode/deqd/api/v1/deq"
 	"sync"
 	"time"
+
+	"gitlab.com/katcheCode/deqd/api/v1/deq"
 )
 
 // Store is an EventStore connected to a specific database
@@ -113,7 +116,7 @@ func (s *Store) startIn() {
 			promise.done <- err
 		}
 
-		txn.Set(append(eventPrefix, promise.event.Key...), data)
+		txn.Set(prefixEvent(promise.event.Key), data)
 		err = txn.Commit(nil)
 		if err != nil {
 			promise.done <- err
@@ -166,6 +169,25 @@ var (
 	cursorPrefix  = []byte("c")
 	eventPrefix   = []byte("E")
 )
+
+func prefixEvent(in []byte) []byte {
+	out := make([]byte, len(in)+len(eventPrefix))
+	copy(out, eventPrefix)
+	copy(out[len(eventPrefix):], in)
+	return out
+}
+func prefixCursor(in []byte) []byte {
+	out := make([]byte, len(in)+len(cursorPrefix))
+	copy(out, cursorPrefix)
+	copy(out[len(cursorPrefix):], in)
+	return out
+}
+func prefixChannel(in []byte) []byte {
+	out := make([]byte, len(in)+len(channelPrefix))
+	copy(out, channelPrefix)
+	copy(out[len(channelPrefix):], in)
+	return out
+}
 
 // GenerateID returns a new id using the current time
 func GenerateID(count uint32) []byte {
