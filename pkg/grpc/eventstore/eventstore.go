@@ -2,14 +2,13 @@ package eventstore
 
 import (
 	"context"
-	// "github.com/gogo/protobuf/types"
+	"log"
+	"time"
+
 	pb "gitlab.com/katcheCode/deqd/api/v1/deq"
 	"gitlab.com/katcheCode/deqd/pkg/eventstore"
 	"google.golang.org/grpc/codes"
 	"google.golang.org/grpc/status"
-	// "io"
-	"log"
-	"time"
 )
 
 // Server represents the gRPC server
@@ -56,8 +55,8 @@ func (s *Server) StreamEvents(in *pb.StreamEventsRequest, stream pb.DEQ_StreamEv
 	}
 
 	channel := s.store.Channel(in.GetChannel())
-	eventc, done := channel.Follow()
-	defer close(done)
+	eventc, idle := channel.Follow()
+	defer channel.Close()
 
 	requeue := make(chan pb.Event, 1)
 	cancelRequeue := make(chan struct{}, 1)
@@ -79,16 +78,15 @@ func (s *Server) StreamEvents(in *pb.StreamEventsRequest, stream pb.DEQ_StreamEv
 		case e, ok := <-eventc:
 			if !ok {
 				// Event stream closed, shutting down...
-				if err := channel.Err(); err != nil {
-					log.Printf("fetch events: %v", err)
+				err := channel.Err()
+				if err != nil {
+					log.Printf("read from channel: %v", err)
 					return status.Error(codes.Internal, "")
 				}
 				// Upstream closed, shut down
 				// TODO: expose running streams metric
 				return nil
 			}
-
-			// streamEventsLog.Debug().Interface("event", e).Msg("sending event...")
 
 			requeue <- e
 			err := stream.Send(&e)
@@ -104,20 +102,28 @@ func (s *Server) StreamEvents(in *pb.StreamEventsRequest, stream pb.DEQ_StreamEv
 			}
 			if err != nil {
 				cancelRequeue <- struct{}{}
+				// TODO: fix duplicate event if we miss requeue window
 				channel.RequeueEvent(e)
 				log.Printf("send event: %v", err)
 				return status.Error(codes.Internal, "")
 			}
-
+			// TODO: could this ever cancel the wrong requeue?
 			cancelRequeue <- struct{}{}
 
-			// streamEventsLog.Debug().Interface("event", e).Msg("Event sent!")
+			// Disconnect on idle if not following
+		case <-idle:
+			if !in.Follow {
+				return nil
+			}
 
-		// Poll to check if client closed connection
+		// Poll to check if stream closed so we can free up memory
 		case <-time.After(time.Second * 5):
-
 			err := stream.Context().Err()
 			if err == context.Canceled || err == context.DeadlineExceeded {
+				return nil
+			}
+			if err != nil {
+				log.Printf("Stream failed: %v", err)
 				return nil
 			}
 		}

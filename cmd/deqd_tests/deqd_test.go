@@ -3,17 +3,17 @@ package main_test
 import (
 	"context"
 	"fmt"
-	"github.com/gogo/protobuf/types"
-	"gitlab.com/katcheCode/deqd/api/v1/deq"
-	"gitlab.com/katcheCode/deqd/pkg/test/model"
-	"google.golang.org/grpc"
-	"google.golang.org/grpc/codes"
-	"google.golang.org/grpc/status"
+	"io"
 	"log"
 	"os"
 	"sync"
 	"testing"
 	"time"
+
+	"github.com/gogo/protobuf/types"
+	"gitlab.com/katcheCode/deqd/api/v1/deq"
+	"gitlab.com/katcheCode/deqd/pkg/test/model"
+	"google.golang.org/grpc"
 )
 
 func gatherTestModels(client deq.DEQClient, duration time.Duration) (result []model.TestModel, err error) {
@@ -24,6 +24,7 @@ func gatherTestModels(client deq.DEQClient, duration time.Duration) (result []mo
 
 	stream, err := client.StreamEvents(ctx, &deq.StreamEventsRequest{
 		Channel: "TestChannel1",
+		Follow:  false,
 	})
 	if err != nil {
 		return nil, err
@@ -32,11 +33,7 @@ func gatherTestModels(client deq.DEQClient, duration time.Duration) (result []mo
 	for {
 		// log.Println("Receiving events...")
 		response, err := stream.Recv()
-		if status.Code(err) == codes.DeadlineExceeded {
-			err = stream.CloseSend()
-			if err != nil {
-				return nil, err
-			}
+		if err == io.EOF {
 			return result, nil
 		}
 		if err != nil {
@@ -79,27 +76,19 @@ func TestCreateAndReceive(t *testing.T) {
 
 	conn, err := grpc.Dial(os.Getenv("TEST_TARGET_URL"), grpc.WithInsecure())
 	if err != nil {
-		t.Fatalf("Failed to connect: %v\n", err)
+		t.Fatalf("Failed to connect: %v", err)
 	}
 	defer conn.Close()
 
 	c := deq.NewDEQClient(conn)
 
-	events, err := gatherTestModels(c, time.Second)
-	if err == nil && len(events) > 0 {
-		t.Fatalf("Received event when none was created: %v\n", events)
-	}
-	if err != nil {
-		t.Fatalf("Error streaming events: %v\n", err)
-	}
-
-	wg := sync.WaitGroup{}
-	var eventsErr error
-	wg.Add(1)
-	go func() {
-		defer wg.Done()
-		events, eventsErr = gatherTestModels(c, time.Second*5)
-	}()
+	// events, err := gatherTestModels(c, time.Second)
+	// if err == nil && len(events) > 0 {
+	// 	t.Fatalf("Received event when none was created: %v\n", events)
+	// }
+	// if err != nil {
+	// 	t.Fatalf("Error streaming events: %v", err)
+	// }
 
 	payload, err := types.MarshalAny(&model.TestModel{
 		Msg: "Hello world!",
@@ -120,7 +109,7 @@ func TestCreateAndReceive(t *testing.T) {
 		},
 	})
 	if err != nil {
-		t.Fatalf("Error Creating Event: %v\n", err)
+		t.Fatalf("Error Creating Event: %v", err)
 	}
 
 	// TODO: fix test if server time is out of sync with local time... or just move to unit test
@@ -132,16 +121,15 @@ func TestCreateAndReceive(t *testing.T) {
 	// 	t.Fatalf("Created event id has incorrect create time. Expected between %v and %v, got %v", beforeTime, afterTime, createTime)
 	// }
 
-	wg.Wait()
-
-	if eventsErr != nil {
-		t.Fatalf("Error streaming events: %v\n", err)
+	events, err := gatherTestModels(c, time.Second)
+	if err != nil {
+		t.Fatalf("Error streaming events: %v", err)
 	}
 	if len(events) == 0 {
 		t.Fatalf("Expected to get message but recieved none")
 	}
 	if m := events[0]; m.GetMsg() != "Hello world!" {
-		t.Fatalf("Incorrect message: %s\n", m.GetMsg())
+		t.Fatalf("Incorrect message: %s", m.GetMsg())
 	}
 }
 
@@ -150,7 +138,7 @@ func TestRequeueTimeout(t *testing.T) {
 
 	conn, err := grpc.Dial(os.Getenv("TEST_TARGET_URL"), grpc.WithInsecure())
 	if err != nil {
-		t.Fatalf("Failed to connect: %v\n", err)
+		t.Fatalf("Failed to connect: %v", err)
 	}
 	defer conn.Close()
 
@@ -161,7 +149,7 @@ func TestRequeueTimeout(t *testing.T) {
 			Msg: fmt.Sprintf("Test Message - %d", i),
 		}, time.Second*10)
 		if err != nil {
-			t.Fatalf("Error Creating Event: %v\n", err)
+			t.Fatalf("Error Creating Event: %v", err)
 		}
 	}
 
@@ -179,7 +167,7 @@ func TestRequeueTimeout(t *testing.T) {
 			Msg: fmt.Sprintf("Test Message - %d", i),
 		}, time.Second*10)
 		if err != nil {
-			t.Fatalf("Error Creating Event: %v\n", err)
+			t.Fatalf("Error Creating Event: %v", err)
 		}
 	}
 
@@ -188,7 +176,7 @@ func TestRequeueTimeout(t *testing.T) {
 	// log.Println(events)
 
 	if eventsErr != nil {
-		t.Fatalf("Error streaming events: %v\n", err)
+		t.Fatalf("Error streaming events: %v", eventsErr)
 	}
 
 	var missed []int

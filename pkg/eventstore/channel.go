@@ -2,7 +2,9 @@ package eventstore
 
 import (
 	"errors"
+	"log"
 	"sync"
+	"time"
 
 	"github.com/dgraph-io/badger"
 	"github.com/gogo/protobuf/proto"
@@ -13,16 +15,19 @@ import (
 type Channel struct {
 	name string
 	out  chan deq.Event
+	idle chan struct{}
 	done chan error
 	err  error
 	db   *badger.DB
 }
 
 type sharedChannel struct {
+	// Mutex protects idelChans and doneChans
 	sync.Mutex
 	in        chan deq.Event
 	out       chan deq.Event
 	done      chan error
+	idleChans []chan struct{}
 	doneChans []chan error
 	db        *badger.DB
 }
@@ -48,14 +53,17 @@ func (s *Store) Channel(name string) Channel {
 
 	// DON'T FORGET TO ADD CHECK FOR FAILED CHANNEL
 
+	idle := make(chan struct{})
 	done := make(chan error, 1)
 	shared.Lock()
 	defer shared.Unlock()
+	shared.idleChans = append(shared.idleChans, idle)
 	shared.doneChans = append(shared.doneChans, done)
 
 	return Channel{
 		name: name,
 		out:  shared.out,
+		idle: idle,
 		done: done,
 		db:   s.db,
 	}
@@ -70,14 +78,18 @@ type ChannelSettings struct {
 var ChannelSettingsDefaults = ChannelSettings{}
 
 // Follow returns
-func (c Channel) Follow() (eventc chan deq.Event, done chan struct{}) {
+func (c Channel) Follow() (eventc chan deq.Event, idle chan struct{}) {
 
-	done = make(chan struct{})
 	// go func() {
 	// 	<-done
 	// }()
 
-	return c.out, done
+	return c.out, c.idle
+}
+
+// Close cleans up resources for this Channel
+func (c Channel) Close() {
+	// TODO: clean up sharedChannel stuff
 }
 
 // Err returns the error that caused this channel to fail, or nil if the channel closed cleanly
@@ -90,7 +102,7 @@ func (c Channel) SetEventStatus(key []byte, status EventStatus) error {
 	txn := c.db.NewTransaction(true)
 	defer txn.Discard()
 
-	_, err := txn.Get(append(eventPrefix, key...))
+	_, err := txn.Get(prefixEvent(key))
 	if err == badger.ErrKeyNotFound {
 		return ErrKeyNotFound
 	}
@@ -184,26 +196,43 @@ func (s *sharedChannel) start(channelName string) {
 		return
 	}
 
-	current := append(eventPrefix, cursor...)
-
+	log.Println(string(cursor))
 	for {
-		current, err = s.catchUp(append(current, "\uffff"...))
+		cursor, err = s.catchUp(cursor)
 		if err != nil {
 			s.broadcastErr(err)
 		}
 
+		// As long as s.in hasn't filled up...
 		for len(s.in) < cap(s.in) {
-			// No event overflow since last read, we're all caught up
-			e := <-s.in
-			s.out <- e
-			current = e.Key
+
+			select {
+			// Periodically poll idle so newly connected clients will know
+			case <-time.After(time.Second / 2):
+				s.Lock()
+				for _, idle := range s.idleChans {
+					select {
+					case idle <- struct{}{}:
+					default:
+						// Don't block if idle isn't ready - we'll signal it next time around
+					}
+				}
+				s.Unlock()
+			// We've got a new event, lets publish it
+			case e := <-s.in:
+				s.out <- e
+				cursor = prefixEvent(e.Key)
+			}
 		}
 
-		// We might have missed an event, lets go back to reading from disk
-		// First let's drain some events so we can tell if we've missed any more
-		for i := 0; i < len(s.in); i++ {
+		// We might have missed an event, lets go back to reading from disk.
+		// First let's drain some events so we can tell if we've missed any more.
+		// We'll read these off the disk, so it's ok to discard them
+		s.Lock()
+		for len(s.in) > 0 {
 			<-s.in
 		}
+		s.Unlock()
 	}
 }
 
@@ -227,10 +256,14 @@ func (s *sharedChannel) catchUp(cursor []byte) ([]byte, error) {
 	var event deq.Event
 	var lastKey []byte
 
-	for it.Seek(append(eventPrefix, cursor...)); it.ValidForPrefix(eventPrefix); it.Next() {
+	start := make([]byte, len(cursor)+len("\uffff"))
+	copy(start, cursor)
+	copy(start[len(cursor):], []byte("\uffff"))
+
+	for it.Seek(cursor); it.ValidForPrefix(eventPrefix); it.Next() {
 
 		item := it.Item()
-		lastKey = item.Key()
+		lastKey = item.KeyCopy(lastKey)
 		buffer, err := item.Value()
 
 		if err != nil {
@@ -245,14 +278,14 @@ func (s *sharedChannel) catchUp(cursor []byte) ([]byte, error) {
 		s.out <- event
 	}
 
-	return append(cursor[:0], lastKey...), nil
+	return lastKey, nil
 }
 
 func (s *sharedChannel) getCursor(channelName string) ([]byte, error) {
 	txn := s.db.NewTransaction(false)
 	defer txn.Discard()
 
-	item, err := txn.Get(append(cursorPrefix, channelName...))
+	item, err := txn.Get(prefixCursor([]byte(channelName)))
 	if err == badger.ErrKeyNotFound {
 		return eventPrefix, nil
 	}
