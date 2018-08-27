@@ -6,69 +6,36 @@ import (
 	"io"
 	"log"
 	"os"
-	"sync"
 	"testing"
 	"time"
 
-	"github.com/gogo/protobuf/types"
-	"gitlab.com/katcheCode/deqd/api/v1/deq"
+	"github.com/gogo/protobuf/proto"
+	"gitlab.com/katcheCode/deqd"
+
+	// "gitlab.com/katcheCode/deqd/api/v1/deq"
 	"gitlab.com/katcheCode/deqd/pkg/test/model"
 	"google.golang.org/grpc"
 )
 
-func gatherTestModels(client deq.DEQClient, duration time.Duration) (result []model.TestModel, err error) {
-	log.Println("Gathering Test Models")
+func gatherTestModels(conn *grpc.ClientConn, duration time.Duration) (result []*model.TestModel, err error) {
 
 	ctx, cancel := context.WithTimeout(context.Background(), duration)
 	defer cancel()
 
-	stream, err := client.StreamEvents(ctx, &deq.StreamEventsRequest{
+	consumer := deq.NewConsumer(conn, deq.ConsumerOpts{
 		Channel: "TestChannel1",
 		Follow:  false,
 	})
-	if err != nil {
-		return nil, err
-	}
 
-	for {
-		// log.Println("Receiving events...")
-		response, err := stream.Recv()
-		if err == io.EOF {
-			return result, nil
-		}
-		if err != nil {
-			return nil, err
-		}
-
-		testModel := model.TestModel{}
-
-		err = types.UnmarshalAny(response.GetPayload(), &testModel)
-		if err != nil {
-			return nil, err
-		}
-
-		// log.Println("Got result")
-		// log.Println(testModel)
-
-		result = append(result, testModel)
-	}
-}
-
-func createEvent(client deq.DEQClient, m model.TestModel, timeout time.Duration) (*deq.Event, error) {
-	payload, err := types.MarshalAny(&m)
-	if err != nil {
-		return nil, err
-	}
-
-	ctx, cancel := context.WithTimeout(context.Background(), time.Second*10)
-	defer cancel()
-
-	// log.Println("Creating event")
-	return client.CreateEvent(ctx, &deq.CreateEventRequest{
-		Event: &deq.Event{
-			Payload: payload,
-		},
+	err = consumer.Sub(ctx, &model.TestModel{}, func(ctx context.Context, e deq.Event) deq.AckCode {
+		result = append(result, e.Message.(*model.TestModel))
+		return deq.AckCodeDequeueOK
 	})
+	if err == io.EOF {
+		return result, nil
+	}
+	return nil, err
+
 }
 
 func TestCreateAndReceive(t *testing.T) {
@@ -80,8 +47,6 @@ func TestCreateAndReceive(t *testing.T) {
 	}
 	defer conn.Close()
 
-	c := deq.NewDEQClient(conn)
-
 	// events, err := gatherTestModels(c, time.Second)
 	// if err == nil && len(events) > 0 {
 	// 	t.Fatalf("Received event when none was created: %v\n", events)
@@ -90,23 +55,19 @@ func TestCreateAndReceive(t *testing.T) {
 	// 	t.Fatalf("Error streaming events: %v", err)
 	// }
 
-	payload, err := types.MarshalAny(&model.TestModel{
-		Msg: "Hello world!",
-	})
-	if err != nil {
-		t.Fatalf("Error marshaling model.TestModel: %v", err)
-	}
-
 	ctx, cancel := context.WithTimeout(context.Background(), time.Second*10)
 	defer cancel()
 
 	// beforeTime := time.Now()
 
-	// log.Println("Creating event")
-	_, err = c.CreateEvent(ctx, &deq.CreateEventRequest{
-		Event: &deq.Event{
-			Payload: payload,
-		},
+	p := deq.NewProducer(conn, deq.ProducerOpts{})
+	expected := &model.TestModel{
+		Msg: "Hello world!",
+	}
+
+	err = p.Pub(ctx, deq.Event{
+		ID:      time.Now().String(),
+		Message: expected,
 	})
 	if err != nil {
 		t.Fatalf("Error Creating Event: %v", err)
@@ -121,15 +82,15 @@ func TestCreateAndReceive(t *testing.T) {
 	// 	t.Fatalf("Created event id has incorrect create time. Expected between %v and %v, got %v", beforeTime, afterTime, createTime)
 	// }
 
-	events, err := gatherTestModels(c, time.Second)
+	messages, err := gatherTestModels(conn, time.Second)
 	if err != nil {
-		t.Fatalf("Error streaming events: %v", err)
+		t.Fatalf("Sub: %v", err)
 	}
-	if len(events) == 0 {
-		t.Fatalf("Expected to get message but recieved none")
+	if len(messages) == 0 {
+		t.Fatalf("Sub: no message recieved")
 	}
-	if m := events[0]; m.GetMsg() != "Hello world!" {
-		t.Fatalf("Incorrect message: %s", m.GetMsg())
+	if m := messages[0]; !proto.Equal(m, expected) {
+		t.Fatalf("Sub: expected %v, got %v", expected, m.Msg)
 	}
 }
 
@@ -142,42 +103,48 @@ func TestRequeueTimeout(t *testing.T) {
 	}
 	defer conn.Close()
 
-	c := deq.NewDEQClient(conn)
+	ctx, cancel := context.WithTimeout(context.Background(), time.Second*10)
+	defer cancel()
+
+	p := deq.NewProducer(conn, deq.ProducerOpts{})
+	now := time.Now().UnixNano()
 
 	for i := 0; i < 500; i++ {
-		_, err = createEvent(c, model.TestModel{
-			Msg: fmt.Sprintf("Test Message - %d", i),
-		}, time.Second*10)
+		err = p.Pub(ctx, deq.Event{
+			ID: fmt.Sprintf("%d-%d", now, i),
+			Message: &model.TestModel{
+				Msg: fmt.Sprintf("Test Message - %d", i),
+			},
+		})
 		if err != nil {
 			t.Fatalf("Error Creating Event: %v", err)
 		}
 	}
 
-	wg := sync.WaitGroup{}
-	var eventsErr error
-	var events []model.TestModel
-	wg.Add(1)
-	go func() {
-		defer wg.Done()
-		events, eventsErr = gatherTestModels(c, time.Second*8)
-	}()
+	events1, err := gatherTestModels(conn, time.Second*8)
+	if err != nil {
+		t.Fatalf("Error streaming events: %v", err)
+	}
 
 	for i := 500; i < 1000; i++ {
-		_, err = createEvent(c, model.TestModel{
-			Msg: fmt.Sprintf("Test Message - %d", i),
-		}, time.Second*10)
+		err = p.Pub(ctx, deq.Event{
+			ID: fmt.Sprintf("%d-%d", now, i),
+			Message: &model.TestModel{
+				Msg: fmt.Sprintf("Test Message - %d", i),
+			},
+		})
 		if err != nil {
 			t.Fatalf("Error Creating Event: %v", err)
 		}
 	}
-
-	wg.Wait()
-
 	// log.Println(events)
 
-	if eventsErr != nil {
-		t.Fatalf("Error streaming events: %v", eventsErr)
+	events2, err := gatherTestModels(conn, time.Second*8)
+	if err != nil {
+		t.Fatalf("Error streaming events: %v", err)
 	}
+
+	events := append(events1, events2...)
 
 	var missed []int
 outer:

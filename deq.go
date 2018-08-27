@@ -16,11 +16,11 @@ import (
 // Consumer allows subscribing to events of particular types
 type Consumer struct {
 	client api.DEQClient
-	opts   ConsumerOptions
+	opts   ConsumerOpts
 }
 
-// ConsumerOptions are options for a Consumer
-type ConsumerOptions struct {
+// ConsumerOpts are options for a Consumer
+type ConsumerOpts struct {
 	Channel string
 	MinID   string
 	MaxID   string
@@ -29,7 +29,7 @@ type ConsumerOptions struct {
 
 // NewConsumer creates a new Consumer.
 // conn can be used by multiple Producers and Consumers in parallel
-func NewConsumer(conn *grpc.ClientConn, opts ConsumerOptions) *Consumer {
+func NewConsumer(conn *grpc.ClientConn, opts ConsumerOpts) *Consumer {
 	return &Consumer{api.NewDEQClient(conn), opts}
 }
 
@@ -54,17 +54,17 @@ func (f HandlerFunc) HandleEvent(ctx context.Context, e Event) AckCode {
 // Sub begins listening for events on the requested channel.
 // m is used to determine the subscribed type url. All messages passed to handler are guarenteed to be of the same concrete type as m
 // Because github.com/gogo/protobuf is used to lookup the typeURL and concrete type of m, m must be a registered type with the same instance of gogo/proto as this binary (ie. no vendoring or github.com/golang/protobuf)
-func (c *Consumer) Sub(ctx context.Context, m Message, handler Handler) error {
+func (c *Consumer) Sub(ctx context.Context, m Message, handler HandlerFunc) error {
 
-	typeURL := proto.MessageName(m)
-	msgType := proto.MessageType(typeURL)
+	msgName := proto.MessageName(m)
+	msgType := proto.MessageType(msgName)
 
 	stream, err := c.client.Sub(ctx, &api.SubRequest{
 		Channel: c.opts.Channel,
 		MinId:   c.opts.MinID,
 		MaxId:   c.opts.MaxID,
 		Follow:  c.opts.Follow,
-		TypeUrl: typeURL,
+		Topic:   msgName,
 	})
 	if err != nil {
 		return err
@@ -82,7 +82,7 @@ func (c *Consumer) Sub(ctx context.Context, m Message, handler Handler) error {
 				_, err = c.client.Ack(ctx, &api.AckRequest{
 					Channel: c.opts.Channel,
 					EventId: event.Id,
-					Code:    api.AckCode_DEQUEUE_FAILED,
+					Code:    api.AckCode_DEQUEUE_ERROR,
 				})
 				if err != nil {
 					// TODO: how to expose error?
@@ -92,9 +92,9 @@ func (c *Consumer) Sub(ctx context.Context, m Message, handler Handler) error {
 			}
 
 			code := handler.HandleEvent(ctx, Event{
-				ID:       event.Id,
-				TypeURL:  event.TypeUrl,
-				Message:  msg,
+				ID:      event.Id,
+				Message: msg,
+				// State:
 				consumer: c,
 			})
 
@@ -115,18 +115,18 @@ func (c *Consumer) Sub(ctx context.Context, m Message, handler Handler) error {
 // Producer publishes events via the Pub method
 type Producer struct {
 	client api.DEQClient
-	opts   ProducerOptions
+	opts   ProducerOpts
 }
 
-// ProducerOptions provides options used by a Producer
-type ProducerOptions struct {
+// ProducerOpts provides options used by a Producer
+type ProducerOpts struct {
 	AwaitChannel      string
 	AwaitMilliseconds uint32
 }
 
 // NewProducer constructs a new Producer.
 // conn can be used by multiple Producers and Consumers in parallel
-func NewProducer(conn *grpc.ClientConn, opts ProducerOptions) *Producer {
+func NewProducer(conn *grpc.ClientConn, opts ProducerOpts) *Producer {
 	return &Producer{api.NewDEQClient(conn), opts}
 }
 
@@ -141,7 +141,7 @@ func (p *Producer) Pub(ctx context.Context, e Event) error {
 	_, err = p.client.Pub(ctx, &api.PubRequest{
 		Event: &api.Event{
 			Id:      e.ID,
-			TypeUrl: e.TypeURL,
+			Topic:   proto.MessageName(e.Message),
 			Payload: payload,
 		},
 		AwaitChannel:      p.opts.AwaitChannel,
@@ -156,8 +156,7 @@ func (p *Producer) Pub(ctx context.Context, e Event) error {
 
 // Event is a deserialized event that is sent to or recieved from deq.
 type Event struct {
-	ID       []byte
-	TypeURL  string
+	ID       string
 	Message  Message
 	consumer *Consumer
 }
@@ -183,18 +182,17 @@ func (e *Event) ResetTimeout(ctx context.Context) error {
 // AckCode is a code used when acknowledging an event
 type AckCode api.AckCode
 
-var (
-	// AckCodeDequeueProcessed dequeues an event, indicating it was processed successfully
-	AckCodeDequeueProcessed = api.AckCode_DEQUEUE_PROCESSED
-	// AckCodeDequeueFailed dequeues an event, indicating it was not processed successfully
-	AckCodeDequeueFailed = api.AckCode_DEQUEUE_FAILED
-
+const (
+	// AckCodeDequeueOK dequeues an event, indicating it was processed successfully
+	AckCodeDequeueOK = AckCode(api.AckCode_DEQUEUE_OK)
+	// AckCodeDequeueError dequeues an event, indicating it was not processed successfully
+	AckCodeDequeueError = AckCode(api.AckCode_DEQUEUE_ERROR)
 	// AckCodeRequeueConstant requeues an event with no backoff
-	AckCodeRequeueConstant = api.AckCode_REQUEUE_CONSTANT
+	AckCodeRequeueConstant = AckCode(api.AckCode_REQUEUE_CONSTANT)
 	// AckCodeRequeueLinear requires an event with a linear backoff
-	AckCodeRequeueLinear = api.AckCode_REQUEUE_LINEAR
+	AckCodeRequeueLinear = AckCode(api.AckCode_REQUEUE_LINEAR)
 	// AckCodeRequeueExponential requeues an event with an exponential backoff
-	AckCodeRequeueExponential = api.AckCode_REQUEUE_EXPONENTIAL
+	AckCodeRequeueExponential = AckCode(api.AckCode_REQUEUE_EXPONENTIAL)
 )
 
 // Message is a message payload that is sent by deq

@@ -1,6 +1,7 @@
 package main
 
 import (
+	"fmt"
 	"log"
 	"net"
 	"os"
@@ -19,20 +20,34 @@ func init() {
 
 func main() {
 	log.Println("Starting up")
+	// run start code in seperate function so we can both defer and os.Exit
+	err := run()
+	if err != nil {
+		log.Fatal(err)
+	}
+
+	log.Println("Shutting down")
+}
+
+func run() error {
 
 	err := os.MkdirAll(env.Dir, os.ModePerm)
 	if err != nil {
-		log.Fatalf("Error creating data directory: %v", err)
+		return fmt.Errorf("Error creating data directory: %v", err)
 	}
 
 	store, err := eventstore.Open(eventstore.Options{
 		Dir: env.Dir,
 	})
 	if err != nil {
-		log.Fatalf("Database directory %s could not be opened", env.Dir)
+		return fmt.Errorf("Database directory %s could not be opened", env.Dir)
 	}
 	defer store.Close()
 
+	err = store.UpgradeDB()
+	if err != nil {
+		return fmt.Errorf("upgrade db: %v", err)
+	}
 	server := eventserver.NewServer(store)
 
 	var opts []grpc.ServerOption
@@ -42,24 +57,14 @@ func main() {
 
 	lis, err := net.Listen("tcp", ":"+env.Port)
 	if err != nil {
-		log.Fatalf("Error binding port %s", env.Port)
+		return fmt.Errorf("Error binding port %s", env.Port)
 	}
 
 	log.Printf("gRPC server listening on port %s", env.Port)
 
 	if err := grpcServer.Serve(lis); err != nil {
-		log.Fatalf("gRPC server failed: %v", err)
+		fmt.Errorf("gRPC server failed: %v", err)
 	}
 
-	// handler.HandleFunc("/graphql", serveHTTP)
-	//
-	// server := &http.Server{
-	// 	Addr:    ":" + env.Port,
-	// 	Handler: handler,
-	// }
-	// log.Info().Str("port", env.Port).Msg("Starting server")
-	// if err := server.ListenAndServe(); err != nil {
-	// 	log.Fatal().Err(err).Msg("Startup failed")
-	// }
-
+	return nil
 }

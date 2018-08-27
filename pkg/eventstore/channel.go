@@ -1,20 +1,20 @@
 package eventstore
 
 import (
-	"errors"
 	"log"
+	"net/url"
+	"strings"
 	"sync"
 	"time"
 
 	"github.com/dgraph-io/badger"
-	"github.com/gogo/protobuf/proto"
 	"gitlab.com/katcheCode/deqd/api/v1/deq"
 )
 
 // Channel allows multiple listeners to synchronize processing of events
 type Channel struct {
 	name string
-	out  chan deq.Event
+	out  chan *deq.Event
 	idle chan struct{}
 	done chan error
 	err  error
@@ -24,8 +24,9 @@ type Channel struct {
 type sharedChannel struct {
 	// Mutex protects idelChans and doneChans
 	sync.Mutex
-	in        chan deq.Event
-	out       chan deq.Event
+	name      string
+	in        chan *deq.Event
+	out       chan *deq.Event
 	done      chan error
 	idleChans []chan struct{}
 	doneChans []chan error
@@ -40,15 +41,16 @@ func (s *Store) Channel(name string) Channel {
 
 	if !ok {
 		shared = &sharedChannel{
-			in:  make(chan deq.Event, 20),
-			out: make(chan deq.Event, 20),
-			db:  s.db,
+			name: name,
+			in:   make(chan *deq.Event, 20),
+			out:  make(chan *deq.Event, 20),
+			db:   s.db,
 		}
 		s.sharedChannelsMu.Lock()
 		s.sharedChannels[name] = shared
 		s.sharedChannelsMu.Unlock()
 
-		go shared.start(name)
+		go shared.start()
 	}
 
 	// DON'T FORGET TO ADD CHECK FOR FAILED CHANNEL
@@ -69,16 +71,8 @@ func (s *Store) Channel(name string) Channel {
 	}
 }
 
-// ChannelSettings is the settings for a channel
-type ChannelSettings struct {
-	// objectID     []byte
-}
-
-// ChannelSettingsDefaults is the default settings for a channel
-var ChannelSettingsDefaults = ChannelSettings{}
-
 // Follow returns
-func (c Channel) Follow() (eventc chan deq.Event, idle chan struct{}) {
+func (c Channel) Follow() (eventc chan *deq.Event, idle chan struct{}) {
 
 	// go func() {
 	// 	<-done
@@ -97,12 +91,12 @@ func (c Channel) Err() error {
 	return c.err
 }
 
-// SetEventStatus sets the status of an event for this channel
-func (c Channel) SetEventStatus(key []byte, status EventStatus) error {
+// SetEventState sets the state of an event for this channel
+func (c Channel) SetEventState(topic, id string, state deq.EventState) error {
 	txn := c.db.NewTransaction(true)
 	defer txn.Discard()
 
-	_, err := txn.Get(prefixEvent(key))
+	_, err := txn.Get([]byte(eventPrefix + "/" + url.QueryEscape(topic) + "/" + url.QueryEscape(id)))
 	if err == badger.ErrKeyNotFound {
 		return ErrKeyNotFound
 	}
@@ -119,84 +113,30 @@ func (c Channel) SetEventStatus(key []byte, status EventStatus) error {
 	return nil
 }
 
-// EventStatus is the processing state of an event on a particular channel
-type EventStatus int
-
-// An event of type EventStatusPending will cause deqd to requeue the event after waiting the channel's event_timeout_miliseconds setting.
-// EventStatusProcessed and EventStatusWillNotProcess have the same behavior for now.
-const (
-	EventStatusPending EventStatus = iota
-	EventStatusProcessed
-	EventStatusWillNotProcess
-)
-
-// Settings provides the current settings of a channel.
-func (c Channel) Settings() (ChannelSettings, error) {
-	settings := ChannelSettingsDefaults
-
-	// txn := c.db.NewTransaction(false)
-	// defer txn.Discard()
-	//
-	// item, err := txn.Get(append(channelPrefix, c.name...))
-	// if err != nil {
-	// 	return ChannelSettings{}, err
-	// }
-	//
-	// data, err := item.Value()
-	// if err != nil {
-	// 	return ChannelSettings{}, err
-	// }
-	//
-	// proto.Unmarshal(data, &settings)
-	//
-	// if err != nil {
-	// 	return ChannelSettings{}, err
-	// }
-
-	return settings, nil
-}
-
-// SetSettings returns the current channel settings.
-// An error is returned if a database error occured or the channel has not been created.
-func (c Channel) SetSettings() error {
-
-	// settings := ChannelSettingsDefaults
-	//
-	// data, err := proto.Marshal(&settings)
-	// if err != nil {
-	// 	return err
-	// }
-	//
-	// txn := c.db.NewTransaction(true)
-	// defer txn.Discard()
-	// err = txn.Set(append(channelPrefix, c.name...), data)
-	// if err != nil {
-	// 	return err
-	// }
-	//
-	// err = txn.Commit(nil)
-	// if err != nil {
-	// 	return err
-	// }
-	// return nil
-
-	return errors.New("SetChannelSettings is not impelmented")
-}
+// // EventStatus is the processing state of an event on a particular channel
+// type EventStatus int
+//
+// // An event of type EventStatusPending will cause deqd to requeue the event after waiting the channel's event_timeout_miliseconds setting.
+// // EventStatusProcessed and EventStatusWillNotProcess have the same behavior for now.
+// const (
+// 	EventStatusPending EventStatus = iota
+// 	EventStatusProcessed
+// 	EventStatusWillNotProcess
+// )
 
 // RequeueEvent adds the event back into the event queue for this channel
-func (c *Channel) RequeueEvent(e deq.Event) {
+func (c *Channel) RequeueEvent(e *deq.Event) {
 	c.out <- e
 }
 
-func (s *sharedChannel) start(channelName string) {
+func (s *sharedChannel) start() {
 
-	cursor, err := s.getCursor(channelName)
+	cursor, err := s.getCursor()
 	if err != nil {
 		s.broadcastErr(err)
 		return
 	}
 
-	log.Println(string(cursor))
 	for {
 		cursor, err = s.catchUp(cursor)
 		if err != nil {
@@ -221,7 +161,7 @@ func (s *sharedChannel) start(channelName string) {
 			// We've got a new event, lets publish it
 			case e := <-s.in:
 				s.out <- e
-				cursor = prefixEvent(e.Key)
+				cursor = eventPrefix + "/" + url.QueryEscape(e.Topic) + "/" + url.QueryEscape(e.Id)
 			}
 		}
 
@@ -237,7 +177,7 @@ func (s *sharedChannel) start(channelName string) {
 }
 
 // catchUp returns nil instead of new prefix when time to quit
-func (s *sharedChannel) catchUp(cursor []byte) ([]byte, error) {
+func (s *sharedChannel) catchUp(cursor string) (string, error) {
 	txn := s.db.NewTransaction(false)
 	defer txn.Discard()
 
@@ -246,59 +186,52 @@ func (s *sharedChannel) catchUp(cursor []byte) ([]byte, error) {
 	it := txn.NewIterator(opts)
 	defer it.Close()
 
-	//
-	// settings, err := s.ChannelSettings(channelName)
-	// if err != nil {
-	// 	c.err = err
-	// 	return
-	// }
-
-	var event deq.Event
 	var lastKey []byte
 
-	start := make([]byte, len(cursor)+len("\uffff"))
-	copy(start, cursor)
-	copy(start[len(cursor):], []byte("\uffff"))
-
-	for it.Seek(cursor); it.ValidForPrefix(eventPrefix); it.Next() {
+	for it.Seek([]byte(cursor + "\uffff")); it.ValidForPrefix([]byte(eventPrefix + "/")); it.Next() {
 
 		item := it.Item()
 		lastKey = item.KeyCopy(lastKey)
-		buffer, err := item.Value()
-
+		buffer, err := item.ValueCopy(nil)
 		if err != nil {
-			return nil, err
+			return "", err
 		}
 
-		err = proto.Unmarshal(buffer, &event)
-		if err != nil {
-			return nil, err
+		parsed := strings.Split(string(lastKey), "/")
+		if len(parsed) != 2 {
+			log.Printf("invalid event key: %s", lastKey)
+			continue
 		}
 
-		s.out <- event
+		s.out <- &deq.Event{
+			Id:      parsed[2],
+			Topic:   parsed[1],
+			Payload: buffer,
+			// State:
+		}
 	}
 
-	return lastKey, nil
+	return string(lastKey), nil
 }
 
-func (s *sharedChannel) getCursor(channelName string) ([]byte, error) {
+func (s *sharedChannel) getCursor() (string, error) {
 	txn := s.db.NewTransaction(false)
 	defer txn.Discard()
 
-	item, err := txn.Get(prefixCursor([]byte(channelName)))
+	item, err := txn.Get([]byte(cursorPrefix + "/" + s.name))
 	if err == badger.ErrKeyNotFound {
-		return eventPrefix, nil
+		return eventPrefix + "/", nil
 	}
 	if err != nil {
-		return nil, err
+		return "", err
 	}
 
 	cursor, err := item.ValueCopy(nil)
 	if err != nil {
-		return nil, err
+		return "", err
 	}
 
-	return cursor, nil
+	return string(cursor), nil
 }
 
 func (s *sharedChannel) broadcastErr(err error) {

@@ -5,17 +5,28 @@ service DEQ {
   rpc Pub (PubRequest) returns (Event);
   rpc Sub (SubRequest) returns (stream Event);
   rpc Ack (AckRequest) returns (AckResponse);
+  // rpc Get (GetRequest) returns (Event);
+  // rpc Del (DelRequest) returns (Empty);
 }
 
 message Event {
   // Required.
-  bytes id = 1;
+  string id = 1;
   // Required.
-  string type_url = 2;
+  string topic = 2;
 
   bytes payload = 3;
-  // bytes parent_event_id = 4;
   // int32 min_retries = 4;
+
+  // State of the event for the channel it is recieved on. Output only.
+  EventState state = 4;
+}
+
+enum EventState {
+  UNSPECIFIED_STATE = 0;
+  QUEUED = 1;
+  DEQUEUED_OK = 2;
+  DEQUEUED_ERROR = 3;
 }
 
 message PubRequest {
@@ -30,18 +41,18 @@ message PubRequest {
 message SubRequest {
   // Required.
   string channel = 1;
-  string type_url = 2;
+  string topic = 2;
   string min_id = 3;
   string max_id = 4;
-  bool   follow = 5;
-  // uint32 requeue_delay_miliseconds = 6;
+  bool follow = 5;
+  int32 requeue_delay_miliseconds = 6;
 }
 
 message AckRequest {
   // Required.
   string channel = 1;
   // Required.
-  bytes event_id = 2;
+  string event_id = 2;
   // Required.
   AckCode code = 3;
 }
@@ -49,8 +60,8 @@ message AckRequest {
 enum AckCode {
   UNSPECIFIED = 0;
 
-  DEQUEUE_PROCESSED = 1;
-  DEQUEUE_FAILED = 2;
+  DEQUEUE_OK = 1;
+  DEQUEUE_ERROR = 2;
 
   REQUEUE_CONSTANT = 3;
   REQUEUE_LINEAR = 4;
@@ -61,4 +72,27 @@ enum AckCode {
 
 message AckResponse {
 
+}
+
+message GetRequest {
+  // Required.
+  string event_id = 1;
+  string channel = 2;
+}
+
+message DelRequest {
+  string event_id = 1;
+}
+
+message Empty {}
+
+message EventV0 {
+  string id = 1;
+  string key = 2;
+  Any Payload = 3;
+}
+
+message Any {
+  string type_url = 1;
+  bytes value = 2;
 }

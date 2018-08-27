@@ -2,14 +2,17 @@ package eventstore
 
 import (
 	"errors"
+	"fmt"
+	"log"
+	"net/url"
+	"strings"
 
 	"github.com/dgraph-io/badger"
 	"github.com/gogo/protobuf/proto"
 
 	// "github.com/satori/go.uuid"
-	"encoding/binary"
+
 	"sync"
-	"time"
 
 	"gitlab.com/katcheCode/deqd/api/v1/deq"
 )
@@ -18,7 +21,7 @@ import (
 type Store struct {
 	db               *badger.DB
 	in               chan eventPromise
-	out              chan deq.Event
+	out              chan *deq.Event
 	sharedChannelsMu sync.RWMutex
 	sharedChannels   map[string]*sharedChannel
 	// done is used for signaling to our store's go routine
@@ -50,7 +53,7 @@ func Open(opts Options) (*Store, error) {
 	s := &Store{
 		db:             db,
 		in:             make(chan eventPromise, 20),
-		out:            make(chan deq.Event, 20),
+		out:            make(chan *deq.Event, 20),
 		sharedChannels: make(map[string]*sharedChannel),
 	}
 
@@ -72,57 +75,43 @@ func (s *Store) Close() error {
 	return nil
 }
 
-// Create inserts an event into the store after assigning it an id
-func (s *Store) Create(e deq.Event) (deq.Event, error) {
-	e.Id = nil
-	return s.insert(e)
-}
-
-// Insert inserts a new event into the store
-func (s *Store) Insert(e deq.Event) (deq.Event, error) {
-	return s.insert(e)
-}
-
-func (s *Store) insert(e deq.Event) (deq.Event, error) {
+// Pub publishes an event
+func (s *Store) Pub(e *deq.Event) error {
 
 	done := make(chan error, 1)
 
 	s.in <- eventPromise{
-		event: &e,
+		event: e,
 		done:  done,
 	}
 
-	return e, <-done
+	return <-done
 }
 
 func (s *Store) startIn() {
 
-	var counter uint32
-
 	for promise := range s.in {
-
-		promise.event.Key = GenerateID(counter)
-		counter++
-
-		if promise.event.Id == nil {
-			promise.event.Id = promise.event.Key
-		}
 
 		txn := s.db.NewTransaction(true)
 		defer txn.Discard()
 
-		data, err := proto.Marshal(promise.event)
+		log.Printf("%s", promise.event)
+
+		err := txn.Set(eventKey(promise.event), promise.event.Payload)
 		if err != nil {
 			promise.done <- err
+			continue
 		}
+		log.Printf("%s", promise.event)
 
-		txn.Set(prefixEvent(promise.event.Key), data)
 		err = txn.Commit(nil)
 		if err != nil {
 			promise.done <- err
+			continue
 		}
+		log.Printf("%s", promise.event)
 
-		s.out <- *promise.event
+		s.out <- promise.event
 		close(promise.done)
 	}
 }
@@ -163,37 +152,101 @@ var (
 	ErrInternal = errors.New("Internal error")
 )
 
-var (
-	sequenceKey   = []byte("__event-store-sequence-key__")
-	channelPrefix = []byte("C")
-	cursorPrefix  = []byte("c")
-	eventPrefix   = []byte("E")
+const (
+	channelPrefix = "C"
+	cursorPrefix  = "c"
+	eventPrefix   = "E"
+	dbVersionKey  = "___DEQ_DB_VERSION___"
+	dbCodeVersion = "1.0.0"
 )
 
-func prefixEvent(in []byte) []byte {
-	out := make([]byte, len(in)+len(eventPrefix))
-	copy(out, eventPrefix)
-	copy(out[len(eventPrefix):], in)
-	return out
-}
-func prefixCursor(in []byte) []byte {
-	out := make([]byte, len(in)+len(cursorPrefix))
-	copy(out, cursorPrefix)
-	copy(out[len(cursorPrefix):], in)
-	return out
-}
-func prefixChannel(in []byte) []byte {
-	out := make([]byte, len(in)+len(channelPrefix))
-	copy(out, channelPrefix)
-	copy(out[len(channelPrefix):], in)
-	return out
+// UpgradeDB upgrades the store's db to the current version.
+// It is not safe to update the database concurrently with UpgradeDB.
+// If any error is encountered, no changes will be made.
+func (s *Store) UpgradeDB() error {
+
+	currentVersion, err := s.getDBVersion()
+	if err != nil {
+		return err
+	}
+
+	log.Printf("[INFO] current DB version is %s", currentVersion)
+
+	if currentVersion == "0" {
+		log.Printf("[INFO] upgrading db...")
+
+		txn := s.db.NewTransaction(true)
+		defer txn.Discard()
+
+		it := txn.NewIterator(badger.DefaultIteratorOptions)
+		defer it.Close()
+
+		for it.Seek([]byte(eventPrefix + "/")); it.ValidForPrefix([]byte(eventPrefix + "/")); it.Next() {
+			item := it.Item()
+			buffer, err := item.Value()
+			if err != nil {
+				return fmt.Errorf("get item value: %v", err)
+			}
+
+			event := new(deq.EventV0)
+			err = proto.Unmarshal(buffer, event)
+			if err != nil {
+				return fmt.Errorf("unmarshal v0 formatted event: %v", err)
+			}
+
+			topic := url.QueryEscape(strings.TrimPrefix(event.Payload.GetTypeUrl(), "types.googleapis.com/"))
+			id := url.QueryEscape(event.Key)
+
+			err = txn.Delete(item.Key())
+			if err != nil {
+				return fmt.Errorf("delete v0 event: %v", err)
+			}
+			err = txn.Set([]byte(eventPrefix+"/"+topic+"/"+id), event.Payload.GetValue())
+			if err != nil {
+				return fmt.Errorf("add v1 event: %v", err)
+			}
+		}
+
+		it.Close()
+
+		err := txn.Set([]byte(dbVersionKey), []byte(dbCodeVersion))
+		if err != nil {
+			return err
+		}
+
+		err = txn.Commit(nil)
+		if err != nil {
+			return fmt.Errorf("commit db upgrade: %v", err)
+		}
+
+		log.Printf("db upgraded to version %s", dbCodeVersion)
+	}
+
+	return nil
 }
 
-// GenerateID returns a new id using the current time
-func GenerateID(count uint32) []byte {
-	id := make([]byte, 10)
-	timePart := uint64(time.Now().UnixNano()) / uint64(time.Millisecond)
-	binary.BigEndian.PutUint64(id, timePart<<16)
-	binary.BigEndian.PutUint32(id[6:], count)
-	return id
+func (s *Store) getDBVersion() (string, error) {
+	txn := s.db.NewTransaction(false)
+	defer txn.Discard()
+
+	item, err := txn.Get([]byte(dbVersionKey))
+	if err == badger.ErrKeyNotFound {
+		return "0", nil
+	}
+	if err != nil {
+		return "", err
+	}
+
+	version, err := item.ValueCopy(nil)
+	if err != nil {
+		return "", err
+	}
+
+	return string(version), nil
+}
+
+func eventKey(e *deq.Event) []byte {
+	topic := url.QueryEscape(e.Topic)
+	id := url.QueryEscape(e.Id)
+	return []byte(eventPrefix + "/" + topic + "/" + id)
 }
