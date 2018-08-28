@@ -95,21 +95,17 @@ func (s *Store) startIn() {
 		txn := s.db.NewTransaction(true)
 		defer txn.Discard()
 
-		log.Printf("%s", promise.event)
-
 		err := txn.Set(eventKey(promise.event), promise.event.Payload)
 		if err != nil {
 			promise.done <- err
 			continue
 		}
-		log.Printf("%s", promise.event)
 
 		err = txn.Commit(nil)
 		if err != nil {
 			promise.done <- err
 			continue
 		}
-		log.Printf("%s", promise.event)
 
 		s.out <- promise.event
 		close(promise.done)
@@ -144,12 +140,10 @@ func (s *Store) startOut() {
 // If a fetch has already been called on this iterator, ErrIteratorAlreadyStarted will be returned.
 
 var (
-	// ErrChannelNotFound is returned when attempting to access a channel that has not been created
-	ErrChannelNotFound = errors.New("Attempted to read from a channel that does not exist")
-	// ErrKeyNotFound is returned when attempting to set event status for an event that does not exist
-	ErrKeyNotFound = errors.New("Key not found")
+	// ErrNotFound is returned when a requested event doesn't exist in the store
+	ErrNotFound = errors.New("event not found")
 	// ErrInternal is returned when an interanl error occurs
-	ErrInternal = errors.New("Internal error")
+	ErrInternal = errors.New("internal error")
 )
 
 const (
@@ -165,7 +159,10 @@ const (
 // If any error is encountered, no changes will be made.
 func (s *Store) UpgradeDB() error {
 
-	currentVersion, err := s.getDBVersion()
+	txn := s.db.NewTransaction(true)
+	defer txn.Discard()
+
+	currentVersion, err := s.getDBVersion(txn)
 	if err != nil {
 		return err
 	}
@@ -175,39 +172,7 @@ func (s *Store) UpgradeDB() error {
 	if currentVersion == "0" {
 		log.Printf("[INFO] upgrading db...")
 
-		txn := s.db.NewTransaction(true)
-		defer txn.Discard()
-
-		it := txn.NewIterator(badger.DefaultIteratorOptions)
-		defer it.Close()
-
-		for it.Seek([]byte(eventPrefix + "/")); it.ValidForPrefix([]byte(eventPrefix + "/")); it.Next() {
-			item := it.Item()
-			buffer, err := item.Value()
-			if err != nil {
-				return fmt.Errorf("get item value: %v", err)
-			}
-
-			event := new(deq.EventV0)
-			err = proto.Unmarshal(buffer, event)
-			if err != nil {
-				return fmt.Errorf("unmarshal v0 formatted event: %v", err)
-			}
-
-			topic := url.QueryEscape(strings.TrimPrefix(event.Payload.GetTypeUrl(), "types.googleapis.com/"))
-			id := url.QueryEscape(event.Key)
-
-			err = txn.Delete(item.Key())
-			if err != nil {
-				return fmt.Errorf("delete v0 event: %v", err)
-			}
-			err = txn.Set([]byte(eventPrefix+"/"+topic+"/"+id), event.Payload.GetValue())
-			if err != nil {
-				return fmt.Errorf("add v1 event: %v", err)
-			}
-		}
-
-		it.Close()
+		upgradeV0EventsToV1(txn)
 
 		err := txn.Set([]byte(dbVersionKey), []byte(dbCodeVersion))
 		if err != nil {
@@ -225,10 +190,7 @@ func (s *Store) UpgradeDB() error {
 	return nil
 }
 
-func (s *Store) getDBVersion() (string, error) {
-	txn := s.db.NewTransaction(false)
-	defer txn.Discard()
-
+func (s *Store) getDBVersion(txn *badger.Txn) (string, error) {
 	item, err := txn.Get([]byte(dbVersionKey))
 	if err == badger.ErrKeyNotFound {
 		return "0", nil
@@ -243,6 +205,42 @@ func (s *Store) getDBVersion() (string, error) {
 	}
 
 	return string(version), nil
+}
+
+// upgradeV0EventsToV1 upgrades all events from v0 to v1 without commiting the txn.
+func upgradeV0EventsToV1(txn *badger.Txn) error {
+	it := txn.NewIterator(badger.DefaultIteratorOptions)
+	defer it.Close()
+
+	prefix := []byte(eventPrefix + "/")
+
+	for it.Seek(prefix); it.ValidForPrefix(prefix); it.Next() {
+		item := it.Item()
+		buffer, err := item.Value()
+		if err != nil {
+			return fmt.Errorf("get item value: %v", err)
+		}
+
+		event := new(deq.EventV0)
+		err = proto.Unmarshal(buffer, event)
+		if err != nil {
+			return fmt.Errorf("unmarshal v0 formatted event: %v", err)
+		}
+
+		topic := url.QueryEscape(strings.TrimPrefix(event.Payload.GetTypeUrl(), "types.googleapis.com/"))
+		id := url.QueryEscape(event.Key)
+
+		err = txn.Delete(item.Key())
+		if err != nil {
+			return fmt.Errorf("delete v0 event: %v", err)
+		}
+		err = txn.Set([]byte(eventPrefix+"/"+topic+"/"+id), event.Payload.GetValue())
+		if err != nil {
+			return fmt.Errorf("add v1 event: %v", err)
+		}
+	}
+
+	return nil
 }
 
 func eventKey(e *deq.Event) []byte {

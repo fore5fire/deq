@@ -98,7 +98,7 @@ func (c Channel) SetEventState(topic, id string, state deq.EventState) error {
 
 	_, err := txn.Get([]byte(eventPrefix + "/" + url.QueryEscape(topic) + "/" + url.QueryEscape(id)))
 	if err == badger.ErrKeyNotFound {
-		return ErrKeyNotFound
+		return ErrNotFound
 	}
 	if err != nil {
 		return err
@@ -198,7 +198,7 @@ func (s *sharedChannel) catchUp(cursor string) (string, error) {
 		}
 
 		parsed := strings.Split(string(lastKey), "/")
-		if len(parsed) != 2 {
+		if len(parsed) != 3 {
 			log.Printf("invalid event key: %s", lastKey)
 			continue
 		}

@@ -63,7 +63,7 @@ func run() error {
 	log.Printf("gRPC server listening on port %s", env.Port)
 
 	if err := grpcServer.Serve(lis); err != nil {
-		fmt.Errorf("gRPC server failed: %v", err)
+		return fmt.Errorf("gRPC server failed: %v", err)
 	}
 
 	return nil

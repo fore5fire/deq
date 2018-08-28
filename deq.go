@@ -81,6 +81,7 @@ func (c *Consumer) Sub(ctx context.Context, m Message, handler HandlerFunc) erro
 			if err != nil {
 				_, err = c.client.Ack(ctx, &api.AckRequest{
 					Channel: c.opts.Channel,
+					Topic:   msgName,
 					EventId: event.Id,
 					Code:    api.AckCode_DEQUEUE_ERROR,
 				})

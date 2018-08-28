@@ -137,7 +137,9 @@ func (s *Server) Ack(ctx context.Context, in *pb.AckRequest) (*pb.AckResponse, e
 	if in.Channel == "" {
 		return nil, status.Error(codes.InvalidArgument, "Missing required argument 'channel'")
 	}
-
+	if in.Topic == "" {
+		return nil, status.Error(codes.InvalidArgument, "Missing required argument 'topic'")
+	}
 	if in.EventId == "" {
 		return nil, status.Error(codes.InvalidArgument, "Missing required argument 'event_id'")
 	}
@@ -166,7 +168,10 @@ func (s *Server) Ack(ctx context.Context, in *pb.AckRequest) (*pb.AckResponse, e
 	}
 
 	if eventState != pb.EventState_UNSPECIFIED_STATE {
-		err := channel.SetEventState(in.Channel, in.EventId, eventState)
+		err := channel.SetEventState(in.Topic, in.EventId, eventState)
+		if err == eventstore.ErrNotFound {
+			return nil, status.Error(codes.NotFound, "")
+		}
 		if err != nil {
 			log.Printf("set event status: %v", err)
 			return nil, status.Error(codes.Internal, "")
