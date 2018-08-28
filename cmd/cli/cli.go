@@ -3,8 +3,8 @@ package main
 import (
 	"context"
 	"flag"
+	"fmt"
 	"io"
-	"log"
 	"math/rand"
 	"os"
 	"strconv"
@@ -35,7 +35,8 @@ func main() {
 	case "list":
 		conn, err := grpc.Dial(*host, grpc.WithInsecure())
 		if err != nil {
-			log.Fatalf("dial host %s: %v", *host, err)
+			fmt.Printf("dial host %s: %v\n", *host, err)
+			os.Exit(2)
 		}
 		deqc := deq.NewDEQClient(conn)
 
@@ -44,7 +45,8 @@ func main() {
 			Follow:  *follow,
 		})
 		if err != nil {
-			log.Fatalf("stream: %v", err)
+			fmt.Printf("stream: %v\n", err)
+			os.Exit(2)
 		}
 
 		for {
@@ -53,10 +55,11 @@ func main() {
 				break
 			}
 			if err != nil {
-				log.Fatalf("recieve message: %v", err)
+				fmt.Printf("recieve message: %v\n", err)
+				os.Exit(2)
 			}
 			if *eventType == "" || strings.TrimPrefix(e.Payload.TypeUrl, "type.googleapis.com/") == *eventType {
-				log.Printf("id: %v, type: %s", e.Id, e.Payload.TypeUrl)
+				fmt.Printf("id: %v, type: %s\n", e.Id, e.Payload.TypeUrl)
 			}
 		}
 
