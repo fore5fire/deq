@@ -4,7 +4,6 @@ import (
 	"context"
 	"fmt"
 	"io"
-	"log"
 	"os"
 	"testing"
 	"time"
@@ -16,6 +15,16 @@ import (
 	"gitlab.com/katcheCode/deqd/pkg/test/model"
 	"google.golang.org/grpc"
 )
+
+var conn *grpc.ClientConn
+
+func init() {
+	var err error
+	conn, err = grpc.Dial(os.Getenv("TEST_TARGET_URL"), grpc.WithInsecure())
+	if err != nil {
+		panic("Failed to connect: " + err.Error())
+	}
+}
 
 func gatherTestModels(conn *grpc.ClientConn, duration time.Duration) (result []*model.TestModel, err error) {
 
@@ -39,13 +48,6 @@ func gatherTestModels(conn *grpc.ClientConn, duration time.Duration) (result []*
 }
 
 func TestCreateAndReceive(t *testing.T) {
-	log.Println("Starting Test")
-
-	conn, err := grpc.Dial(os.Getenv("TEST_TARGET_URL"), grpc.WithInsecure())
-	if err != nil {
-		t.Fatalf("Failed to connect: %v", err)
-	}
-	defer conn.Close()
 
 	// events, err := gatherTestModels(c, time.Second)
 	// if err == nil && len(events) > 0 {
@@ -65,7 +67,7 @@ func TestCreateAndReceive(t *testing.T) {
 		Msg: "Hello world!",
 	}
 
-	err = p.Pub(ctx, deq.Event{
+	err := p.Pub(ctx, deq.Event{
 		ID:      time.Now().String(),
 		Message: expected,
 	})
@@ -95,13 +97,6 @@ func TestCreateAndReceive(t *testing.T) {
 }
 
 func TestRequeueTimeout(t *testing.T) {
-	log.Println("Starting TestRequeueTimeout")
-
-	conn, err := grpc.Dial(os.Getenv("TEST_TARGET_URL"), grpc.WithInsecure())
-	if err != nil {
-		t.Fatalf("Failed to connect: %v", err)
-	}
-	defer conn.Close()
 
 	ctx, cancel := context.WithTimeout(context.Background(), time.Second*10)
 	defer cancel()
@@ -110,7 +105,7 @@ func TestRequeueTimeout(t *testing.T) {
 	now := time.Now().UnixNano()
 
 	for i := 0; i < 500; i++ {
-		err = p.Pub(ctx, deq.Event{
+		err := p.Pub(ctx, deq.Event{
 			ID: fmt.Sprintf("%d-%d", now, i),
 			Message: &model.TestModel{
 				Msg: fmt.Sprintf("Test Message - %d", i),

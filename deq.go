@@ -101,6 +101,7 @@ func (c *Consumer) Sub(ctx context.Context, m Message, handler HandlerFunc) erro
 
 			_, err = c.client.Ack(ctx, &api.AckRequest{
 				Channel: c.opts.Channel,
+				Topic:   msgName,
 				EventId: event.Id,
 				Code:    api.AckCode(code),
 			})
@@ -162,7 +163,7 @@ type Event struct {
 	consumer *Consumer
 }
 
-// ResetTimeout sends a reset timeout request to the
+// ResetTimeout resets the requeue timeout of this event
 func (e *Event) ResetTimeout(ctx context.Context) error {
 	if e.consumer == nil {
 		return errors.New("ResetTimeout is only valid for events created by a consumer")
@@ -170,6 +171,7 @@ func (e *Event) ResetTimeout(ctx context.Context) error {
 
 	_, err := e.consumer.client.Ack(ctx, &api.AckRequest{
 		Channel: e.consumer.opts.Channel,
+		Topic:   e.Topic(),
 		EventId: e.ID,
 		Code:    api.AckCode_RESET_TIMEOUT,
 	})
@@ -178,6 +180,14 @@ func (e *Event) ResetTimeout(ctx context.Context) error {
 	}
 
 	return nil
+}
+
+// Topic returns the topic of this event by inspecting it's Message type, or
+// an empty string if the topic could not be determined.
+func (e *Event) Topic() string {
+	// Return an empty string instead of panicing if not found
+	defer recover()
+	return proto.MessageName(e.Message)
 }
 
 // AckCode is a code used when acknowledging an event

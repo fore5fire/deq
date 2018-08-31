@@ -34,7 +34,7 @@ type Options struct {
 }
 
 type eventPromise struct {
-	event *deq.Event
+	event deq.Event
 	done  chan error
 }
 
@@ -57,8 +57,8 @@ func Open(opts Options) (*Store, error) {
 		sharedChannels: make(map[string]*sharedChannel),
 	}
 
-	go s.startIn()
-	go s.startOut()
+	go s.listenIn()
+	go s.listenOut()
 
 	return s, nil
 }
@@ -78,24 +78,60 @@ func (s *Store) Close() error {
 // Pub publishes an event
 func (s *Store) Pub(e *deq.Event) error {
 
+	if e == nil {
+		return errors.New("event is nil")
+	}
+
 	done := make(chan error, 1)
 
 	s.in <- eventPromise{
-		event: e,
+		event: *e,
 		done:  done,
 	}
 
 	return <-done
 }
 
-func (s *Store) startIn() {
-
+// listenIn listens to the store's in chan. It writes recieved events to disc,
+// then sends them to the store's out chan.
+// TODO: batch writes in a single transaction or spin off goroutines
+func (s *Store) listenIn() {
+	var buffer []byte
+	var err error
+	// var txn *badger.Txn
 	for promise := range s.in {
+
+		id := promise.event.Id
+		topic := promise.event.Topic
+
+		promise.event.Id = ""
+		promise.event.Topic = ""
+
+		size := promise.event.Size()
+		if len(buffer) < size {
+			buffer = make([]byte, size)
+		}
+
+		size, err = promise.event.MarshalTo(buffer)
+		if err != nil {
+			promise.done <- fmt.Errorf("marshal event: %v", err)
+			continue
+		}
 
 		txn := s.db.NewTransaction(true)
 		defer txn.Discard()
 
-		err := txn.Set(eventKey(promise.event), promise.event.Payload)
+		key := eventKey(topic, id)
+
+		existing, err := txn.Get(key)
+		if err == nil {
+
+		}
+		if err != nil && {
+
+		}
+
+		err = txn.Set(key, buffer[:size])
 		if err != nil {
 			promise.done <- err
 			continue
@@ -107,12 +143,12 @@ func (s *Store) startIn() {
 			continue
 		}
 
-		s.out <- promise.event
+		s.out <- &promise.event
 		close(promise.done)
 	}
 }
 
-func (s *Store) startOut() {
+func (s *Store) listenOut() {
 	for e := range s.out {
 		s.sharedChannelsMu.RLock()
 		for _, shared := range s.sharedChannels {
@@ -234,7 +270,7 @@ func upgradeV0EventsToV1(txn *badger.Txn) error {
 		if err != nil {
 			return fmt.Errorf("delete v0 event: %v", err)
 		}
-		err = txn.Set([]byte(eventPrefix+"/"+topic+"/"+id), event.Payload.GetValue())
+		err = txn.Set(eventKey(topic, id), event.Payload.GetValue())
 		if err != nil {
 			return fmt.Errorf("add v1 event: %v", err)
 		}
@@ -243,8 +279,6 @@ func upgradeV0EventsToV1(txn *badger.Txn) error {
 	return nil
 }
 
-func eventKey(e *deq.Event) []byte {
-	topic := url.QueryEscape(e.Topic)
-	id := url.QueryEscape(e.Id)
-	return []byte(eventPrefix + "/" + topic + "/" + id)
+func eventKey(topic, id string) []byte {
+	return []byte(eventPrefix + "/" + url.QueryEscape(topic) + "/" + url.QueryEscape(id))
 }

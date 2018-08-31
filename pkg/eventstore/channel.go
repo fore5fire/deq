@@ -2,7 +2,6 @@ package eventstore
 
 import (
 	"log"
-	"net/url"
 	"strings"
 	"sync"
 	"time"
@@ -96,15 +95,13 @@ func (c Channel) SetEventState(topic, id string, state deq.EventState) error {
 	txn := c.db.NewTransaction(true)
 	defer txn.Discard()
 
-	_, err := txn.Get([]byte(eventPrefix + "/" + url.QueryEscape(topic) + "/" + url.QueryEscape(id)))
+	_, err := txn.Get(eventKey(topic, id))
 	if err == badger.ErrKeyNotFound {
 		return ErrNotFound
 	}
 	if err != nil {
 		return err
 	}
-
-	// txn.Get()
 
 	err = txn.Commit(nil)
 	if err != nil {
@@ -161,7 +158,7 @@ func (s *sharedChannel) start() {
 			// We've got a new event, lets publish it
 			case e := <-s.in:
 				s.out <- e
-				cursor = eventPrefix + "/" + url.QueryEscape(e.Topic) + "/" + url.QueryEscape(e.Id)
+				cursor = string(eventKey(e.Topic, e.Id))
 			}
 		}
 
@@ -188,7 +185,7 @@ func (s *sharedChannel) catchUp(cursor string) (string, error) {
 
 	var lastKey []byte
 
-	for it.Seek([]byte(cursor + "\uffff")); it.ValidForPrefix([]byte(eventPrefix + "/")); it.Next() {
+	for it.Seek([]byte(cursor + "\u0000")); it.ValidForPrefix([]byte(eventPrefix + "/")); it.Next() {
 
 		item := it.Item()
 		lastKey = item.KeyCopy(lastKey)
