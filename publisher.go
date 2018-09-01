@@ -9,27 +9,15 @@ import (
 	"google.golang.org/grpc"
 )
 
+// Event is a publishable event
+type Event struct {
+	ID  string
+	Msg deq.Message
+}
+
 // Publisher is a deq client for publishing events
 type Publisher struct {
 	deqc *deq.Client
-}
-
-// Pub publishes an event with message m
-func (p *Publisher) Pub(ctx context.Context, m deq.Message) error {
-	payload, err := types.MarshalAny(m)
-	if err != nil {
-		return fmt.Errorf("marshal payload: %v", err)
-	}
-	_, err = p.deqc.CreateEvent(ctx, &deq.CreateEventRequest{
-		Event: &deq.Event{
-			Payload: payload,
-		},
-	})
-	if err != nil {
-		return err
-	}
-
-	return nil
 }
 
 // NewPublisher returns a new publisher to deq using a deq ClientConn
@@ -39,4 +27,23 @@ func NewPublisher(deqConn *grpc.ClientConn) *Publisher {
 	return &Publisher{
 		deqc: deqc,
 	}
+}
+
+// Pub publishes an event with message m
+func (p *Publisher) Pub(ctx context.Context, e *Event) error {
+	payload, err := types.MarshalAny(e.Msg)
+	if err != nil {
+		return fmt.Errorf("marshal payload: %v", err)
+	}
+	_, err = p.deqc.CreateEvent(ctx, &deq.CreateEventRequest{
+		Event: &deq.Event{
+			Id:      []byte(e.ID),
+			Payload: payload,
+		},
+	})
+	if err != nil {
+		return err
+	}
+
+	return nil
 }
