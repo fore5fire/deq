@@ -14,6 +14,7 @@ github.com/rs/zerolog v1.8.0 h1:Oglcb4i6h42uWacEjomB2MI8gfkwCwTMFaDY3+Vgj5k=
 github.com/rs/zerolog v1.8.0/go.mod h1:YbFCdg8HfsridGWAh22vktObvhZbQsZXe4/zB0OKkWU=
 gitlab.com/katcheCode/deqd v0.5.3 h1:G7+WBBYt+EXi1Yq2idDjfsUryPnnwuJiCHw/lb6h40c=
 gitlab.com/katcheCode/deqd v0.5.3/go.mod h1:rxFjZ2kIGjrvuHiq61RxpvhIcmP4Ea+xwPPVfPpujQU=
+gitlab.com/katcheCode/deqd v0.6.3/go.mod h1:CPTB657uF6cmrrh2CXZhYH1JVAHqnlQbvrMSwDaAqlk=
 gitlab.com/katcheCode/deqd v1.0.3 h1:mP88kG+LRUvnBzmirufy+u6nlxOuksQSQAKxexZAPQY=
 gitlab.com/katcheCode/deqd v1.0.3/go.mod h1:rxFjZ2kIGjrvuHiq61RxpvhIcmP4Ea+xwPPVfPpujQU=
 golang.org/x/net v0.0.0-20180826012351-8a410e7b638d h1:g9qWBGx4puODJTMVyoPrpoxPFgVGd+z1DZwjfRu4d0I=
