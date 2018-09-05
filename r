@@ -14,5 +14,5 @@ docker run -itd --name=deqd -p 8080:8080 \
     deqd:local
 sleep 3
 echo running tests
-TEST_TARGET_URL=localhost:8080 DEQ_HOST=localhost:80 GOCACHE=off go test gitlab.com/katcheCode/deqd/cmd/deqd_tests || docker logs deqd
+TEST_TARGET_URL=localhost:8080 DEQ_HOST=localhost:80 go test gitlab.com/katcheCode/deqd/cmd/deqd_tests -count=1 || docker logs deqd
 ! docker rm -f deqd &> /dev/null
