@@ -8,7 +8,7 @@ require (
 	github.com/golang/protobuf v1.2.0 // indirect
 	github.com/pkg/errors v0.8.0 // indirect
 	github.com/rs/zerolog v1.8.0 // indirect
-	gitlab.com/katcheCode/deqd v0.6.1 // indirect
+	gitlab.com/katcheCode/deqd v0.6.3 // indirect
 	golang.org/x/net v0.0.0-20180826012351-8a410e7b638d // indirect
 	golang.org/x/sys v0.0.0-20180905080454-ebe1bf3edb33 // indirect
 	golang.org/x/text v0.3.0 // indirect
