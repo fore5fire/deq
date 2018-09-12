@@ -1,18 +1,26 @@
 #!/bin/bash
 
+function cleanup {
+  ! kill $LOGS_PID &>/dev/null
+  ! docker kill deqd &>/dev/null
+}
+trap cleanup EXIT
+
 set -e
-export CGO_ENABLED=0
 
 echo building server
-GOOS=linux go build -o build/deqd gitlab.com/katcheCode/deqd/cmd/deqd
+GOOS=linux CGO_ENABLED=0 go build -o build/deqd gitlab.com/katcheCode/deqd/cmd/deqd
 docker build --tag=deqd:local build
 
-! docker rm -f deqd &> /dev/null
 echo starting server
-docker run -itd --name=deqd -p 8080:8080 \
-    -e PORT=8080 \
-    deqd:local
-sleep 3
+docker run -itd --rm --name=deqd -p 8080:8080 \
+  -e PORT=8080 \
+  deqd:local
+
+docker logs deqd -f | sed -e 's/^/SERVER: /;' &
+LOGS_PID=$!
+disown
+
 echo running tests
-TEST_TARGET_URL=localhost:8080 DEQ_HOST=localhost:80 GOCACHE=off go test gitlab.com/katcheCode/deqd/cmd/deqd_tests || docker logs deqd
+TEST_TARGET_URL=localhost:8080 DEQ_HOST=localhost:80 go test gitlab.com/katcheCode/deqd/cmd/deqd_tests -count 1 | sed -e 's/^/TEST: /;'
 ! docker rm -f deqd &> /dev/null

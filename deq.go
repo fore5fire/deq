@@ -93,8 +93,8 @@ func (c *Consumer) Sub(ctx context.Context, m Message, handler HandlerFunc) erro
 			}
 
 			code := handler.HandleEvent(ctx, Event{
-				ID:      event.Id,
-				Message: msg,
+				ID:  event.Id,
+				Msg: msg,
 				// State:
 				consumer: c,
 			})
@@ -107,6 +107,7 @@ func (c *Consumer) Sub(ctx context.Context, m Message, handler HandlerFunc) erro
 			})
 			if err != nil {
 				// TODO: How to expose error?
+				log.Println(event)
 				log.Printf("deq: event handled: ack: %v", err)
 				return
 			}
@@ -135,7 +136,11 @@ func NewProducer(conn *grpc.ClientConn, opts ProducerOpts) *Producer {
 // Pub publishes a new event.
 func (p *Producer) Pub(ctx context.Context, e Event) error {
 
-	payload, err := proto.Marshal(e.Message)
+	if e.ID == "" {
+		return fmt.Errorf("e.ID is required")
+	}
+
+	payload, err := proto.Marshal(e.Msg)
 	if err != nil {
 		return fmt.Errorf("marshal payload: %v", err)
 	}
@@ -143,7 +148,7 @@ func (p *Producer) Pub(ctx context.Context, e Event) error {
 	_, err = p.client.Pub(ctx, &api.PubRequest{
 		Event: &api.Event{
 			Id:      e.ID,
-			Topic:   proto.MessageName(e.Message),
+			Topic:   proto.MessageName(e.Msg),
 			Payload: payload,
 		},
 		AwaitChannel:      p.opts.AwaitChannel,
@@ -159,7 +164,7 @@ func (p *Producer) Pub(ctx context.Context, e Event) error {
 // Event is a deserialized event that is sent to or recieved from deq.
 type Event struct {
 	ID       string
-	Message  Message
+	Msg      Message
 	consumer *Consumer
 }
 
@@ -187,7 +192,7 @@ func (e *Event) ResetTimeout(ctx context.Context) error {
 func (e *Event) Topic() string {
 	// Return an empty string instead of panicing if not found
 	defer recover()
-	return proto.MessageName(e.Message)
+	return proto.MessageName(e.Msg)
 }
 
 // AckCode is a code used when acknowledging an event

@@ -55,7 +55,7 @@ func (s *Server) Sub(in *pb.SubRequest, stream pb.DEQ_SubServer) error {
 		requeueDelay = 8000 * time.Millisecond
 	}
 
-	channel := s.store.Channel(in.Channel)
+	channel := s.store.Channel(in.Channel, in.Topic)
 	eventc, idle := channel.Follow()
 	defer channel.Close()
 
@@ -144,7 +144,7 @@ func (s *Server) Ack(ctx context.Context, in *pb.AckRequest) (*pb.AckResponse, e
 		return nil, status.Error(codes.InvalidArgument, "Missing required argument 'event_id'")
 	}
 
-	channel := s.store.Channel(in.Channel)
+	channel := s.store.Channel(in.Channel, in.Topic)
 
 	eventState := pb.EventState_UNSPECIFIED_STATE
 	switch in.Code {
@@ -168,7 +168,7 @@ func (s *Server) Ack(ctx context.Context, in *pb.AckRequest) (*pb.AckResponse, e
 	}
 
 	if eventState != pb.EventState_UNSPECIFIED_STATE {
-		err := channel.SetEventState(in.Topic, in.EventId, eventState)
+		err := channel.SetEventState(in.Topic, eventState)
 		if err == eventstore.ErrNotFound {
 			return nil, status.Error(codes.NotFound, "")
 		}

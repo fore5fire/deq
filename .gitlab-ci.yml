@@ -1,7 +1,4 @@
 
-variables:
-  DOCKER_DRIVER: overlay2
-
 stages:
   - build
   - test
@@ -9,21 +6,15 @@ stages:
 
 build-server:
   stage: build
-  image: golang:1.10.3-alpine
+  image: golang:1.11.0-alpine
   variables:
-    GOPATH: /go
     CGO_ENABLED: "0"
     GOOS: linux
   artifacts:
     paths:
     - build/deqd
-  before_script:
-  - mkdir -p /go/src/gitlab.com/katcheCode/charter-success
-  - ln -s $CI_PROJECT_DIR /go/src/gitlab.com/katcheCode/charter-success/deqd
-  - cd /go/src/gitlab.com/katcheCode/charter-success/deqd
   script:
   - apk add --no-cache git
-  - go get ./cmd/deqd
   - go build -o build/deqd ./cmd/deqd
 
 # api-tests:
@@ -35,11 +26,13 @@ build-server:
 #   services:
 #     - docker:dind
 #   script:
-#     - go test gitlab.com/katcheCode/charter-success/deqd/cmd/deqd_tests
+#     - go test gitlab.com/charterpay/deqd/cmd/deqd_tests
 
 deploy-server:
   stage: deploy
   image: docker
+  variables:
+    DOCKER_DRIVER: overlay2
   services:
     - docker:dind
   script:

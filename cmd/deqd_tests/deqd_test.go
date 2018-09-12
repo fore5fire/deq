@@ -5,13 +5,13 @@ import (
 	"fmt"
 	"io"
 	"os"
+	"sync"
 	"testing"
 	"time"
 
 	"github.com/gogo/protobuf/proto"
-	"gitlab.com/katcheCode/deqd"
 
-	// "gitlab.com/katcheCode/deqd/api/v1/deq"
+	deq "gitlab.com/katcheCode/deqd"
 	"gitlab.com/katcheCode/deqd/pkg/test/model"
 	"google.golang.org/grpc"
 )
@@ -36,8 +36,12 @@ func gatherTestModels(conn *grpc.ClientConn, duration time.Duration) (result []*
 		Follow:  false,
 	})
 
+	mut := sync.Mutex{}
+
 	err = consumer.Sub(ctx, &model.TestModel{}, func(ctx context.Context, e deq.Event) deq.AckCode {
-		result = append(result, e.Message.(*model.TestModel))
+		mut.Lock()
+		defer mut.Unlock()
+		result = append(result, e.Msg.(*model.TestModel))
 		return deq.AckCodeDequeueOK
 	})
 	if err == io.EOF {
@@ -68,8 +72,8 @@ func TestCreateAndReceive(t *testing.T) {
 	}
 
 	err := p.Pub(ctx, deq.Event{
-		ID:      time.Now().String(),
-		Message: expected,
+		ID:  time.Now().String(),
+		Msg: expected,
 	})
 	if err != nil {
 		t.Fatalf("Error Creating Event: %v", err)
@@ -92,7 +96,7 @@ func TestCreateAndReceive(t *testing.T) {
 		t.Fatalf("Sub: no message recieved")
 	}
 	if m := messages[0]; !proto.Equal(m, expected) {
-		t.Fatalf("Sub: expected %v, got %v", expected, m.Msg)
+		t.Fatalf("Sub: expected %v, got %v", expected, messages)
 	}
 }
 
@@ -106,9 +110,9 @@ func TestRequeueTimeout(t *testing.T) {
 
 	for i := 0; i < 500; i++ {
 		err := p.Pub(ctx, deq.Event{
-			ID: fmt.Sprintf("%d-%d", now, i),
-			Message: &model.TestModel{
-				Msg: fmt.Sprintf("Test Message - %d", i),
+			ID: fmt.Sprintf("%d-%.3d", now, i),
+			Msg: &model.TestModel{
+				Msg: fmt.Sprintf("Test Message - %.3d", i),
 			},
 		})
 		if err != nil {
@@ -124,15 +128,14 @@ func TestRequeueTimeout(t *testing.T) {
 	for i := 500; i < 1000; i++ {
 		err = p.Pub(ctx, deq.Event{
 			ID: fmt.Sprintf("%d-%d", now, i),
-			Message: &model.TestModel{
-				Msg: fmt.Sprintf("Test Message - %d", i),
+			Msg: &model.TestModel{
+				Msg: fmt.Sprintf("Test Message - %.3d", i),
 			},
 		})
 		if err != nil {
 			t.Fatalf("Error Creating Event: %v", err)
 		}
 	}
-	// log.Println(events)
 
 	events2, err := gatherTestModels(conn, time.Second*8)
 	if err != nil {
@@ -145,7 +148,7 @@ func TestRequeueTimeout(t *testing.T) {
 outer:
 	for i := 0; i < 1000; i++ {
 		for _, m := range events {
-			if m.GetMsg() == fmt.Sprintf("Test Message - %d", i) {
+			if m.GetMsg() == fmt.Sprintf("Test Message - %.3d", i) {
 				continue outer
 			}
 		}

@@ -23,7 +23,7 @@ type Store struct {
 	in               chan eventPromise
 	out              chan *deq.Event
 	sharedChannelsMu sync.RWMutex
-	sharedChannels   map[string]*sharedChannel
+	sharedChannels   map[channelKey]*sharedChannel
 	// done is used for signaling to our store's go routine
 	done chan error
 }
@@ -34,7 +34,7 @@ type Options struct {
 }
 
 type eventPromise struct {
-	event deq.Event
+	event *deq.Event
 	done  chan error
 }
 
@@ -54,7 +54,7 @@ func Open(opts Options) (*Store, error) {
 		db:             db,
 		in:             make(chan eventPromise, 20),
 		out:            make(chan *deq.Event, 20),
-		sharedChannels: make(map[string]*sharedChannel),
+		sharedChannels: make(map[channelKey]*sharedChannel),
 	}
 
 	go s.listenIn()
@@ -85,7 +85,7 @@ func (s *Store) Pub(e *deq.Event) error {
 	done := make(chan error, 1)
 
 	s.in <- eventPromise{
-		event: *e,
+		event: e,
 		done:  done,
 	}
 
@@ -104,6 +104,8 @@ func (s *Store) listenIn() {
 		id := promise.event.Id
 		topic := promise.event.Topic
 
+		// It's a waste of space to include these in the value because they're
+		// already in the key
 		promise.event.Id = ""
 		promise.event.Topic = ""
 
@@ -118,17 +120,23 @@ func (s *Store) listenIn() {
 			continue
 		}
 
+		// Put the key-stored values back for in-memory processing of the event
+		promise.event.Id = id
+		promise.event.Topic = topic
+
 		txn := s.db.NewTransaction(true)
 		defer txn.Discard()
 
 		key := eventKey(topic, id)
 
-		existing, err := txn.Get(key)
+		_, err := txn.Get(key)
 		if err == nil {
-
+			promise.done <- ErrAlreadyExists
+			continue
 		}
-		if err != nil && {
-
+		if err != badger.ErrKeyNotFound {
+			promise.done <- fmt.Errorf("check event doesn't exist: %v", err)
+			continue
 		}
 
 		err = txn.Set(key, buffer[:size])
@@ -142,8 +150,8 @@ func (s *Store) listenIn() {
 			promise.done <- err
 			continue
 		}
-
-		s.out <- &promise.event
+		out := *promise.event
+		s.out <- &out
 		close(promise.done)
 	}
 }
@@ -152,10 +160,13 @@ func (s *Store) listenOut() {
 	for e := range s.out {
 		s.sharedChannelsMu.RLock()
 		for _, shared := range s.sharedChannels {
-			select {
-			case shared.in <- e:
-				// TODO: Move db write code here
-			default: // Skip if full, listeners can catch up from disk later
+			// TODO: organize sharedChannels so we can skip over other topics completely
+			if shared.topic == url.QueryEscape(e.Topic) {
+				select {
+				case shared.in <- e:
+					// TODO: Move db write code here
+				default: // Skip if full, listeners can catch up from disk later
+				}
 			}
 		}
 		s.sharedChannelsMu.RUnlock()
@@ -180,6 +191,8 @@ var (
 	ErrNotFound = errors.New("event not found")
 	// ErrInternal is returned when an interanl error occurs
 	ErrInternal = errors.New("internal error")
+	// ErrAlreadyExists is returned when creating an event with a key that is in use
+	ErrAlreadyExists = errors.New("already exists")
 )
 
 const (
@@ -281,4 +294,24 @@ func upgradeV0EventsToV1(txn *badger.Txn) error {
 
 func eventKey(topic, id string) []byte {
 	return []byte(eventPrefix + "/" + url.QueryEscape(topic) + "/" + url.QueryEscape(id))
+}
+
+func parseEventKey(key []byte) (topic, id string, err error) {
+	parsed := strings.Split(string(key), "/")
+	if len(parsed) != 3 {
+		return "", "", fmt.Errorf("incorrect segment count")
+	}
+	id, err = url.QueryUnescape(parsed[2])
+	if err != nil {
+		return "", "", fmt.Errorf("url unescape: %v", err)
+	}
+	topic, err = url.QueryUnescape(parsed[1])
+	if err != nil {
+		return "", "", fmt.Errorf("url unescape: %v", err)
+	}
+	return topic, id, nil
+}
+
+func eventStateKey(channel, topic, id string) []byte {
+	return []byte(channelPrefix + "/" + url.QueryEscape(channel) + "/" + url.QueryEscape(topic) + "/" + url.QueryEscape(id))
 }
