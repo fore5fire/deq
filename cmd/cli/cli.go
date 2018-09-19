@@ -8,7 +8,6 @@ import (
 	"math/rand"
 	"os"
 	"strconv"
-	"strings"
 	"time"
 
 	"gitlab.com/katcheCode/deqd/api/v1/deq"
@@ -21,11 +20,11 @@ func main() {
 	host := flag.String("host", "localhost:3000", "specify deq host and port. defaults to localhost:8080")
 	channel := flag.String("c", strconv.FormatInt(int64(rand.Int()), 16), "specify channel. defaults to random")
 	follow := flag.Bool("f", false, "continue streaming when idling. defaults to false")
-	eventType := flag.String("t", "", "event type to print. defaults to all types")
+	topic := flag.String("t", "", "topic to print. required")
 
 	flag.Parse()
 
-	if flag.NArg() != 1 {
+	if flag.NArg() != 1 || *topic == "" {
 		flag.Usage()
 		os.Exit(1)
 	}
@@ -39,7 +38,7 @@ func main() {
 		}
 		deqc := deq.NewDEQClient(conn)
 
-		stream, err := deqc.StreamEvents(context.Background(), &deq.StreamEventsRequest{
+		stream, err := deqc.Sub(context.Background(), &deq.SubRequest{
 			Channel: *channel,
 			Follow:  *follow,
 		})
@@ -55,9 +54,7 @@ func main() {
 			if err != nil {
 				log.Fatalf("recieve message: %v", err)
 			}
-			if *eventType == "" || strings.TrimPrefix(e.Payload.TypeUrl, "type.googleapis.com/") == *eventType {
-				log.Printf("id: %v, type: %s", e.Id, e.Payload.TypeUrl)
-			}
+			log.Printf("id: %v, topic: %s", e.Id, e.Topic)
 		}
 
 	case "help":

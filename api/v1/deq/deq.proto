@@ -5,21 +5,30 @@ service DEQ {
   rpc Pub (PubRequest) returns (Event);
   rpc Sub (SubRequest) returns (stream Event);
   rpc Ack (AckRequest) returns (AckResponse);
-  // rpc Get (GetRequest) returns (Event);
-  // rpc Del (DelRequest) returns (Empty);
+  rpc Get (GetRequest) returns (Event);
+  rpc Del (DelRequest) returns (Empty);
 }
 
 message Event {
+  // Unique identifier for the event. Use a deterministic id for
+  // request idempotency.
   // Required.
   string id = 1;
+  // Topic to which the event will be sent. Cannot contain the null character.
   // Required.
   string topic = 2;
 
   bytes payload = 3;
-  // int32 min_retries = 4;
-
-  // State of the event for the channel it is recieved on. Output only.
-  EventState state = 4;
+  // Time the event was created, represented as the number of nanoseconds
+  // since the unix epoch.
+  // Output only.
+  sfixed64 create_time = 4;
+  // The initial state of this event for all channels. If not QUEUED, the event
+  // will be created but not sent to subscribers of topic.
+  EventState default_state = 5;
+  // State of the event for the channel it is recieved on.
+  // Output only.
+  EventState state = 6;
 }
 
 enum EventState {
@@ -34,17 +43,21 @@ message PubRequest {
   Event event = 1;
   // If set, the request will not complete until the published event has been dequeued by this channel
   string await_channel = 2;
-  // Miliseconds to await before timing out. 0 indicates server default.
-  uint32 await_milliseconds = 3;
 }
 
 message SubRequest {
   // Required.
   string channel = 1;
+  // The topic listen to. Only events with matching topic will be sent.
   string topic = 2;
-  string min_id = 3;
-  string max_id = 4;
+  // // Events with id lexiographically less than min_id will not be sent.
+  // string min_id = 3;
+  // // Events with id lexiographically greater than max_id will not be sent.
+  // string max_id = 4;
+  // If true, the request will not complete when the channel is idle.
   bool follow = 5;
+  // Number of milliseconds to wait before requeuing the event if it
+  // is not dequeued.
   int32 requeue_delay_miliseconds = 6;
 }
 
@@ -79,19 +92,25 @@ message AckResponse {
 message GetRequest {
   // Required.
   string event_id = 1;
-  string channel = 2;
+  // Required.
+  string topic = 2;
+  // Required.
+  string channel = 3;
 }
 
 message DelRequest {
+  // Required.
   string event_id = 1;
+  // Required.
+  string topic = 2;
 }
 
 message Empty {}
 
 message EventV0 {
-  string id = 1;
-  string key = 2;
-  Any Payload = 3;
+  Any payload = 1;
+  bytes id = 2;
+  bytes key = 3;
 }
 
 message Any {

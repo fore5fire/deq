@@ -1,25 +1,27 @@
 package eventstore
 
 import (
+	"context"
+	"fmt"
 	"log"
-	"net/url"
 	"sync"
 	"time"
 
 	"github.com/dgraph-io/badger"
 	"github.com/gogo/protobuf/proto"
 	"gitlab.com/katcheCode/deqd/api/v1/deq"
+	"gitlab.com/katcheCode/deqd/pkg/eventstore/data"
 )
 
 // Channel allows multiple listeners to synchronize processing of events
 type Channel struct {
-	topic string
-	name  string
-	out   chan *deq.Event
-	idle  chan struct{}
-	done  chan error
-	err   error
-	db    *badger.DB
+	topic  string
+	name   string
+	shared *sharedChannel
+	idle   bool
+	done   chan error
+	err    error
+	db     *badger.DB
 }
 
 type channelKey struct {
@@ -28,32 +30,37 @@ type channelKey struct {
 }
 
 type sharedChannel struct {
-	// Mutex protects idelChans and doneChans
+	// Mutex protects idleChans and doneChans
 	sync.Mutex
-	name      string
-	topic     string
-	in        chan *deq.Event
-	out       chan *deq.Event
-	done      chan error
-	idleChans []chan struct{}
-	doneChans []chan error
-	db        *badger.DB
+	name            string
+	topic           string
+	in              chan *deq.Event
+	out             chan *deq.Event
+	done            chan error
+	idleMutex       sync.RWMutex
+	idle            bool
+	doneChans       []chan error
+	stateChansMutex sync.Mutex
+	// Pass in a response channel, when the event is dequeued the new state will
+	// be sent back on the response channel
+	stateChans map[string]chan chan deq.EventState
+	db         *badger.DB
 }
 
 // Channel returns the channel for a given name
-func (s *Store) Channel(name, topic string) Channel {
-	name, topic = url.QueryEscape(name), url.QueryEscape(topic)
+func (s *Store) Channel(name, topic string) *Channel {
 	key := channelKey{name, topic}
 
 	s.sharedChannelsMu.Lock()
 	shared, ok := s.sharedChannels[key]
 	if !ok {
 		shared = &sharedChannel{
-			name:  name,
-			topic: topic,
-			in:    make(chan *deq.Event, 20),
-			out:   make(chan *deq.Event, 20),
-			db:    s.db,
+			name:       name,
+			topic:      topic,
+			in:         make(chan *deq.Event, 20),
+			out:        make(chan *deq.Event, 20),
+			stateChans: make(map[string]chan chan deq.EventState),
+			db:         s.db,
 		}
 		s.sharedChannels[key] = shared
 
@@ -63,51 +70,71 @@ func (s *Store) Channel(name, topic string) Channel {
 
 	// DON'T FORGET TO ADD CHECK FOR FAILED CHANNEL
 
-	idle := make(chan struct{})
 	done := make(chan error, 1)
 	shared.Lock()
 	defer shared.Unlock()
-	shared.idleChans = append(shared.idleChans, idle)
+	// shared.idleChans = append(shared.idleChans, idle)
 	shared.doneChans = append(shared.doneChans, done)
 
-	return Channel{
-		name: name,
-		out:  shared.out,
-		idle: idle,
-		done: done,
-		db:   s.db,
+	return &Channel{
+		name:   name,
+		topic:  topic,
+		shared: shared,
+		done:   done,
+		db:     s.db,
 	}
 }
 
-// Follow returns
-func (c Channel) Follow() (eventc chan *deq.Event, idle chan struct{}) {
+// Follow returns the next event in the queue, or nil if there are no events
+func (c *Channel) Follow() chan *deq.Event {
+	return c.shared.out
+}
 
-	// go func() {
-	// 	<-done
-	// }()
-
-	return c.out, c.idle
+// Idle returns the channel's current idle state.
+func (c *Channel) Idle() bool {
+	return c.shared.Idle()
 }
 
 // Close cleans up resources for this Channel
-func (c Channel) Close() {
+func (c *Channel) Close() {
 	// TODO: clean up sharedChannel stuff
 }
 
 // Err returns the error that caused this channel to fail, or nil if the channel closed cleanly
-func (c Channel) Err() error {
+func (c *Channel) Err() error {
 	return c.err
 }
 
-// SetEventState sets the state of an event for this channel
-func (c Channel) SetEventState(id string, state deq.EventState) error {
+// Get returns the event for an event ID, or ErrNotFound if none is found
+func (c *Channel) Get(eventID string) (*deq.Event, error) {
+	txn := c.db.NewTransaction(false)
+	defer txn.Discard()
 
-	key := eventStateKey(c.name, c.topic, id)
+	return getEvent(txn, c.topic, eventID, c.name)
+}
+
+// SetEventState sets the state of an event for this channel
+func (c *Channel) SetEventState(id string, state deq.EventState) error {
 
 	txn := c.db.NewTransaction(true)
 	defer txn.Discard()
 
-	err := txn.Set(key, []byte{})
+	key, err := data.ChannelKey{
+		Topic:   c.topic,
+		Channel: c.name,
+		ID:      id,
+	}.Marshal()
+	if err != nil {
+		return fmt.Errorf("marshal key: %v", err)
+	}
+	payload, err := proto.Marshal(&data.ChannelPayload{
+		EventState: state,
+	})
+	if err != nil {
+		return fmt.Errorf("marshal payload: %v", err)
+	}
+
+	err = txn.Set(key, payload)
 	if err != nil {
 		return err
 	}
@@ -116,6 +143,24 @@ func (c Channel) SetEventState(id string, state deq.EventState) error {
 	if err != nil {
 		return err
 	}
+
+	c.shared.stateChansMutex.Lock()
+	stateChans := c.shared.stateChans[id]
+	if stateChans != nil {
+		done := false
+		for !done {
+			select {
+			case stateChan := <-stateChans:
+				stateChan <- state
+			default:
+				done = true
+			}
+		}
+		// TODO: cleanup (currently causing a deadlock because they need to have the lock to publish and we need it to read)
+		// c.shared.stateChans[id] = nil
+	}
+	c.shared.stateChansMutex.Unlock()
+
 	return nil
 }
 
@@ -132,8 +177,36 @@ func (c Channel) SetEventState(id string, state deq.EventState) error {
 
 // RequeueEvent adds the event back into the event queue for this channel
 func (c *Channel) RequeueEvent(e *deq.Event) {
-	log.Printf("REQUEUE %s", e.Id)
-	c.out <- e
+	c.shared.out <- e
+}
+
+// AwaitDequeue blocks until the event is dequeued, then returns it's state.
+func (c *Channel) AwaitDequeue(ctx context.Context, id string) (deq.EventState, error) {
+
+	result := make(chan deq.EventState, 1)
+	c.shared.stateChansMutex.Lock()
+	if c.shared.stateChans[id] == nil {
+		c.shared.stateChans[id] = make(chan chan deq.EventState)
+	}
+	c.shared.stateChansMutex.Unlock()
+	select {
+	case <-ctx.Done():
+		return deq.EventState_UNSPECIFIED_STATE, ctx.Err()
+	case c.shared.stateChans[id] <- result:
+		// Just move on.
+	}
+	select {
+	case state := <-result:
+		return state, nil
+	case <-ctx.Done():
+		return deq.EventState_UNSPECIFIED_STATE, ctx.Err()
+	}
+}
+
+func (s *sharedChannel) Idle() bool {
+	s.idleMutex.RLock()
+	defer s.idleMutex.RUnlock()
+	return s.idle
 }
 
 func (s *sharedChannel) start() {
@@ -144,6 +217,10 @@ func (s *sharedChannel) start() {
 		return
 	}
 
+	timer := time.NewTimer(0)
+	timer.Stop()
+	defer timer.Stop()
+
 	for {
 		cursor, err = s.catchUp(cursor)
 		if err != nil {
@@ -152,23 +229,33 @@ func (s *sharedChannel) start() {
 
 		// As long as s.in hasn't filled up...
 		for len(s.in) < cap(s.in) {
+			// if we're already idle, we don't want idle getting set over and over.
+			// by leaving the timer expired, it won't trigger again.
+			if !s.Idle() {
+				// Only show that we're idle if it lasts for more than a short time
+				// TODO: we could get this instead by having the store directly track if
+				// it's idle or not. then the channel would be idle only if it's not
+				// reading from disk and the store is idle.
+				timer.Reset(time.Second / 32)
+			}
 
 			select {
-			// Periodically poll idle so newly connected clients will know
-			case <-time.After(time.Second / 2):
-				s.Lock()
-				for _, idle := range s.idleChans {
-					select {
-					case idle <- struct{}{}:
-					default:
-						// Don't block if idle isn't ready - we'll signal it next time around
-					}
-				}
-				s.Unlock()
+			// The timer expired, we're idle
+			case <-timer.C:
+				s.idleMutex.Lock()
+				s.idle = true
+				s.idleMutex.Unlock()
 			// We've got a new event, lets publish it
 			case e := <-s.in:
+				s.idleMutex.Lock()
+				s.idle = false
+				s.idleMutex.Unlock()
 				s.out <- e
-				cursor = string(eventKey(e.Topic, e.Id))
+				cursor, _ = data.EventKey{
+					Topic:      e.Topic,
+					CreateTime: time.Unix(0, e.CreateTime),
+					ID:         e.Id,
+				}.Marshal()
 			}
 		}
 
@@ -184,55 +271,104 @@ func (s *sharedChannel) start() {
 }
 
 // catchUp returns nil instead of new prefix when time to quit
-func (s *sharedChannel) catchUp(cursor string) (string, error) {
+func (s *sharedChannel) catchUp(cursor []byte) ([]byte, error) {
 	txn := s.db.NewTransaction(false)
 	defer txn.Discard()
 
 	opts := badger.DefaultIteratorOptions
 	opts.PrefetchSize = 100
+
 	it := txn.NewIterator(opts)
 	defer it.Close()
 
 	var lastKey []byte
+	prefix, err := data.EventPrefix(s.topic)
+	if err != nil {
+		return nil, err
+	}
 
-	for it.Seek([]byte(cursor + "\u0000")); it.ValidForPrefix([]byte(eventPrefix + "/" + s.topic + "/")); it.Next() {
+	for it.Seek(append(cursor, 0)); it.ValidForPrefix(prefix); it.Next() {
 
 		item := it.Item()
 		lastKey = item.KeyCopy(lastKey)
-		buffer, err := item.ValueCopy(nil)
-		if err != nil {
-			return "", err
-		}
 
-		topic, id, err := parseEventKey(lastKey)
+		var state deq.EventState
+		var key data.EventKey
+		err = data.UnmarshalTo(lastKey, &key)
 		if err != nil {
 			log.Printf("parse event key %s: %v", lastKey, err)
 			continue
 		}
-		_, err = txn.Get(eventStateKey(s.name, topic, id))
-		if err == nil {
-			// Event is processed, skip
+
+		channelKey, err := data.ChannelKey{
+			Channel: s.name,
+			Topic:   key.Topic,
+			ID:      key.ID,
+		}.Marshal()
+		if err != nil {
+			log.Printf("marshal channel key: %v", err)
 			continue
 		}
-		if err != badger.ErrKeyNotFound {
-			log.Printf("get event %s id channel status: %v", id, err)
+		channelItem, err := txn.Get(channelKey)
+		if err != nil && err != badger.ErrKeyNotFound {
+			log.Printf("get event %s channel status: %v", key.ID, err)
 			continue
+		}
+		if err == nil {
+			buf, err := channelItem.Value()
+			if err != nil {
+				log.Printf("get event %s channel status: %v", key.ID, err)
+				continue
+			}
+
+			var channel data.ChannelPayload
+			err = proto.Unmarshal(buf, &channel)
+			if err != nil {
+				log.Printf("get event %s channel status: %v", key.ID, err)
+				continue
+			}
+			state = channel.EventState
+
+			if state != deq.EventState_QUEUED {
+				// Not queued, don't send
+				continue
+			}
 		}
 
-		e := new(deq.Event)
-		err = proto.Unmarshal(buffer, e)
+		val, err := item.Value()
+		if err != nil {
+			return nil, err
+		}
+
+		var e data.EventPayload
+		err = proto.Unmarshal(val, &e)
 		if err != nil {
 			log.Printf("unmarshal event: %v", err)
 			continue
 		}
-		e.Id, e.Topic = id, topic
-		s.out <- e
+
+		if state == deq.EventState_UNSPECIFIED_STATE {
+			state = e.DefaultEventState
+		}
+
+		if state != deq.EventState_QUEUED {
+			// Not queued, don't send
+			continue
+		}
+
+		s.out <- &deq.Event{
+			Id:         key.ID,
+			Topic:      key.Topic,
+			CreateTime: key.CreateTime.UnixNano(),
+			Payload:    e.Payload,
+			State:      state,
+		}
 	}
 
-	return string(lastKey), nil
+	return lastKey, nil
 }
 
-func (s *sharedChannel) getCursor(topic string) (string, error) {
+func (s *sharedChannel) getCursor(topic string) ([]byte, error) {
 	// txn := s.db.NewTransaction(false)
 	// defer txn.Discard()
 	//
@@ -240,7 +376,10 @@ func (s *sharedChannel) getCursor(topic string) (string, error) {
 	// iter := txn.NewIterator(opts)
 	// defer iter.Close()
 
-	prefix := []byte(eventPrefix + "/" + url.QueryEscape(topic) + "/")
+	prefix, err := data.EventPrefix(s.topic)
+	if err != nil {
+		return nil, err
+	}
 	current := prefix
 	// for iter.Seek(prefix); iter.ValidForPrefix(prefix); iter.Next() {
 	// 	current = iter.Item().Key()
@@ -255,7 +394,7 @@ func (s *sharedChannel) getCursor(topic string) (string, error) {
 	// 	}
 	// }
 
-	return string(current), nil
+	return current, nil
 }
 
 func (s *sharedChannel) broadcastErr(err error) {

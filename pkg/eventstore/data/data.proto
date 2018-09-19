@@ -1,0 +1,16 @@
+syntax = "proto3";
+
+import "api/v1/deq/deq.proto";
+
+message ChannelPayload {
+  deq.EventState event_state = 1;
+}
+
+message EventTimePayload {
+  sfixed64 create_time = 1;
+}
+
+message EventPayload {
+  bytes payload = 1;
+  deq.EventState default_event_state = 2;
+}

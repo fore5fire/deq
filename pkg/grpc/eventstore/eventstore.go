@@ -33,11 +33,38 @@ func (s *Server) Pub(ctx context.Context, in *pb.PubRequest) (*pb.Event, error) 
 	if in.Event.Topic == "" {
 		return nil, status.Error(codes.InvalidArgument, "Missing required argument event.topic")
 	}
+	if in.Event.DefaultState == pb.EventState_UNSPECIFIED_STATE {
+		in.Event.DefaultState = pb.EventState_QUEUED
+	}
 
-	err := s.store.Pub(in.Event)
+	in.Event.CreateTime = time.Now().UnixNano()
+
+	var await chan pb.EventState
+	if in.AwaitChannel != "" {
+		await = make(chan pb.EventState)
+		go func() {
+			state, err := s.store.Channel(in.AwaitChannel, in.Event.Topic).AwaitDequeue(ctx, in.Event.Id)
+			if err != nil {
+				log.Printf("Pub %s: await channel %s: %v", in.Event.Id, in.AwaitChannel, err)
+				close(await)
+				return
+			}
+			await <- state
+		}()
+	}
+
+	err := s.store.Pub(*in.Event)
 	if err != nil {
 		log.Printf("create event: %v", err)
 		return nil, status.Error(codes.Internal, "")
+	}
+
+	if await != nil {
+		state, ok := <-await
+		if !ok {
+			return nil, status.Error(codes.Internal, "")
+		}
+		in.Event.State = state
 	}
 
 	return in.Event, nil
@@ -56,24 +83,41 @@ func (s *Server) Sub(in *pb.SubRequest, stream pb.DEQ_SubServer) error {
 	}
 
 	channel := s.store.Channel(in.Channel, in.Topic)
-	eventc, idle := channel.Follow()
+	eventc := channel.Follow()
 	defer channel.Close()
 
 	requeue := make(chan *pb.Event, 1)
 	cancelRequeue := make(chan struct{}, 1)
+	requeueNow := make(chan struct{}, 1)
 	defer close(requeue)
 
 	go func() {
+		timer := time.NewTimer(requeueDelay)
+		defer timer.Stop()
+
 		for e := range requeue {
 			select {
-			case <-time.After(requeueDelay):
+			case <-timer.C:
+				channel.RequeueEvent(e)
+			case <-requeueNow:
 				channel.RequeueEvent(e)
 			case <-cancelRequeue:
 			}
 		}
 	}()
 
+	idleTimer := time.NewTimer(time.Second / 2)
+	idleTimer.Stop()
+	defer idleTimer.Stop()
+
+	clientDisconnectTimer := time.NewTimer(time.Second * 5)
+	defer clientDisconnectTimer.Stop()
+
 	for {
+
+		if !in.Follow {
+			idleTimer.Reset(time.Second / 2)
+		}
 
 		select {
 		case e, ok := <-eventc:
@@ -91,20 +135,12 @@ func (s *Server) Sub(in *pb.SubRequest, stream pb.DEQ_SubServer) error {
 
 			requeue <- e
 			err := stream.Send(e)
-			if status.Code(err) == codes.Canceled {
-				cancelRequeue <- struct{}{}
-				channel.RequeueEvent(e)
-				return nil
-			}
-			if status.Code(err) == codes.DeadlineExceeded {
-				cancelRequeue <- struct{}{}
-				channel.RequeueEvent(e)
+			if status.Code(err) == codes.Canceled || status.Code(err) == codes.DeadlineExceeded {
+				requeueNow <- struct{}{}
 				return nil
 			}
 			if err != nil {
-				cancelRequeue <- struct{}{}
-				// TODO: fix duplicate event if we miss requeue window
-				channel.RequeueEvent(e)
+				requeueNow <- struct{}{}
 				log.Printf("send event: %v", err)
 				return status.Error(codes.Internal, "")
 			}
@@ -112,13 +148,13 @@ func (s *Server) Sub(in *pb.SubRequest, stream pb.DEQ_SubServer) error {
 			cancelRequeue <- struct{}{}
 
 			// Disconnect on idle if not following
-		case <-idle:
-			if !in.Follow {
+		case <-idleTimer.C:
+			if channel.Idle() {
 				return nil
 			}
 
-		// Poll to check if stream closed so we can free up memory
-		case <-time.After(time.Second * 5):
+			// Poll to check if stream closed so we can free up memory
+		case <-clientDisconnectTimer.C:
 			err := stream.Context().Err()
 			if err == context.Canceled || err == context.DeadlineExceeded {
 				return nil
@@ -179,4 +215,49 @@ func (s *Server) Ack(ctx context.Context, in *pb.AckRequest) (*pb.AckResponse, e
 	}
 
 	return &pb.AckResponse{}, nil
+}
+
+func (s *Server) Get(ctx context.Context, in *pb.GetRequest) (*pb.Event, error) {
+
+	if in.EventId == "" {
+		return nil, status.Error(codes.InvalidArgument, "argument event_id is required")
+	}
+	if in.Topic == "" {
+		return nil, status.Error(codes.InvalidArgument, "topic is required")
+	}
+	if in.Channel == "" {
+		return nil, status.Error(codes.InvalidArgument, "argument channel is required")
+	}
+
+	e, err := s.store.Channel(in.Channel, in.Topic).Get(in.EventId)
+	if err == eventstore.ErrNotFound {
+		return nil, status.Error(codes.NotFound, "")
+	}
+	if err != nil {
+		log.Printf("Get: %v", err)
+		return nil, status.Error(codes.Internal, "")
+	}
+
+	return e, nil
+}
+
+func (s *Server) Del(ctx context.Context, in *pb.DelRequest) (*pb.Empty, error) {
+
+	if in.EventId == "" {
+		return nil, status.Error(codes.InvalidArgument, "argument event_id is required")
+	}
+	if in.Topic == "" {
+		return nil, status.Error(codes.InvalidArgument, "topic is required")
+	}
+
+	err := s.store.Del(in.Topic, in.EventId)
+	if err == eventstore.ErrNotFound {
+		return nil, status.Error(codes.NotFound, "")
+	}
+	if err != nil {
+		log.Printf("Del: %v", err)
+		return nil, status.Error(codes.Internal, "")
+	}
+
+	return &pb.Empty{}, nil
 }

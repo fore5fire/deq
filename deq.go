@@ -22,9 +22,9 @@ type Consumer struct {
 // ConsumerOpts are options for a Consumer
 type ConsumerOpts struct {
 	Channel string
-	MinID   string
-	MaxID   string
-	Follow  bool
+	// MinID   string
+	// MaxID   string
+	Follow bool
 }
 
 // NewConsumer creates a new Consumer.
@@ -61,10 +61,10 @@ func (c *Consumer) Sub(ctx context.Context, m Message, handler HandlerFunc) erro
 
 	stream, err := c.client.Sub(ctx, &api.SubRequest{
 		Channel: c.opts.Channel,
-		MinId:   c.opts.MinID,
-		MaxId:   c.opts.MaxID,
-		Follow:  c.opts.Follow,
-		Topic:   msgName,
+		// MinId:   c.opts.MinID,
+		// MaxId:   c.opts.MaxID,
+		Follow: c.opts.Follow,
+		Topic:  msgName,
 	})
 	if err != nil {
 		return err
@@ -75,6 +75,7 @@ func (c *Consumer) Sub(ctx context.Context, m Message, handler HandlerFunc) erro
 		if err != nil {
 			return err
 		}
+
 		go func() {
 			msg := reflect.New(msgType.Elem()).Interface().(Message)
 			err := proto.Unmarshal(event.Payload, msg)
@@ -123,8 +124,7 @@ type Producer struct {
 
 // ProducerOpts provides options used by a Producer
 type ProducerOpts struct {
-	AwaitChannel      string
-	AwaitMilliseconds uint32
+	AwaitChannel string
 }
 
 // NewProducer constructs a new Producer.
@@ -151,8 +151,7 @@ func (p *Producer) Pub(ctx context.Context, e Event) error {
 			Topic:   proto.MessageName(e.Msg),
 			Payload: payload,
 		},
-		AwaitChannel:      p.opts.AwaitChannel,
-		AwaitMilliseconds: p.opts.AwaitMilliseconds,
+		AwaitChannel: p.opts.AwaitChannel,
 	})
 	if err != nil {
 		return err
