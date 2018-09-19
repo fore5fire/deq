@@ -13,24 +13,24 @@ import (
 	"google.golang.org/grpc"
 )
 
-// Consumer allows subscribing to events of particular types
-type Consumer struct {
+// Subscriber allows subscribing to events of particular types
+type Subscriber struct {
 	client api.DEQClient
-	opts   ConsumerOpts
+	opts   SubscriberOpts
 }
 
-// ConsumerOpts are options for a Consumer
-type ConsumerOpts struct {
+// SubscriberOpts are options for a Subscriber
+type SubscriberOpts struct {
 	Channel string
 	// MinID   string
 	// MaxID   string
 	Follow bool
 }
 
-// NewConsumer creates a new Consumer.
+// NewSubscriber creates a new Subscriber.
 // conn can be used by multiple Producers and Consumers in parallel
-func NewConsumer(conn *grpc.ClientConn, opts ConsumerOpts) *Consumer {
-	return &Consumer{api.NewDEQClient(conn), opts}
+func NewSubscriber(conn *grpc.ClientConn, opts SubscriberOpts) *Subscriber {
+	return &Subscriber{api.NewDEQClient(conn), opts}
 }
 
 // Handler is a handler for DEQ events.
@@ -54,16 +54,16 @@ func (f HandlerFunc) HandleEvent(ctx context.Context, e Event) AckCode {
 // Sub begins listening for events on the requested channel.
 // m is used to determine the subscribed type url. All messages passed to handler are guarenteed to be of the same concrete type as m
 // Because github.com/gogo/protobuf is used to lookup the typeURL and concrete type of m, m must be a registered type with the same instance of gogo/proto as this binary (ie. no vendoring or github.com/golang/protobuf)
-func (c *Consumer) Sub(ctx context.Context, m Message, handler HandlerFunc) error {
+func (sub *Subscriber) Sub(ctx context.Context, m Message, handler HandlerFunc) error {
 
 	msgName := proto.MessageName(m)
 	msgType := proto.MessageType(msgName)
 
-	stream, err := c.client.Sub(ctx, &api.SubRequest{
-		Channel: c.opts.Channel,
+	stream, err := sub.client.Sub(ctx, &api.SubRequest{
+		Channel: sub.opts.Channel,
 		// MinId:   c.opts.MinID,
 		// MaxId:   c.opts.MaxID,
-		Follow: c.opts.Follow,
+		Follow: sub.opts.Follow,
 		Topic:  msgName,
 	})
 	if err != nil {
@@ -80,8 +80,8 @@ func (c *Consumer) Sub(ctx context.Context, m Message, handler HandlerFunc) erro
 			msg := reflect.New(msgType.Elem()).Interface().(Message)
 			err := proto.Unmarshal(event.Payload, msg)
 			if err != nil {
-				_, err = c.client.Ack(ctx, &api.AckRequest{
-					Channel: c.opts.Channel,
+				_, err = sub.client.Ack(ctx, &api.AckRequest{
+					Channel: sub.opts.Channel,
 					Topic:   msgName,
 					EventId: event.Id,
 					Code:    api.AckCode_DEQUEUE_ERROR,
@@ -97,11 +97,11 @@ func (c *Consumer) Sub(ctx context.Context, m Message, handler HandlerFunc) erro
 				ID:  event.Id,
 				Msg: msg,
 				// State:
-				consumer: c,
+				sub: sub,
 			})
 
-			_, err = c.client.Ack(ctx, &api.AckRequest{
-				Channel: c.opts.Channel,
+			_, err = sub.client.Ack(ctx, &api.AckRequest{
+				Channel: sub.opts.Channel,
 				Topic:   msgName,
 				EventId: event.Id,
 				Code:    api.AckCode(code),
@@ -116,25 +116,25 @@ func (c *Consumer) Sub(ctx context.Context, m Message, handler HandlerFunc) erro
 	}
 }
 
-// Producer publishes events via the Pub method
-type Producer struct {
+// Publisher publishes events via the Pub method
+type Publisher struct {
 	client api.DEQClient
-	opts   ProducerOpts
+	opts   PublisherOpts
 }
 
-// ProducerOpts provides options used by a Producer
-type ProducerOpts struct {
+// PublisherOpts provides options used by a Producer
+type PublisherOpts struct {
 	AwaitChannel string
 }
 
-// NewProducer constructs a new Producer.
-// conn can be used by multiple Producers and Consumers in parallel
-func NewProducer(conn *grpc.ClientConn, opts ProducerOpts) *Producer {
-	return &Producer{api.NewDEQClient(conn), opts}
+// NewPublisher constructs a new Publisher.
+// conn can be used by multiple Publishers and Subscribers in parallel
+func NewPublisher(conn *grpc.ClientConn, opts PublisherOpts) *Publisher {
+	return &Publisher{api.NewDEQClient(conn), opts}
 }
 
 // Pub publishes a new event.
-func (p *Producer) Pub(ctx context.Context, e Event) error {
+func (p *Publisher) Pub(ctx context.Context, e Event) error {
 
 	if e.ID == "" {
 		return fmt.Errorf("e.ID is required")
@@ -162,19 +162,19 @@ func (p *Producer) Pub(ctx context.Context, e Event) error {
 
 // Event is a deserialized event that is sent to or recieved from deq.
 type Event struct {
-	ID       string
-	Msg      Message
-	consumer *Consumer
+	ID  string
+	Msg Message
+	sub *Subscriber
 }
 
 // ResetTimeout resets the requeue timeout of this event
 func (e *Event) ResetTimeout(ctx context.Context) error {
-	if e.consumer == nil {
-		return errors.New("ResetTimeout is only valid for events created by a consumer")
+	if e.sub == nil {
+		return errors.New("ResetTimeout is only valid for events created by a Subscriber")
 	}
 
-	_, err := e.consumer.client.Ack(ctx, &api.AckRequest{
-		Channel: e.consumer.opts.Channel,
+	_, err := e.sub.client.Ack(ctx, &api.AckRequest{
+		Channel: e.sub.opts.Channel,
 		Topic:   e.Topic(),
 		EventId: e.ID,
 		Code:    api.AckCode_RESET_TIMEOUT,
@@ -189,8 +189,6 @@ func (e *Event) ResetTimeout(ctx context.Context) error {
 // Topic returns the topic of this event by inspecting it's Message type, or
 // an empty string if the topic could not be determined.
 func (e *Event) Topic() string {
-	// Return an empty string instead of panicing if not found
-	defer recover()
 	return proto.MessageName(e.Msg)
 }
 

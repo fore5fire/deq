@@ -31,14 +31,14 @@ func gatherTestModels(conn *grpc.ClientConn, duration time.Duration) (result []*
 	ctx, cancel := context.WithTimeout(context.Background(), duration)
 	defer cancel()
 
-	consumer := deq.NewConsumer(conn, deq.ConsumerOpts{
+	sub := deq.NewSubscriber(conn, deq.SubscriberOpts{
 		Channel: "TestChannel1",
 		Follow:  false,
 	})
 
 	mut := sync.Mutex{}
 
-	err = consumer.Sub(ctx, &model.TestModel{}, func(ctx context.Context, e deq.Event) deq.AckCode {
+	err = sub.Sub(ctx, &model.TestModel{}, func(ctx context.Context, e deq.Event) deq.AckCode {
 		mut.Lock()
 		defer mut.Unlock()
 		result = append(result, e.Msg.(*model.TestModel))
@@ -66,7 +66,7 @@ func TestCreateAndReceive(t *testing.T) {
 
 	// beforeTime := time.Now()
 
-	p := deq.NewProducer(conn, deq.ProducerOpts{})
+	p := deq.NewPublisher(conn, deq.PublisherOpts{})
 	expected := []*model.TestModel{
 		&model.TestModel{
 			Msg: "Hello world!",
@@ -104,7 +104,7 @@ func TestMassPublish(t *testing.T) {
 	ctx, cancel := context.WithTimeout(context.Background(), time.Second*10)
 	defer cancel()
 
-	p := deq.NewProducer(conn, deq.ProducerOpts{})
+	p := deq.NewPublisher(conn, deq.PublisherOpts{})
 	now := time.Now().UnixNano()
 
 	for i := 0; i < 500; i++ {
@@ -164,7 +164,7 @@ func TestRequeue(t *testing.T) {
 	ctx, cancel := context.WithTimeout(context.Background(), time.Second*20)
 	defer cancel()
 
-	p := deq.NewProducer(conn, deq.ProducerOpts{})
+	p := deq.NewPublisher(conn, deq.PublisherOpts{})
 	expected := &model.TestModel{
 		Msg: "Hello world!",
 	}
@@ -177,7 +177,7 @@ func TestRequeue(t *testing.T) {
 		t.Fatalf("Error Creating Event: %v", err)
 	}
 
-	consumer := deq.NewConsumer(conn, deq.ConsumerOpts{
+	consumer := deq.NewSubscriber(conn, deq.SubscriberOpts{
 		Channel: "TestChannel1",
 		Follow:  false,
 	})
