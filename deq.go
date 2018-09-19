@@ -192,21 +192,5 @@ func (e *Event) Topic() string {
 	return proto.MessageName(e.Msg)
 }
 
-// AckCode is a code used when acknowledging an event
-type AckCode api.AckCode
-
-const (
-	// AckCodeDequeueOK dequeues an event, indicating it was processed successfully
-	AckCodeDequeueOK = AckCode(api.AckCode_DEQUEUE_OK)
-	// AckCodeDequeueError dequeues an event, indicating it was not processed successfully
-	AckCodeDequeueError = AckCode(api.AckCode_DEQUEUE_ERROR)
-	// AckCodeRequeueConstant requeues an event with no backoff
-	AckCodeRequeueConstant = AckCode(api.AckCode_REQUEUE_CONSTANT)
-	// AckCodeRequeueLinear requires an event with a linear backoff
-	AckCodeRequeueLinear = AckCode(api.AckCode_REQUEUE_LINEAR)
-	// AckCodeRequeueExponential requeues an event with an exponential backoff
-	AckCodeRequeueExponential = AckCode(api.AckCode_REQUEUE_EXPONENTIAL)
-)
-
 // Message is a message payload that is sent by deq
 type Message proto.Message
