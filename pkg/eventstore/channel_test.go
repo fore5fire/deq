@@ -105,6 +105,7 @@ func TestGet(t *testing.T) {
 		Id:         "event1",
 		Topic:      "topic",
 		CreateTime: time.Now().UnixNano(),
+		State:      deq.EventState_QUEUED,
 	}
 
 	err = db.Pub(*expected)
@@ -112,11 +113,28 @@ func TestGet(t *testing.T) {
 		t.Fatalf("pub: %v", err)
 	}
 
-	e, err := db.Channel("channel", expected.Topic).Get(expected.Id)
+	channel := db.Channel("channel", expected.Topic)
+
+	e, err := channel.Get(expected.Id)
 	if err != nil {
 		t.Fatalf("get: %v", err)
 	}
 	if !proto.Equal(e, expected) {
 		t.Errorf("expected: %v, got %v", expected, e)
+	}
+
+	err = channel.SetEventState(expected.Id, deq.EventState_DEQUEUED_OK)
+	if err != nil {
+		t.Fatalf("set event state: %v", err)
+	}
+
+	expected.State = deq.EventState_DEQUEUED_OK
+
+	e, err = channel.Get(expected.Id)
+	if err != nil {
+		t.Fatalf("get after set state: %v", err)
+	}
+	if !proto.Equal(e, expected) {
+		t.Errorf("get after set state: expected: %v, got %v", expected, e)
 	}
 }

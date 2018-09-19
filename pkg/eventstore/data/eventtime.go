@@ -50,7 +50,7 @@ func (key EventTimeKey) MarshalTo(buf []byte) error {
 	return nil
 }
 
-// Unmarshal updates the this key's values by decoding the provided buf
+// UnmarshalEventTimeKey updates the this key's values by decoding the provided buf
 func UnmarshalEventTimeKey(buf []byte, key *EventTimeKey) error {
 	buf = buf[2:]
 	i := bytes.IndexByte(buf, Sep)

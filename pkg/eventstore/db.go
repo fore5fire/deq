@@ -61,7 +61,7 @@ func getEvent(txn *badger.Txn, topic, eventID, channel string) (*deq.Event, erro
 		return nil, fmt.Errorf("unmarshal event payload: %v", err)
 	}
 
-	eventState := event.DefaultEventState
+	eventState := deq.EventState_QUEUED
 
 	if channel != "" {
 		channelKey, err := data.ChannelKey{
@@ -87,6 +87,8 @@ func getEvent(txn *badger.Txn, topic, eventID, channel string) (*deq.Event, erro
 			if err != nil {
 				return nil, fmt.Errorf("unmarshal channel payload: %v", err)
 			}
+
+			eventState = channelState.EventState
 		}
 	}
 
@@ -165,6 +167,61 @@ func writeEvent(txn *badger.Txn, e *deq.Event) error {
 	}
 
 	err = txn.Set(key, val)
+	if err != nil {
+		return err
+	}
+
+	if e.DefaultState != deq.EventState_UNSPECIFIED_STATE && e.DefaultState != deq.EventState_QUEUED {
+
+		it := txn.NewIterator(badger.DefaultIteratorOptions)
+		defer it.Close()
+
+		prefix := []byte{data.ChannelTag, data.Sep}
+		cursor := prefix
+
+		for it.Seek(cursor); it.ValidForPrefix(prefix); it.Seek(cursor) {
+
+			var key data.ChannelKey
+			err := data.UnmarshalChannelKey(it.Item().Key(), &key)
+			if err != nil {
+				return fmt.Errorf("unmarshal channel key: %v", err)
+			}
+
+			// Skip to next channel
+			cursor, err = data.ChannelPrefix(key.Channel + "\u0001")
+			if err != nil {
+				return fmt.Errorf("marshal channel prefix: %v", err)
+			}
+
+			newKey := data.ChannelKey{
+				Topic:   e.Topic,
+				Channel: key.Channel,
+				ID:      e.Id,
+			}
+
+			err = setEventState(txn, newKey, e.DefaultState)
+			if err != nil {
+				return fmt.Errorf("set event state on channel %s: %v", key.Channel, err)
+			}
+		}
+	}
+
+	return nil
+}
+
+func setEventState(txn *badger.Txn, key data.ChannelKey, state deq.EventState) error {
+	rawkey, err := key.Marshal()
+	if err != nil {
+		return fmt.Errorf("marshal key: %v", err)
+	}
+	payload, err := proto.Marshal(&data.ChannelPayload{
+		EventState: state,
+	})
+	if err != nil {
+		return fmt.Errorf("marshal payload: %v", err)
+	}
+
+	err = txn.Set(rawkey, payload)
 	if err != nil {
 		return err
 	}

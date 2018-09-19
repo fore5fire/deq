@@ -68,7 +68,7 @@ func (key EventKey) MarshalTo(buf []byte) error {
 	return nil
 }
 
-// Unmarshal unmarshals a key marshaled by key.Marshal()
+// UnmarshalEventKey unmarshals a key marshaled by key.Marshal()
 func UnmarshalEventKey(buf []byte, key *EventKey) error {
 	buf = buf[2:]
 	i := bytes.IndexByte(buf, Sep)

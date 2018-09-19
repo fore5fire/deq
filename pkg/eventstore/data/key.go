@@ -10,7 +10,7 @@ import (
 	"github.com/gogo/protobuf/proto"
 )
 
-// Prefixes are used to group keys by type.
+// Tags are used to group keys by type.
 const (
 	ChannelTag        = 'h'
 	EventTag          = 'e'

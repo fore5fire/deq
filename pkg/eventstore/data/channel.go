@@ -59,7 +59,7 @@ func (key ChannelKey) MarshalTo(buf []byte) error {
 	return nil
 }
 
-// Unmarshal updates the this key's values by decoding the provided buf
+// UnmarshalChannelKey updates the this key's values by decoding the provided buf
 func UnmarshalChannelKey(buf []byte, key *ChannelKey) error {
 	buf = buf[2:]
 	i := bytes.IndexByte(buf, Sep)
@@ -76,4 +76,22 @@ func UnmarshalChannelKey(buf []byte, key *ChannelKey) error {
 	buf = buf[j+1:]
 	key.ID = string(buf)
 	return nil
+}
+
+// ChannelPrefix creates a prefix for ChannelKeys of a given topic
+func ChannelPrefix(channel string) ([]byte, error) {
+
+	if strings.ContainsRune(channel, 0) {
+		return nil, errors.New("Channel cannot contain null character")
+	}
+
+	ret := make([]byte, len(channel)+2)
+	buf := ret
+
+	buf[0], buf[1] = ChannelTag, Sep
+	buf = buf[2:]
+	copy(buf, channel)
+	buf = buf[len(channel):]
+	// buf[0] = Sep
+	return ret, nil
 }

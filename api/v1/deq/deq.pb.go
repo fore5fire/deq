@@ -51,7 +51,7 @@ func (x EventState) String() string {
 	return proto.EnumName(EventState_name, int32(x))
 }
 func (EventState) EnumDescriptor() ([]byte, []int) {
-	return fileDescriptor_deq_126ca8444cb72efd, []int{0}
+	return fileDescriptor_deq_f2238ac186c6823a, []int{0}
 }
 
 type AckCode int32
@@ -89,7 +89,7 @@ func (x AckCode) String() string {
 	return proto.EnumName(AckCode_name, int32(x))
 }
 func (AckCode) EnumDescriptor() ([]byte, []int) {
-	return fileDescriptor_deq_126ca8444cb72efd, []int{1}
+	return fileDescriptor_deq_f2238ac186c6823a, []int{1}
 }
 
 type Event struct {
@@ -105,7 +105,7 @@ type Event struct {
 	// since the unix epoch.
 	// Output only.
 	CreateTime int64 `protobuf:"fixed64,4,opt,name=create_time,json=createTime,proto3" json:"create_time,omitempty"`
-	// The initial state of this event for all channels. If not QUEUED, the event
+	// The initial state of this event for existing channels. If not QUEUED, the event
 	// will be created but not sent to subscribers of topic.
 	DefaultState EventState `protobuf:"varint,5,opt,name=default_state,json=defaultState,proto3,enum=deq.EventState" json:"default_state,omitempty"`
 	// State of the event for the channel it is recieved on.
@@ -119,7 +119,7 @@ func (m *Event) Reset()         { *m = Event{} }
 func (m *Event) String() string { return proto.CompactTextString(m) }
 func (*Event) ProtoMessage()    {}
 func (*Event) Descriptor() ([]byte, []int) {
-	return fileDescriptor_deq_126ca8444cb72efd, []int{0}
+	return fileDescriptor_deq_f2238ac186c6823a, []int{0}
 }
 func (m *Event) XXX_Unmarshal(b []byte) error {
 	return m.Unmarshal(b)
@@ -203,7 +203,7 @@ func (m *PubRequest) Reset()         { *m = PubRequest{} }
 func (m *PubRequest) String() string { return proto.CompactTextString(m) }
 func (*PubRequest) ProtoMessage()    {}
 func (*PubRequest) Descriptor() ([]byte, []int) {
-	return fileDescriptor_deq_126ca8444cb72efd, []int{1}
+	return fileDescriptor_deq_f2238ac186c6823a, []int{1}
 }
 func (m *PubRequest) XXX_Unmarshal(b []byte) error {
 	return m.Unmarshal(b)
@@ -268,7 +268,7 @@ func (m *SubRequest) Reset()         { *m = SubRequest{} }
 func (m *SubRequest) String() string { return proto.CompactTextString(m) }
 func (*SubRequest) ProtoMessage()    {}
 func (*SubRequest) Descriptor() ([]byte, []int) {
-	return fileDescriptor_deq_126ca8444cb72efd, []int{2}
+	return fileDescriptor_deq_f2238ac186c6823a, []int{2}
 }
 func (m *SubRequest) XXX_Unmarshal(b []byte) error {
 	return m.Unmarshal(b)
@@ -342,7 +342,7 @@ func (m *AckRequest) Reset()         { *m = AckRequest{} }
 func (m *AckRequest) String() string { return proto.CompactTextString(m) }
 func (*AckRequest) ProtoMessage()    {}
 func (*AckRequest) Descriptor() ([]byte, []int) {
-	return fileDescriptor_deq_126ca8444cb72efd, []int{3}
+	return fileDescriptor_deq_f2238ac186c6823a, []int{3}
 }
 func (m *AckRequest) XXX_Unmarshal(b []byte) error {
 	return m.Unmarshal(b)
@@ -408,7 +408,7 @@ func (m *AckResponse) Reset()         { *m = AckResponse{} }
 func (m *AckResponse) String() string { return proto.CompactTextString(m) }
 func (*AckResponse) ProtoMessage()    {}
 func (*AckResponse) Descriptor() ([]byte, []int) {
-	return fileDescriptor_deq_126ca8444cb72efd, []int{4}
+	return fileDescriptor_deq_f2238ac186c6823a, []int{4}
 }
 func (m *AckResponse) XXX_Unmarshal(b []byte) error {
 	return m.Unmarshal(b)
@@ -452,7 +452,7 @@ func (m *GetRequest) Reset()         { *m = GetRequest{} }
 func (m *GetRequest) String() string { return proto.CompactTextString(m) }
 func (*GetRequest) ProtoMessage()    {}
 func (*GetRequest) Descriptor() ([]byte, []int) {
-	return fileDescriptor_deq_126ca8444cb72efd, []int{5}
+	return fileDescriptor_deq_f2238ac186c6823a, []int{5}
 }
 func (m *GetRequest) XXX_Unmarshal(b []byte) error {
 	return m.Unmarshal(b)
@@ -515,7 +515,7 @@ func (m *DelRequest) Reset()         { *m = DelRequest{} }
 func (m *DelRequest) String() string { return proto.CompactTextString(m) }
 func (*DelRequest) ProtoMessage()    {}
 func (*DelRequest) Descriptor() ([]byte, []int) {
-	return fileDescriptor_deq_126ca8444cb72efd, []int{6}
+	return fileDescriptor_deq_f2238ac186c6823a, []int{6}
 }
 func (m *DelRequest) XXX_Unmarshal(b []byte) error {
 	return m.Unmarshal(b)
@@ -567,7 +567,7 @@ func (m *Empty) Reset()         { *m = Empty{} }
 func (m *Empty) String() string { return proto.CompactTextString(m) }
 func (*Empty) ProtoMessage()    {}
 func (*Empty) Descriptor() ([]byte, []int) {
-	return fileDescriptor_deq_126ca8444cb72efd, []int{7}
+	return fileDescriptor_deq_f2238ac186c6823a, []int{7}
 }
 func (m *Empty) XXX_Unmarshal(b []byte) error {
 	return m.Unmarshal(b)
@@ -608,7 +608,7 @@ func (m *EventV0) Reset()         { *m = EventV0{} }
 func (m *EventV0) String() string { return proto.CompactTextString(m) }
 func (*EventV0) ProtoMessage()    {}
 func (*EventV0) Descriptor() ([]byte, []int) {
-	return fileDescriptor_deq_126ca8444cb72efd, []int{8}
+	return fileDescriptor_deq_f2238ac186c6823a, []int{8}
 }
 func (m *EventV0) XXX_Unmarshal(b []byte) error {
 	return m.Unmarshal(b)
@@ -669,7 +669,7 @@ func (m *Any) Reset()         { *m = Any{} }
 func (m *Any) String() string { return proto.CompactTextString(m) }
 func (*Any) ProtoMessage()    {}
 func (*Any) Descriptor() ([]byte, []int) {
-	return fileDescriptor_deq_126ca8444cb72efd, []int{9}
+	return fileDescriptor_deq_f2238ac186c6823a, []int{9}
 }
 func (m *Any) XXX_Unmarshal(b []byte) error {
 	return m.Unmarshal(b)
@@ -2790,9 +2790,9 @@ var (
 	ErrIntOverflowDeq   = fmt.Errorf("proto: integer overflow")
 )
 
-func init() { proto.RegisterFile("deq.proto", fileDescriptor_deq_126ca8444cb72efd) }
+func init() { proto.RegisterFile("deq.proto", fileDescriptor_deq_f2238ac186c6823a) }
 
-var fileDescriptor_deq_126ca8444cb72efd = []byte{
+var fileDescriptor_deq_f2238ac186c6823a = []byte{
 	// 690 bytes of a gzipped FileDescriptorProto
 	0x1f, 0x8b, 0x08, 0x00, 0x00, 0x00, 0x00, 0x00, 0x02, 0xff, 0x9c, 0x54, 0x4d, 0x4f, 0xdb, 0x4a,
 	0x14, 0x65, 0x62, 0x9c, 0xc0, 0xcd, 0x07, 0x66, 0x1e, 0xef, 0x11, 0x58, 0xe4, 0x45, 0x7e, 0xaf,

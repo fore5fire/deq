@@ -2,7 +2,6 @@ package eventstore
 
 import (
 	"context"
-	"fmt"
 	"log"
 	"sync"
 	"time"
@@ -119,22 +118,13 @@ func (c *Channel) SetEventState(id string, state deq.EventState) error {
 	txn := c.db.NewTransaction(true)
 	defer txn.Discard()
 
-	key, err := data.ChannelKey{
+	key := data.ChannelKey{
 		Topic:   c.topic,
 		Channel: c.name,
 		ID:      id,
-	}.Marshal()
-	if err != nil {
-		return fmt.Errorf("marshal key: %v", err)
-	}
-	payload, err := proto.Marshal(&data.ChannelPayload{
-		EventState: state,
-	})
-	if err != nil {
-		return fmt.Errorf("marshal payload: %v", err)
 	}
 
-	err = txn.Set(key, payload)
+	err := setEventState(txn, key, state)
 	if err != nil {
 		return err
 	}
@@ -292,7 +282,7 @@ func (s *sharedChannel) catchUp(cursor []byte) ([]byte, error) {
 		item := it.Item()
 		lastKey = item.KeyCopy(lastKey)
 
-		var state deq.EventState
+		state := deq.EventState_QUEUED
 		var key data.EventKey
 		err = data.UnmarshalTo(lastKey, &key)
 		if err != nil {
@@ -327,12 +317,12 @@ func (s *sharedChannel) catchUp(cursor []byte) ([]byte, error) {
 				log.Printf("get event %s channel status: %v", key.ID, err)
 				continue
 			}
-			state = channel.EventState
-
-			if state != deq.EventState_QUEUED {
+			if channel.EventState != deq.EventState_QUEUED {
 				// Not queued, don't send
 				continue
 			}
+
+			state = channel.EventState
 		}
 
 		val, err := item.Value()
@@ -344,15 +334,6 @@ func (s *sharedChannel) catchUp(cursor []byte) ([]byte, error) {
 		err = proto.Unmarshal(val, &e)
 		if err != nil {
 			log.Printf("unmarshal event: %v", err)
-			continue
-		}
-
-		if state == deq.EventState_UNSPECIFIED_STATE {
-			state = e.DefaultEventState
-		}
-
-		if state != deq.EventState_QUEUED {
-			// Not queued, don't send
 			continue
 		}
 
