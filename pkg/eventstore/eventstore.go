@@ -7,8 +7,8 @@ import (
 	"time"
 
 	"github.com/dgraph-io/badger"
-	"gitlab.com/katcheCode/deqd/api/v1/deq"
-	"gitlab.com/katcheCode/deqd/pkg/eventstore/data"
+	"gitlab.com/katcheCode/deq/api/v1/deq"
+	"gitlab.com/katcheCode/deq/pkg/eventstore/data"
 )
 
 // Store is an EventStore connected to a specific database

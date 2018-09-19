@@ -9,7 +9,7 @@ import (
 	"time"
 
 	"github.com/gogo/protobuf/proto"
-	"gitlab.com/katcheCode/deqd/api/v1/deq"
+	"gitlab.com/katcheCode/deq/api/v1/deq"
 )
 
 func TestAwaitChannelTimeout(t *testing.T) {

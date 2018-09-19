@@ -10,7 +10,7 @@ import (
 	"strconv"
 	"time"
 
-	"gitlab.com/katcheCode/deqd/api/v1/deq"
+	"gitlab.com/katcheCode/deq/api/v1/deq"
 	"google.golang.org/grpc"
 )
 

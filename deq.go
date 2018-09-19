@@ -9,7 +9,8 @@ import (
 	"log"
 
 	"github.com/gogo/protobuf/proto"
-	api "gitlab.com/katcheCode/deqd/api/v1/deq"
+	"gitlab.com/katcheCode/deq/ack"
+	api "gitlab.com/katcheCode/deq/api/v1/deq"
 	"google.golang.org/grpc"
 )
 
@@ -35,15 +36,15 @@ func NewSubscriber(conn *grpc.ClientConn, opts SubscriberOpts) *Subscriber {
 
 // Handler is a handler for DEQ events.
 type Handler interface {
-	HandleEvent(context.Context, Event) AckCode
+	HandleEvent(context.Context, Event) ack.Code
 	// NewMessage() Message
 }
 
 // HandlerFunc is the function type that can be used for registering HandlerFuncs
-type HandlerFunc func(context.Context, Event) AckCode
+type HandlerFunc func(context.Context, Event) ack.Code
 
 // HandleEvent implements the Handler interface
-func (f HandlerFunc) HandleEvent(ctx context.Context, e Event) AckCode {
+func (f HandlerFunc) HandleEvent(ctx context.Context, e Event) ack.Code {
 	return f(ctx, e)
 }
 

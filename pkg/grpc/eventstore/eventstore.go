@@ -5,8 +5,8 @@ import (
 	"log"
 	"time"
 
-	pb "gitlab.com/katcheCode/deqd/api/v1/deq"
-	"gitlab.com/katcheCode/deqd/pkg/eventstore"
+	pb "gitlab.com/katcheCode/deq/api/v1/deq"
+	"gitlab.com/katcheCode/deq/pkg/eventstore"
 	"google.golang.org/grpc/codes"
 	"google.golang.org/grpc/status"
 )

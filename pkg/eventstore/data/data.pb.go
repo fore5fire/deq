@@ -6,7 +6,7 @@ package data
 import proto "github.com/gogo/protobuf/proto"
 import fmt "fmt"
 import math "math"
-import deq "gitlab.com/katcheCode/deqd/api/v1/deq"
+import deq "gitlab.com/katcheCode/deq/api/v1/deq"
 
 import encoding_binary "encoding/binary"
 

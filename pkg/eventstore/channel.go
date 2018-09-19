@@ -9,8 +9,8 @@ import (
 
 	"github.com/dgraph-io/badger"
 	"github.com/gogo/protobuf/proto"
-	"gitlab.com/katcheCode/deqd/api/v1/deq"
-	"gitlab.com/katcheCode/deqd/pkg/eventstore/data"
+	"gitlab.com/katcheCode/deq/api/v1/deq"
+	"gitlab.com/katcheCode/deq/pkg/eventstore/data"
 )
 
 // Channel allows multiple listeners to synchronize processing of events

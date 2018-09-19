@@ -9,7 +9,7 @@ trap cleanup EXIT
 set -e
 
 echo building server
-GOOS=linux CGO_ENABLED=0 go build -o build/deqd gitlab.com/katcheCode/deqd/cmd/deqd
+GOOS=linux CGO_ENABLED=0 go build -o build/deqd gitlab.com/katcheCode/deq/cmd/deqd
 docker build --tag=deqd:local build
 
 echo starting server
@@ -22,5 +22,5 @@ LOGS_PID=$!
 disown
 
 echo running tests
-TEST_TARGET_URL=localhost:8080 DEQ_HOST=localhost:80 go test gitlab.com/katcheCode/deqd/cmd/deqd_tests -count 1 | sed -e 's/^/TEST: /;'
+TEST_TARGET_URL=localhost:8080 DEQ_HOST=localhost:80 go test gitlab.com/katcheCode/deq/cmd/deqd_tests -count 1 | sed -e 's/^/TEST: /;'
 ! docker rm -f deqd &> /dev/null

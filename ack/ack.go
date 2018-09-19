@@ -1,7 +1,7 @@
 package ack
 
 import (
-	api "gitlab.com/katcheCode/deqd/api/v1/deq"
+	api "gitlab.com/katcheCode/deq/api/v1/deq"
 )
 
 // Code is a code used when acknowledging an event

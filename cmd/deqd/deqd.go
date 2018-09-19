@@ -6,10 +6,10 @@ import (
 	"net"
 	"os"
 
-	pb "gitlab.com/katcheCode/deqd/api/v1/deq"
-	"gitlab.com/katcheCode/deqd/pkg/env"
-	"gitlab.com/katcheCode/deqd/pkg/eventstore"
-	eventserver "gitlab.com/katcheCode/deqd/pkg/grpc/eventstore"
+	pb "gitlab.com/katcheCode/deq/api/v1/deq"
+	"gitlab.com/katcheCode/deq/pkg/env"
+	"gitlab.com/katcheCode/deq/pkg/eventstore"
+	eventserver "gitlab.com/katcheCode/deq/pkg/grpc/eventstore"
 	"google.golang.org/grpc"
 )
 
