@@ -44,10 +44,6 @@ func (s *Store) UpgradeDB() error {
 			return fmt.Errorf("commit db upgrade: %v", err)
 		}
 
-		txn := s.db.NewTransaction(false)
-		defer txn.Discard()
-		printKeys(txn)
-
 		log.Printf("db upgraded to version %s", dbCodeVersion)
 	}
 

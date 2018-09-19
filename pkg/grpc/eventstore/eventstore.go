@@ -180,38 +180,55 @@ func (s *Server) Ack(ctx context.Context, in *pb.AckRequest) (*pb.AckResponse, e
 		return nil, status.Error(codes.InvalidArgument, "Missing required argument 'event_id'")
 	}
 
-	channel := s.store.Channel(in.Channel, in.Topic)
-
-	eventState := pb.EventState_UNSPECIFIED_STATE
+	var eventState pb.EventState
 	switch in.Code {
 	case pb.AckCode_DEQUEUE_OK:
 		eventState = pb.EventState_DEQUEUED_OK
 	case pb.AckCode_DEQUEUE_ERROR:
 		eventState = pb.EventState_DEQUEUED_ERROR
-	case pb.AckCode_REQUEUE_CONSTANT:
+	case pb.AckCode_REQUEUE_CONSTANT, pb.AckCode_REQUEUE_LINEAR, pb.AckCode_REQUEUE_EXPONENTIAL:
 		eventState = pb.EventState_QUEUED
-
-	case pb.AckCode_REQUEUE_LINEAR:
-		eventState = pb.EventState_QUEUED
-
-	case pb.AckCode_REQUEUE_EXPONENTIAL:
-		eventState = pb.EventState_QUEUED
-
 	case pb.AckCode_RESET_TIMEOUT:
 
+	case pb.AckCode_UNSPECIFIED:
+		return nil, status.Error(codes.InvalidArgument, "argument code is required")
 	default:
 		return nil, status.Error(codes.InvalidArgument, "Invalid value for argument 'code'")
 	}
 
-	if eventState != pb.EventState_UNSPECIFIED_STATE {
-		err := channel.SetEventState(in.Topic, eventState)
-		if err == eventstore.ErrNotFound {
-			return nil, status.Error(codes.NotFound, "")
-		}
-		if err != nil {
-			log.Printf("set event status: %v", err)
-			return nil, status.Error(codes.Internal, "")
-		}
+	channel := s.store.Channel(in.Channel, in.Topic)
+
+	e, err := channel.Get(in.EventId)
+	if err == eventstore.ErrNotFound {
+		return nil, status.Error(codes.NotFound, "")
+	}
+	if err != nil {
+		log.Printf("Delete: get event: %v", err)
+		return nil, status.Error(codes.Internal, "")
+	}
+
+	err = channel.SetEventState(in.Topic, eventState)
+	if err == eventstore.ErrNotFound {
+		return nil, status.Error(codes.NotFound, "")
+	}
+	if err != nil {
+		log.Printf("set event status: %v", err)
+		return nil, status.Error(codes.Internal, "")
+	}
+
+	if eventState == pb.EventState_QUEUED {
+		go func() {
+			switch in.Code {
+			// TODO: Implement dynamic requeue delay
+			case pb.AckCode_REQUEUE_CONSTANT:
+				time.Sleep(time.Second * 7)
+			case pb.AckCode_REQUEUE_LINEAR:
+				time.Sleep(time.Second * 7)
+			case pb.AckCode_REQUEUE_EXPONENTIAL:
+				time.Sleep(time.Second * 7)
+			}
+			channel.RequeueEvent(e)
+		}()
 	}
 
 	return &pb.AckResponse{}, nil
