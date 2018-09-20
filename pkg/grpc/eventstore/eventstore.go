@@ -92,10 +92,10 @@ func (s *Server) Sub(in *pb.SubRequest, stream pb.DEQ_SubServer) error {
 	defer close(requeue)
 
 	go func() {
-		timer := time.NewTimer(requeueDelay)
-		defer timer.Stop()
+		timer := time.NewTimer(0)
 
 		for e := range requeue {
+			timer.Reset(requeueDelay)
 			select {
 			case <-timer.C:
 				channel.RequeueEvent(e)
@@ -104,6 +104,8 @@ func (s *Server) Sub(in *pb.SubRequest, stream pb.DEQ_SubServer) error {
 			case <-cancelRequeue:
 			}
 		}
+
+		timer.Stop()
 	}()
 
 	idleTimer := time.NewTimer(time.Second / 2)
