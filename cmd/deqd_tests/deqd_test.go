@@ -39,7 +39,7 @@ func gatherTestModels(conn *grpc.ClientConn, duration time.Duration) (result []*
 
 	mut := sync.Mutex{}
 
-	err = sub.Sub(ctx, &model.TestModel{}, func(ctx context.Context, e deq.Event) ack.Code {
+	err = sub.Sub(ctx, &model.TestModel{}, func(e deq.Event) ack.Code {
 		mut.Lock()
 		defer mut.Unlock()
 		result = append(result, e.Msg.(*model.TestModel))
@@ -190,7 +190,7 @@ func TestRequeue(t *testing.T) {
 	})
 
 	var result *model.TestModel
-	err = consumer.Sub(ctx, &model.TestModel{}, func(ctx context.Context, e deq.Event) ack.Code {
+	err = consumer.Sub(ctx, &model.TestModel{}, func(e deq.Event) ack.Code {
 		result = e.Msg.(*model.TestModel)
 		return ack.RequeueConstant
 	})
@@ -203,7 +203,7 @@ func TestRequeue(t *testing.T) {
 
 	time.Sleep(time.Second * 8)
 
-	err = consumer.Sub(ctx, &model.TestModel{}, func(ctx context.Context, e deq.Event) ack.Code {
+	err = consumer.Sub(ctx, &model.TestModel{}, func(e deq.Event) ack.Code {
 		result = e.Msg.(*model.TestModel)
 		return ack.DequeueOK
 	})
@@ -218,7 +218,7 @@ func TestRequeue(t *testing.T) {
 
 	recieved := false
 
-	err = consumer.Sub(ctx, &model.TestModel{}, func(ctx context.Context, e deq.Event) ack.Code {
+	err = consumer.Sub(ctx, &model.TestModel{}, func(e deq.Event) ack.Code {
 		recieved = true
 		return ack.DequeueOK
 	})

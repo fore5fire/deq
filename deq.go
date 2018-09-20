@@ -37,16 +37,16 @@ func NewSubscriber(conn *grpc.ClientConn, opts SubscriberOpts) *Subscriber {
 
 // Handler is a handler for DEQ events.
 type Handler interface {
-	HandleEvent(context.Context, Event) ack.Code
+	HandleEvent(Event) ack.Code
 	// NewMessage() Message
 }
 
 // HandlerFunc is the function type that can be used for registering HandlerFuncs
-type HandlerFunc func(context.Context, Event) ack.Code
+type HandlerFunc func(Event) ack.Code
 
 // HandleEvent implements the Handler interface
-func (f HandlerFunc) HandleEvent(ctx context.Context, e Event) ack.Code {
-	return f(ctx, e)
+func (f HandlerFunc) HandleEvent(e Event) ack.Code {
+	return f(e)
 }
 
 // type handler struct {
@@ -96,7 +96,7 @@ func (sub *Subscriber) Sub(ctx context.Context, m Message, handler HandlerFunc) 
 				return
 			}
 
-			code := handler.HandleEvent(ctx, protoToEvent(event, msg, sub))
+			code := handler.HandleEvent(protoToEvent(event, msg, sub))
 
 			_, err = sub.client.Ack(ctx, &api.AckRequest{
 				Channel: sub.opts.Channel,
