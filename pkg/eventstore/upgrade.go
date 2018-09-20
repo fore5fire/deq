@@ -103,7 +103,7 @@ func upgradeV0EventsToV1(db *badger.DB) error {
 					Payload: event.Payload.GetValue(),
 					// We didn't keep track of the state before, so let's assume they're all
 					// dequeued to prevent a mass send-out
-					DefaultState: deq.EventState_DEQUEUED_OK,
+					DefaultState: deq.EventState_QUEUED,
 					CreateTime:   deq.DeprecatedTimeFromID(event.Id).UnixNano(),
 				}
 
