@@ -11,7 +11,7 @@ import (
 	"time"
 
 	"github.com/gogo/protobuf/proto"
-	deq "gitlab.com/katcheCode/deq"
+	"gitlab.com/katcheCode/deq"
 	"gitlab.com/katcheCode/deq/ack"
 	"gitlab.com/katcheCode/deq/pkg/test/model"
 	"google.golang.org/grpc"
@@ -74,12 +74,18 @@ func TestCreateAndReceive(t *testing.T) {
 		},
 	}
 
-	err := p.Pub(ctx, deq.Event{
+	expectedE := deq.Event{
 		ID:  time.Now().String(),
 		Msg: expected[0],
-	})
+	}
+
+	e, err := p.Pub(ctx, expectedE)
 	if err != nil {
 		t.Fatalf("Error Creating Event: %v", err)
+	}
+	expectedE.CreateTime = e.CreateTime
+	if !reflect.DeepEqual(expectedE, e) {
+		t.Errorf("expected %v, got %v", expectedE, e)
 	}
 
 	// TODO: fix test if server time is out of sync with local time... or just move to unit test
@@ -109,7 +115,7 @@ func TestMassPublish(t *testing.T) {
 	now := time.Now().UnixNano()
 
 	for i := 0; i < 500; i++ {
-		err := p.Pub(ctx, deq.Event{
+		_, err := p.Pub(ctx, deq.Event{
 			ID: fmt.Sprintf("%d-%.3d", now, i),
 			Msg: &model.TestModel{
 				Msg: fmt.Sprintf("Test Message - %.3d", i),
@@ -126,7 +132,7 @@ func TestMassPublish(t *testing.T) {
 	}
 
 	for i := 500; i < 1000; i++ {
-		err = p.Pub(ctx, deq.Event{
+		_, err = p.Pub(ctx, deq.Event{
 			ID: fmt.Sprintf("%d-%d", now, i),
 			Msg: &model.TestModel{
 				Msg: fmt.Sprintf("Test Message - %.3d", i),
@@ -170,7 +176,7 @@ func TestRequeue(t *testing.T) {
 		Msg: "Hello world!",
 	}
 
-	err := p.Pub(ctx, deq.Event{
+	_, err := p.Pub(ctx, deq.Event{
 		ID:  "requeue-" + time.Now().String(),
 		Msg: expected,
 	})

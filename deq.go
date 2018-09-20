@@ -5,6 +5,7 @@ import (
 	"errors"
 	"fmt"
 	"reflect"
+	"time"
 
 	"log"
 
@@ -78,6 +79,7 @@ func (sub *Subscriber) Sub(ctx context.Context, m Message, handler HandlerFunc) 
 		}
 
 		go func() {
+
 			msg := reflect.New(msgType.Elem()).Interface().(Message)
 			err := proto.Unmarshal(event.Payload, msg)
 			if err != nil {
@@ -94,12 +96,7 @@ func (sub *Subscriber) Sub(ctx context.Context, m Message, handler HandlerFunc) 
 				return
 			}
 
-			code := handler.HandleEvent(ctx, Event{
-				ID:  event.Id,
-				Msg: msg,
-				// State:
-				sub: sub,
-			})
+			code := handler.HandleEvent(ctx, protoToEvent(event, msg, sub))
 
 			_, err = sub.client.Ack(ctx, &api.AckRequest{
 				Channel: sub.opts.Channel,
@@ -135,38 +132,77 @@ func NewPublisher(conn *grpc.ClientConn, opts PublisherOpts) *Publisher {
 }
 
 // Pub publishes a new event.
-func (p *Publisher) Pub(ctx context.Context, e Event) error {
+func (p *Publisher) Pub(ctx context.Context, e Event) (Event, error) {
 
 	if e.ID == "" {
-		return fmt.Errorf("e.ID is required")
+		return Event{}, fmt.Errorf("e.ID is required")
 	}
 
 	payload, err := proto.Marshal(e.Msg)
 	if err != nil {
-		return fmt.Errorf("marshal payload: %v", err)
+		return Event{}, fmt.Errorf("marshal payload: %v", err)
 	}
 
-	_, err = p.client.Pub(ctx, &api.PubRequest{
+	event, err := p.client.Pub(ctx, &api.PubRequest{
 		Event: &api.Event{
-			Id:      e.ID,
-			Topic:   proto.MessageName(e.Msg),
-			Payload: payload,
+			Id:         e.ID,
+			Topic:      proto.MessageName(e.Msg),
+			CreateTime: e.CreateTime.UnixNano(),
+			Payload:    payload,
 		},
 		AwaitChannel: p.opts.AwaitChannel,
 	})
 	if err != nil {
-		return err
+		return Event{}, err
 	}
 
-	return nil
+	return protoToEvent(event, e.Msg, nil), nil
+}
+
+func protoToEvent(event *api.Event, msg Message, sub *Subscriber) Event {
+
+	var state EventState
+	switch event.State {
+	case api.EventState_QUEUED:
+		state = EventStateQueued
+	case api.EventState_DEQUEUED_OK:
+		state = EventStateDequeuedOK
+	case api.EventState_DEQUEUED_ERROR:
+	default:
+		state = EventStateUnspecified
+	}
+
+	return Event{
+		ID:         event.Id,
+		Msg:        msg,
+		CreateTime: time.Unix(0, event.CreateTime),
+		State:      state,
+		sub:        sub,
+	}
 }
 
 // Event is a deserialized event that is sent to or recieved from deq.
 type Event struct {
-	ID  string
-	Msg Message
-	sub *Subscriber
+	ID         string
+	Msg        Message
+	CreateTime time.Time
+	State      EventState
+	sub        *Subscriber
 }
+
+// EventState is the queue state of an event
+type EventState string
+
+const (
+	// EventStateUnspecified indicates the event state is unspecified.
+	EventStateUnspecified EventState = ""
+	// EventStateQueued indicates the event is queued on this channel.
+	EventStateQueued = "Queued"
+	// EventStateDequeuedOK indicates the event was processed with no error on this channel.
+	EventStateDequeuedOK = "DequeuedOK"
+	// EventStateDequeuedError indicates the event was processed with an error and should not be retried.
+	EventStateDequeuedError = "DequeuedError"
+)
 
 // ResetTimeout resets the requeue timeout of this event
 func (e *Event) ResetTimeout(ctx context.Context) error {
