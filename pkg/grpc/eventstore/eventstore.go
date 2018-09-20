@@ -183,20 +183,20 @@ func (s *Server) Ack(ctx context.Context, in *pb.AckRequest) (*pb.AckResponse, e
 		return nil, status.Error(codes.Internal, "")
 	}
 
-	if eventState == pb.EventState_QUEUED {
-		go func() {
-			switch in.Code {
-			// TODO: Implement dynamic requeue delay
-			case pb.AckCode_REQUEUE_CONSTANT:
-				time.Sleep(time.Second * 7)
-			case pb.AckCode_REQUEUE_LINEAR:
-				time.Sleep(time.Second * 7)
-			case pb.AckCode_REQUEUE_EXPONENTIAL:
-				time.Sleep(time.Second * 7)
-			}
-			channel.RequeueEvent(e)
-		}()
-	}
+	// if eventState == pb.EventState_QUEUED {
+	// 	go func() {
+	// 		switch in.Code {
+	// 		// TODO: Implement dynamic requeue delay
+	// 		case pb.AckCode_REQUEUE_CONSTANT:
+	// 			time.Sleep(time.Second * 7)
+	// 		case pb.AckCode_REQUEUE_LINEAR:
+	// 			time.Sleep(time.Second * 7)
+	// 		case pb.AckCode_REQUEUE_EXPONENTIAL:
+	// 			time.Sleep(time.Second * 7)
+	// 		}
+	// 		channel.RequeueEvent(e)
+	// 	}()
+	// }
 
 	return &pb.AckResponse{}, nil
 }
