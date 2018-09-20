@@ -121,3 +121,44 @@ func TestWriteEvent(t *testing.T) {
 		t.Error("commit: ", err)
 	}
 }
+
+func BenchmarkWriteEvent(b *testing.B) {
+
+	dir, err := ioutil.TempDir("", "test-write-event")
+	if err != nil {
+		b.Fatalf("create temp dir: %v", err)
+	}
+	defer os.RemoveAll(dir)
+
+	opts := badger.DefaultOptions
+	opts.Dir = dir
+	opts.ValueDir = dir
+	db, err := badger.Open(opts)
+	defer db.Close()
+	if err != nil {
+		b.Fatal("open db: ", err)
+	}
+
+	txn := db.NewTransaction(true)
+	defer txn.Discard()
+
+	expected := &deq.Event{
+		Topic:        "topic",
+		Id:           "event1",
+		CreateTime:   time.Now().UnixNano(),
+		Payload:      []byte{1, 2, 3},
+		DefaultState: deq.EventState_DEQUEUED_OK,
+		// Should be ignored.
+		State: deq.EventState_DEQUEUED_ERROR,
+	}
+
+	err = writeEvent(txn, expected)
+	if err != nil {
+		b.Fatal("write event: ", err)
+	}
+
+	err = txn.Commit(nil)
+	if err != nil {
+		b.Error("commit: ", err)
+	}
+}

@@ -149,12 +149,12 @@ func (s *Store) listenOut() {
 	for e := range s.out {
 		s.sharedChannelsMu.Lock()
 		for _, shared := range s.sharedChannels {
-			// TODO: organize sharedChannels so we can skip over other topics completely
 			if shared.topic == e.Topic {
 				select {
 				case shared.in <- e:
 					// TODO: Move db write code here
 				default: // Skip if full, listeners can catch up from disk later
+					shared.SetMissed(true)
 				}
 			}
 		}

@@ -86,40 +86,14 @@ func (s *Server) Sub(in *pb.SubRequest, stream pb.DEQ_SubServer) error {
 	eventc := channel.Follow()
 	defer channel.Close()
 
-	requeue := make(chan *pb.Event, 1)
-	cancelRequeue := make(chan struct{}, 1)
-	requeueNow := make(chan struct{}, 1)
-	defer close(requeue)
-
-	go func() {
-		timer := time.NewTimer(0)
-
-		for e := range requeue {
-			timer.Reset(requeueDelay)
-			select {
-			case <-timer.C:
-				channel.RequeueEvent(e)
-			case <-requeueNow:
-				channel.RequeueEvent(e)
-			case <-cancelRequeue:
-			}
-		}
-
-		timer.Stop()
-	}()
-
-	idleTimer := time.NewTimer(time.Second / 2)
-	idleTimer.Stop()
+	idleTimer := time.NewTimer(time.Hour)
 	defer idleTimer.Stop()
 
-	clientDisconnectTimer := time.NewTimer(time.Second * 5)
-	defer clientDisconnectTimer.Stop()
-
 	for {
-
-		if !in.Follow {
-			idleTimer.Reset(time.Second / 2)
-		}
+		// if !idleTimer.Stop() {
+		// 	<-idleTimer.C
+		// }
+		idleTimer.Reset(time.Second / 3)
 
 		select {
 		case e, ok := <-eventc:
@@ -135,28 +109,19 @@ func (s *Server) Sub(in *pb.SubRequest, stream pb.DEQ_SubServer) error {
 				return nil
 			}
 
-			requeue <- e
 			err := stream.Send(e)
-			if status.Code(err) == codes.Canceled || status.Code(err) == codes.DeadlineExceeded {
-				requeueNow <- struct{}{}
-				return nil
-			}
 			if err != nil {
-				requeueNow <- struct{}{}
+				channel.RequeueEvent(e)
 				log.Printf("send event: %v", err)
 				return status.Error(codes.Internal, "")
 			}
-			// TODO: could this ever cancel the wrong requeue?
-			cancelRequeue <- struct{}{}
 
-			// Disconnect on idle if not following
+			// Poll for disconect when idle
 		case <-idleTimer.C:
-			if channel.Idle() {
+			if !in.Follow && channel.Idle() {
 				return nil
 			}
-
 			// Poll to check if stream closed so we can free up memory
-		case <-clientDisconnectTimer.C:
 			err := stream.Context().Err()
 			if err == context.Canceled || err == context.DeadlineExceeded {
 				return nil

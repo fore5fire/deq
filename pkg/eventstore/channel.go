@@ -33,6 +33,8 @@ type sharedChannel struct {
 	sync.Mutex
 	name            string
 	topic           string
+	missedMutex     sync.Mutex
+	missed          bool
 	in              chan *deq.Event
 	out             chan *deq.Event
 	done            chan error
@@ -88,6 +90,32 @@ func (s *Store) Channel(name, topic string) *Channel {
 func (c *Channel) Follow() chan *deq.Event {
 	return c.shared.out
 }
+
+// func (c *sharedChannel) enqueue(*deq.Event) {
+// 	requeue := make(chan *pb.Event, 20)
+// 	requeueNow := make(chan struct{}, 1)
+// 	defer close(requeue)
+//
+// 	go func() {
+// 		timer := time.NewTimer(time.Hour)
+//
+// 		for e := range requeue {
+// 			if !timer.Stop() {
+// 				<-timer.C
+// 			}
+// 			timer.Reset(requeueDelay)
+// 			select {
+// 			case <-timer.C:
+// 				if channel.Get(e.Id)
+// 				channel.RequeueEvent(e)
+// 			case <-requeueNow:
+// 				channel.RequeueEvent(e)
+// 			}
+// 		}
+//
+// 		timer.Stop()
+// 	}()
+// }
 
 // Idle returns the channel's current idle state.
 func (c *Channel) Idle() bool {
@@ -199,6 +227,18 @@ func (s *sharedChannel) Idle() bool {
 	return s.idle
 }
 
+func (s *sharedChannel) Missed() bool {
+	s.missedMutex.Lock()
+	defer s.missedMutex.Unlock()
+	return s.missed
+}
+
+func (s *sharedChannel) SetMissed(m bool) {
+	s.missedMutex.Lock()
+	s.missed = m
+	s.missedMutex.Unlock()
+}
+
 func (s *sharedChannel) start() {
 
 	cursor, err := s.getCursor(s.topic)
@@ -207,34 +247,50 @@ func (s *sharedChannel) start() {
 		return
 	}
 
-	timer := time.NewTimer(0)
-	timer.Stop()
+	timer := time.NewTimer(time.Hour)
+	if !timer.Stop() {
+		<-timer.C
+	}
 	defer timer.Stop()
 
 	for {
+		// Let's drain our events so have room for some that might come in while we catch up.
+		// We'll read these off the disk, so it's ok to discard them
+		// s.Lock()
+		for i := len(s.in); i > 0; i-- {
+			<-s.in
+		}
+		// s.Unlock()
+
+		s.SetMissed(false)
+
 		cursor, err = s.catchUp(cursor)
 		if err != nil {
 			s.broadcastErr(err)
 		}
 
-		// As long as s.in hasn't filled up...
-		for len(s.in) < cap(s.in) {
+		// As long as we're up to date...
+		for !s.Missed() {
 			// if we're already idle, we don't want idle getting set over and over.
 			// by leaving the timer expired, it won't trigger again.
-			if !s.Idle() {
+			// if !s.Idle() && len(s.in) == 0 {
+			if len(s.in) == 0 {
 				// Only show that we're idle if it lasts for more than a short time
 				// TODO: we could get this instead by having the store directly track if
 				// it's idle or not. then the channel would be idle only if it's not
 				// reading from disk and the store is idle.
-				timer.Reset(time.Second / 32)
+				// if !timer.Stop() {
+				// 	<-timer.C
+				// }
+				// timer.Reset(time.Second / 32)
+				s.idleMutex.Lock()
+				s.idle = true
+				s.idleMutex.Unlock()
 			}
 
 			select {
 			// The timer expired, we're idle
-			case <-timer.C:
-				s.idleMutex.Lock()
-				s.idle = true
-				s.idleMutex.Unlock()
+			// case <-timer.C:
 			// We've got a new event, lets publish it
 			case e := <-s.in:
 				s.idleMutex.Lock()
@@ -250,13 +306,7 @@ func (s *sharedChannel) start() {
 		}
 
 		// We might have missed an event, lets go back to reading from disk.
-		// First let's drain some events so we can tell if we've missed any more.
-		// We'll read these off the disk, so it's ok to discard them
-		s.Lock()
-		for len(s.in) > 0 {
-			<-s.in
-		}
-		s.Unlock()
+		// s.Unlock()
 	}
 }
 
@@ -338,11 +388,12 @@ func (s *sharedChannel) catchUp(cursor []byte) ([]byte, error) {
 		}
 
 		s.out <- &deq.Event{
-			Id:         key.ID,
-			Topic:      key.Topic,
-			CreateTime: key.CreateTime.UnixNano(),
-			Payload:    e.Payload,
-			State:      state,
+			Id:           key.ID,
+			Topic:        key.Topic,
+			CreateTime:   key.CreateTime.UnixNano(),
+			Payload:      e.Payload,
+			State:        state,
+			DefaultState: e.DefaultEventState,
 		}
 	}
 
