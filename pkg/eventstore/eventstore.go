@@ -96,6 +96,14 @@ func (s *Store) Pub(e deq.Event) error {
 	return nil
 }
 
+// // Get returns the event for an event ID, or ErrNotFound if none is found
+// func (s *Store) Get(topic, eventID, channel string) (*deq.Event, error) {
+// 	txn := s.db.NewTransaction(false)
+// 	defer txn.Discard()
+//
+// 	return getEvent(txn, topic, eventID, channel)
+// }
+
 // Del deletes an event
 func (s *Store) Del(topic, id string) error {
 

@@ -1,6 +1,7 @@
 package eventstore
 
 import (
+	"bytes"
 	"fmt"
 	"log"
 	"time"
@@ -131,7 +132,14 @@ func writeEvent(txn *badger.Txn, e *deq.Event) error {
 
 	_, err = txn.Get(key)
 	if err == nil {
-		return ErrAlreadyExists
+		existing, err := getEvent(txn, e.Topic, e.Id, "")
+		if err != nil {
+			return fmt.Errorf("get existing event: %v", err)
+		}
+		if !bytes.Equal(existing.Payload, e.Payload) {
+			return ErrAlreadyExists
+		}
+		return nil
 	}
 	if err != badger.ErrKeyNotFound {
 		return fmt.Errorf("check event doesn't exist: %v", err)

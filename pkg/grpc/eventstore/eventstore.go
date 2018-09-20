@@ -54,9 +54,6 @@ func (s *Server) Pub(ctx context.Context, in *pb.PubRequest) (*pb.Event, error) 
 	}
 
 	err := s.store.Pub(*in.Event)
-	if err == eventstore.ErrAlreadyExists {
-		return nil, nil
-	}
 	if err != nil {
 		log.Printf("create event: %v", err)
 		return nil, status.Error(codes.Internal, "")

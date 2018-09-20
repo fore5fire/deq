@@ -106,6 +106,55 @@ func TestCreateAndReceive(t *testing.T) {
 	}
 }
 
+func TestPubDuplicate(t *testing.T) {
+
+	// events, err := gatherTestModels(c, time.Second)
+	// if err == nil && len(events) > 0 {
+	// 	t.Fatalf("Received event when none was created: %v\n", events)
+	// }
+	// if err != nil {
+	// 	t.Fatalf("Error streaming events: %v", err)
+	// }
+
+	ctx, cancel := context.WithTimeout(context.Background(), time.Second*10)
+	defer cancel()
+
+	// beforeTime := time.Now()
+
+	p := deq.NewPublisher(conn, deq.PublisherOpts{})
+	expected := []*model.TestModel{
+		&model.TestModel{
+			Msg: "Hello world!",
+		},
+	}
+
+	expectedE := deq.Event{
+		ID:  time.Now().String(),
+		Msg: expected[0],
+	}
+
+	e, err := p.Pub(ctx, expectedE)
+	if err != nil {
+		t.Fatalf("Error Creating Event: %v", err)
+	}
+	e, err = p.Pub(ctx, expectedE)
+	if err != nil {
+		t.Fatalf("Error Creating Event: %v", err)
+	}
+	expectedE.CreateTime = e.CreateTime
+	if !reflect.DeepEqual(expectedE, e) {
+		t.Errorf("expected %v, got %v", expectedE, e)
+	}
+
+	expectedE.Msg = &model.TestModel{
+		Msg: "Hello world #2!",
+	}
+	e, err = p.Pub(ctx, expectedE)
+	if err == nil {
+		t.Fatalf("allowed duplicate keys with different payloads")
+	}
+}
+
 func TestMassPublish(t *testing.T) {
 
 	ctx, cancel := context.WithTimeout(context.Background(), time.Second*10)
