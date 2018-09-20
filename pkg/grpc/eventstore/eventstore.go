@@ -174,7 +174,7 @@ func (s *Server) Ack(ctx context.Context, in *pb.AckRequest) (*pb.AckResponse, e
 		return nil, status.Error(codes.Internal, "")
 	}
 
-	err = channel.SetEventState(in.Topic, eventState)
+	err = channel.SetEventState(in.EventId, eventState)
 	if err == eventstore.ErrNotFound {
 		return nil, status.Error(codes.NotFound, "")
 	}

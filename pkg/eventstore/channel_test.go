@@ -63,6 +63,7 @@ func TestAwaitChannel(t *testing.T) {
 	if err != nil {
 		t.Fatalf("open db: %v", err)
 	}
+	defer db.Close()
 
 	err = db.Pub(deq.Event{
 		Id:         "event1",
@@ -100,6 +101,7 @@ func TestGet(t *testing.T) {
 	if err != nil {
 		t.Fatalf("open db: %v", err)
 	}
+	defer db.Close()
 
 	expected := &deq.Event{
 		Id:         "event1",
@@ -136,5 +138,50 @@ func TestGet(t *testing.T) {
 	}
 	if !proto.Equal(e, expected) {
 		t.Errorf("get after set state: expected: %v, got %v", expected, e)
+	}
+}
+
+func TestDequeue(t *testing.T) {
+	dir, err := ioutil.TempDir("", "")
+	if err != nil {
+		t.Fatalf("create temp dir: %v", err)
+	}
+	defer os.RemoveAll(dir)
+
+	db, err := Open(Options{Dir: dir})
+	if err != nil {
+		t.Fatalf("open db: %v", err)
+	}
+
+	expected := &deq.Event{
+		Id:         "event1",
+		Topic:      "topic",
+		CreateTime: time.Now().UnixNano(),
+		State:      deq.EventState_QUEUED,
+	}
+
+	err = db.Pub(*expected)
+	if err != nil {
+		t.Fatalf("pub: %v", err)
+	}
+
+	channel := db.Channel("channel", expected.Topic)
+
+	err = channel.SetEventState(expected.Id, deq.EventState_DEQUEUED_ERROR)
+	if err != nil {
+		t.Fatalf("set event state: %v", err)
+	}
+
+	db.Close()
+
+	db, err = Open(Options{Dir: dir})
+	if err != nil {
+		t.Fatalf("open db second time: %v", err)
+	}
+
+	select {
+	case e := <-db.Channel("channel", expected.Topic).Follow():
+		t.Fatalf("recieved dequeued event: %v", e)
+	case <-time.After(time.Second / 8):
 	}
 }
