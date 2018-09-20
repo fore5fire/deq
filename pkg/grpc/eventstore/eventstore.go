@@ -165,7 +165,7 @@ func (s *Server) Ack(ctx context.Context, in *pb.AckRequest) (*pb.AckResponse, e
 
 	channel := s.store.Channel(in.Channel, in.Topic)
 
-	e, err := channel.Get(in.EventId)
+	_, err := channel.Get(in.EventId)
 	if err == eventstore.ErrNotFound {
 		return nil, status.Error(codes.NotFound, "")
 	}
