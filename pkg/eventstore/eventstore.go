@@ -97,6 +97,18 @@ func (s *Store) Pub(e deq.Event) error {
 	}
 
 	err = txn.Commit(nil)
+	if err == badger.ErrConflict {
+		txn := s.db.NewTransaction(false)
+		defer txn.Discard()
+		existing, err := getEvent(txn, e.Topic, e.Id, "")
+		if err != nil {
+			return fmt.Errorf("get conflicting event: %v", err)
+		}
+		if !bytes.Equal(existing.Payload, e.Payload) {
+			return ErrAlreadyExists
+		}
+		return nil
+	}
 	if err != nil {
 		return err
 	}
