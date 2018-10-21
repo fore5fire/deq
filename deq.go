@@ -91,7 +91,7 @@ func (sub *Subscriber) Sub(ctx context.Context, m Message, handler HandlerFunc) 
 				})
 				if err != nil {
 					// TODO: how to expose error?
-					log.Printf("deq: unmarshal message failed: ack: %v", err)
+					log.Printf("deq: unmarshal message for event %s failed: ack: %v", event.Id, err)
 				}
 				return
 			}
@@ -106,8 +106,7 @@ func (sub *Subscriber) Sub(ctx context.Context, m Message, handler HandlerFunc) 
 			})
 			if err != nil {
 				// TODO: How to expose error?
-				log.Println(event)
-				log.Printf("deq: event handled: ack: %v", err)
+				log.Printf("deq: event %s handled: ack: %v", event.Id, err)
 				return
 			}
 		}()
