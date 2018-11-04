@@ -29,6 +29,9 @@ message Event {
   // State of the event for the channel it is recieved on.
   // Output only.
   EventState state = 6;
+  // Number of attempts to send the event on the channel it is recieved on.
+  // Output only.
+  int32 requeue_count = 7;
 }
 
 enum EventState {
@@ -41,7 +44,7 @@ enum EventState {
 message PubRequest {
   // Required.
   Event event = 1;
-  // If set, the request will not complete until the published event has been dequeued by this channel
+  // If set, the request will not complete until the published event has been dequeued by this channel.
   string await_channel = 2;
 }
 
@@ -54,11 +57,13 @@ message SubRequest {
   // string min_id = 3;
   // // Events with id lexiographically greater than max_id will not be sent.
   // string max_id = 4;
-  // If true, the request will not complete when the channel is idle.
+  // Deprecated. If true, equivelant to idle_timout_milliseconds = 1000.
   bool follow = 5;
-  // Number of milliseconds to wait before requeuing the event if it
-  // is not dequeued.
-  int32 requeue_delay_miliseconds = 6;
+  // If positive, the request will not complete until the channel is idle for the specified number of milliseconds.
+  int32 idle_timeout_milliseconds = 7;
+  // Number of milliseconds to wait before requeuing the event if it is not dequeued.
+  // Defaults to 8000.
+  int32 requeue_delay_milliseconds = 6;
 }
 
 message AckRequest {

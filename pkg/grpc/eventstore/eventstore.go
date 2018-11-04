@@ -3,6 +3,7 @@ package eventstore
 import (
 	"context"
 	"log"
+	"math"
 	"time"
 
 	pb "gitlab.com/katcheCode/deq/api/v1/deq"
@@ -39,18 +40,11 @@ func (s *Server) Pub(ctx context.Context, in *pb.PubRequest) (*pb.Event, error) 
 
 	in.Event.CreateTime = time.Now().UnixNano()
 
+	channel := s.store.Channel(in.AwaitChannel, in.Event.Topic)
+
 	var await chan pb.EventState
 	if in.AwaitChannel != "" {
-		await = make(chan pb.EventState)
-		go func() {
-			state, err := s.store.Channel(in.AwaitChannel, in.Event.Topic).AwaitDequeue(ctx, in.Event.Id)
-			if err != nil {
-				log.Printf("Pub %s: await channel %s: %v", in.Event.Id, in.AwaitChannel, err)
-				close(await)
-				return
-			}
-			await <- state
-		}()
+		await = channel.AwaitEventStateChange(ctx, in.Event.Id)
 	}
 
 	err := s.store.Pub(*in.Event)
@@ -65,6 +59,7 @@ func (s *Server) Pub(ctx context.Context, in *pb.PubRequest) (*pb.Event, error) 
 	if await != nil {
 		state, ok := <-await
 		if !ok {
+			log.Printf("await event dequeue: %v", channel.Err())
 			return nil, status.Error(codes.Internal, "")
 		}
 		in.Event.State = state
@@ -80,59 +75,86 @@ func (s *Server) Sub(in *pb.SubRequest, stream pb.DEQ_SubServer) error {
 		return status.Error(codes.InvalidArgument, "Missing required argument 'channel'")
 	}
 
-	requeueDelay := time.Duration(in.GetRequeueDelayMiliseconds()) * time.Millisecond
-	if requeueDelay == 0 {
-		requeueDelay = 8000 * time.Millisecond
+	baseRequeueDelay := time.Duration(in.RequeueDelayMilliseconds) * time.Millisecond
+	if baseRequeueDelay == 0 {
+		baseRequeueDelay = 8 * time.Second
+	}
+	idleTimeout := time.Duration(in.IdleTimeoutMilliseconds) * time.Millisecond
+	if idleTimeout == 0 && in.Follow {
+		idleTimeout = time.Second
 	}
 
 	channel := s.store.Channel(in.Channel, in.Topic)
-	eventc := channel.Follow()
 	defer channel.Close()
+
+	// No buffer here - we don't want to pull of the next event until we're at least sending the previous
+	events := make(chan pb.Event)
+	ready := make(chan struct{})
+	defer close(ready)
+	var nextErr error
+	go func() {
+		for range ready {
+			e, err := channel.Next(stream.Context())
+			if err != nil {
+				nextErr = err
+				close(events)
+				return
+			}
+			events <- e
+		}
+	}()
 
 	idleTimer := time.NewTimer(time.Hour)
 	defer idleTimer.Stop()
 
 	for {
-		// if !idleTimer.Stop() {
-		// 	<-idleTimer.C
-		// }
-		idleTimer.Reset(time.Second / 3)
-
+		if !idleTimer.Stop() {
+			<-idleTimer.C
+		}
+		if idleTimeout > 0 {
+			idleTimer.Reset(idleTimeout)
+		}
+		ready <- struct{}{}
 		select {
-		case e, ok := <-eventc:
+		case e, ok := <-events:
 			if !ok {
-				// Event stream closed, shutting down...
-				err := channel.Err()
-				if err != nil {
-					log.Printf("read from channel: %v", err)
+				if nextErr != nil {
+					log.Printf("read from channel: %v", nextErr)
 					return status.Error(codes.Internal, "")
 				}
-				// Upstream closed, shut down
+				// Event stream closed, shutting down...
 				// TODO: expose running streams metric
 				return nil
 			}
 
-			err := stream.Send(e)
+			if baseRequeueDelay > 0 {
+				err := channel.RequeueEvent(e, time.Duration(math.Pow(2, float64(e.RequeueCount)))*baseRequeueDelay)
+				if err != nil {
+					log.Printf("send event: requeue: %v", err)
+					return status.Error(codes.Internal, "")
+				}
+			}
+
+			err := stream.Send(&e)
 			if err != nil {
-				channel.RequeueEvent(e)
+				// channel.RequeueEvent(e, 0)
 				log.Printf("send event: %v", err)
 				return status.Error(codes.Internal, "")
 			}
-
 			// Poll for disconect when idle
 		case <-idleTimer.C:
-			if !in.Follow && channel.Idle() {
+			if channel.Idle() {
 				return nil
 			}
-			// Poll to check if stream closed so we can free up memory
-			err := stream.Context().Err()
-			if err == context.Canceled || err == context.DeadlineExceeded {
-				return nil
-			}
-			if err != nil {
-				log.Printf("Stream failed: %v", err)
-				return nil
-			}
+			// // Poll to check if stream closed so we can free up memory
+			// err := stream.Context().Err()
+			// if err == context.Canceled || err == context.DeadlineExceeded {
+			// 	return nil
+			// }
+			// if err != nil {
+			// 	log.Printf("Stream failed: %v", err)
+			// 	return nil
+			// }
 		}
 	}
 }
@@ -168,7 +190,7 @@ func (s *Server) Ack(ctx context.Context, in *pb.AckRequest) (*pb.AckResponse, e
 
 	channel := s.store.Channel(in.Channel, in.Topic)
 
-	_, err := channel.Get(in.EventId)
+	e, err := channel.Get(in.EventId)
 	if err == eventstore.ErrNotFound {
 		return nil, status.Error(codes.NotFound, "")
 	}
@@ -182,28 +204,34 @@ func (s *Server) Ack(ctx context.Context, in *pb.AckRequest) (*pb.AckResponse, e
 		return nil, status.Error(codes.NotFound, "")
 	}
 	if err != nil {
-		log.Printf("set event status: %v", err)
+		log.Printf("set event %s status: %v", in.EventId, err)
 		return nil, status.Error(codes.Internal, "")
 	}
 
-	// if eventState == pb.EventState_QUEUED {
-	// 	go func() {
-	// 		switch in.Code {
-	// 		// TODO: Implement dynamic requeue delay
-	// 		case pb.AckCode_REQUEUE_CONSTANT:
-	// 			time.Sleep(time.Second * 7)
-	// 		case pb.AckCode_REQUEUE_LINEAR:
-	// 			time.Sleep(time.Second * 7)
-	// 		case pb.AckCode_REQUEUE_EXPONENTIAL:
-	// 			time.Sleep(time.Second * 7)
-	// 		}
-	// 		channel.RequeueEvent(e)
-	// 	}()
-	// }
+	if eventState == pb.EventState_QUEUED {
+
+		baseTime := time.Second
+		var delay time.Duration
+		switch in.Code {
+		case pb.AckCode_REQUEUE_CONSTANT:
+			delay = baseTime
+		case pb.AckCode_REQUEUE_LINEAR:
+			delay = baseTime * time.Duration(e.RequeueCount)
+		case pb.AckCode_REQUEUE_EXPONENTIAL:
+			delay = time.Duration(math.Pow(2, float64(e.RequeueCount))) * baseTime
+		}
+
+		if delay < 0 || delay > time.Hour {
+			delay = time.Hour
+		}
+
+		channel.RequeueEvent(e, delay)
+	}
 
 	return &pb.AckResponse{}, nil
 }
 
+// Get implements DEQ.Get
 func (s *Server) Get(ctx context.Context, in *pb.GetRequest) (*pb.Event, error) {
 
 	if in.EventId == "" {
@@ -225,9 +253,10 @@ func (s *Server) Get(ctx context.Context, in *pb.GetRequest) (*pb.Event, error) 
 		return nil, status.Error(codes.Internal, "")
 	}
 
-	return e, nil
+	return &e, nil
 }
 
+// Del implements DEQ.Del
 func (s *Server) Del(ctx context.Context, in *pb.DelRequest) (*pb.Empty, error) {
 
 	if in.EventId == "" {

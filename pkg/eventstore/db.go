@@ -11,94 +11,52 @@ import (
 	"gitlab.com/katcheCode/deq/pkg/eventstore/data"
 )
 
+var defaultChannelState = data.ChannelPayload{
+	EventState: deq.EventState_QUEUED,
+}
+
 func getEvent(txn *badger.Txn, topic, eventID, channel string) (*deq.Event, error) {
-	key, err := data.EventTimeKey{
+	eventTime, err := getEventTimePayload(txn, data.EventTimeKey{
 		ID:    eventID,
 		Topic: topic,
-	}.Marshal()
-	if err != nil {
-		return nil, fmt.Errorf("marshal event time key: %v", err)
-	}
-	item, err := txn.Get(key)
-	if err == badger.ErrKeyNotFound {
-		log.Printf("get %s", key)
+	})
+	if err == ErrNotFound {
 		return nil, ErrNotFound
 	}
 	if err != nil {
-		return nil, err
-	}
-	val, err := item.Value()
-	if err != nil {
-		return nil, err
+		return nil, fmt.Errorf("get event time: %v", err)
 	}
 
-	var eventTime data.EventTimePayload
-	err = proto.Unmarshal(val, &eventTime)
-	if err != nil {
-		return nil, fmt.Errorf("unmarshal event time payload: %v", err)
-	}
-
-	eventKey, err := data.EventKey{
+	event, err := getEventPayload(txn, data.EventKey{
 		ID:         eventID,
 		Topic:      topic,
 		CreateTime: time.Unix(0, eventTime.CreateTime),
-	}.Marshal()
+	})
 	if err != nil {
-		return nil, fmt.Errorf("marshal event key: %v", err)
-	}
-	item, err = txn.Get(eventKey)
-	if err != nil {
-		return nil, err
-	}
-	val, err = item.Value()
-	if err != nil {
-		return nil, err
+		return nil, fmt.Errorf("get event payload: %v", err)
 	}
 
-	var event data.EventPayload
-	err = proto.Unmarshal(val, &event)
-	if err != nil {
-		return nil, fmt.Errorf("unmarshal event payload: %v", err)
-	}
-
-	eventState := deq.EventState_QUEUED
+	channelState := defaultChannelState
 
 	if channel != "" {
-		channelKey, err := data.ChannelKey{
+		channelState, err = getChannelEvent(txn, data.ChannelKey{
 			ID:      eventID,
 			Topic:   topic,
 			Channel: channel,
-		}.Marshal()
+		})
 		if err != nil {
-			return nil, fmt.Errorf("marshal channel key: %v", err)
-		}
-		item, err = txn.Get(channelKey)
-		if err != nil && err != badger.ErrKeyNotFound {
-			return nil, err
-		}
-		// not found isn't an error - it just means we need to use the default state
-		if err == nil {
-			val, err = item.Value()
-			if err != nil {
-				return nil, err
-			}
-			var channelState data.ChannelPayload
-			err = proto.Unmarshal(val, &channelState)
-			if err != nil {
-				return nil, fmt.Errorf("unmarshal channel payload: %v", err)
-			}
-
-			eventState = channelState.EventState
+			return nil, fmt.Errorf("get event state: %v", err)
 		}
 	}
 
 	return &deq.Event{
 		Id:           eventID,
 		Topic:        topic,
-		CreateTime:   eventTime.CreateTime,
-		State:        eventState,
-		DefaultState: event.DefaultEventState,
 		Payload:      event.Payload,
+		CreateTime:   eventTime.CreateTime,
+		RequeueCount: channelState.RequeueCount,
+		State:        channelState.EventState,
+		DefaultState: event.DefaultEventState,
 	}, nil
 }
 
@@ -199,7 +157,10 @@ func writeEvent(txn *badger.Txn, e *deq.Event) error {
 				ID:      e.Id,
 			}
 
-			err = setEventState(txn, newKey, e.DefaultState)
+			err = setChannelEvent(txn, newKey, data.ChannelPayload{
+				EventState:   e.DefaultState,
+				RequeueCount: e.RequeueCount,
+			})
 			if err != nil {
 				return fmt.Errorf("set event state on channel %s: %v", key.Channel, err)
 			}
@@ -209,22 +170,101 @@ func writeEvent(txn *badger.Txn, e *deq.Event) error {
 	return nil
 }
 
-func setEventState(txn *badger.Txn, key data.ChannelKey, state deq.EventState) error {
+func setChannelEvent(txn *badger.Txn, key data.ChannelKey, payload data.ChannelPayload) error {
+
 	rawkey, err := key.Marshal()
 	if err != nil {
 		return fmt.Errorf("marshal key: %v", err)
 	}
-	payload, err := proto.Marshal(&data.ChannelPayload{
-		EventState: state,
-	})
+	buf, err := proto.Marshal(&payload)
 	if err != nil {
 		return fmt.Errorf("marshal payload: %v", err)
 	}
 
-	err = txn.Set(rawkey, payload)
+	err = txn.Set(rawkey, buf)
 	if err != nil {
 		return err
 	}
 
 	return nil
+}
+
+func getEventTimePayload(txn *badger.Txn, key data.EventTimeKey) (payload data.EventTimePayload, err error) {
+	rawKey, err := key.Marshal()
+	if err != nil {
+		return payload, fmt.Errorf("marshal event time key: %v", err)
+	}
+	item, err := txn.Get(rawKey)
+	if err == badger.ErrKeyNotFound {
+		log.Printf("get %s", key)
+		return payload, ErrNotFound
+	}
+	if err != nil {
+		return payload, err
+	}
+	val, err := item.Value()
+	if err != nil {
+		return payload, err
+	}
+
+	err = proto.Unmarshal(val, &payload)
+	if err != nil {
+		return data.EventTimePayload{}, fmt.Errorf("unmarshal event time payload: %v", err)
+	}
+
+	return payload, nil
+}
+
+func getEventPayload(txn *badger.Txn, key data.EventKey) (payload data.EventPayload, err error) {
+	rawKey, err := key.Marshal()
+	if err != nil {
+		return payload, fmt.Errorf("marshal event key: %v", err)
+	}
+	item, err := txn.Get(rawKey)
+	if err != nil {
+		return payload, err
+	}
+	val, err := item.Value()
+	if err != nil {
+		return payload, err
+	}
+
+	err = proto.Unmarshal(val, &payload)
+	if err != nil {
+		return data.EventPayload{}, fmt.Errorf("unmarshal event payload: %v", err)
+	}
+
+	return payload, nil
+}
+
+var defaultChannelPayload = data.ChannelPayload{
+	EventState: deq.EventState_QUEUED,
+}
+
+func getChannelEvent(txn *badger.Txn, key data.ChannelKey) (data.ChannelPayload, error) {
+
+	rawKey, err := key.Marshal()
+	if err != nil {
+		return data.ChannelPayload{}, fmt.Errorf("marshal event key: %v", err)
+	}
+
+	item, err := txn.Get(rawKey)
+	if err == badger.ErrKeyNotFound {
+		return defaultChannelPayload, nil
+	}
+	if err != nil {
+		return data.ChannelPayload{}, err
+	}
+	// not found isn't an error - it just means we need to use the default state
+	val, err := item.Value()
+	if err != nil {
+		return data.ChannelPayload{}, err
+	}
+	var channelState data.ChannelPayload
+	err = proto.Unmarshal(val, &channelState)
+	if err != nil {
+		return data.ChannelPayload{}, fmt.Errorf("unmarshal channel payload: %v", err)
+	}
+
+	return channelState, nil
 }

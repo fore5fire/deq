@@ -4,6 +4,7 @@ import "api/v1/deq/deq.proto";
 
 message ChannelPayload {
   deq.EventState event_state = 1;
+  int32 requeue_count = 2;
 }
 
 message EventTimePayload {

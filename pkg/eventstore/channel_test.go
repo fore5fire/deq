@@ -38,11 +38,13 @@ func TestAwaitChannelTimeout(t *testing.T) {
 		t.Fatalf("pub: %v", err)
 	}
 
-	_, err = db.Channel("channel", "topic").AwaitDequeue(ctx, "event1")
-	if err == nil {
+	channel := db.Channel("channel", "topic")
+
+	_, ok := <-channel.AwaitEventStateChange(ctx, "event1")
+	if ok {
 		t.Fatalf("await dequeue returned without dequeue")
 	}
-	if err != ctx.Err() {
+	if channel.Err() != ctx.Err() {
 		t.Errorf("await dequeue: %v", err)
 	}
 }
@@ -81,9 +83,12 @@ func TestAwaitChannel(t *testing.T) {
 			log.Printf("set event state: %v", err)
 		}
 	}()
-	state, err := db.Channel("channel", "topic").AwaitDequeue(ctx, "event1")
-	if err != nil {
-		t.Fatalf("await dequeue: %v", err)
+
+	channel := db.Channel("channel", "topic")
+
+	state, ok := <-channel.AwaitEventStateChange(ctx, "event1")
+	if !ok {
+		t.Fatalf("await dequeue: %v", channel.Err())
 	}
 	if state != deq.EventState_DEQUEUED_OK {
 		t.Fatalf("returned incorrect state: %s", state.String())
@@ -103,14 +108,14 @@ func TestGet(t *testing.T) {
 	}
 	defer db.Close()
 
-	expected := &deq.Event{
+	expected := deq.Event{
 		Id:         "event1",
 		Topic:      "topic",
 		CreateTime: time.Now().UnixNano(),
 		State:      deq.EventState_QUEUED,
 	}
 
-	err = db.Pub(*expected)
+	err = db.Pub(expected)
 	if err != nil {
 		t.Fatalf("pub: %v", err)
 	}
@@ -121,7 +126,7 @@ func TestGet(t *testing.T) {
 	if err != nil {
 		t.Fatalf("get: %v", err)
 	}
-	if !proto.Equal(e, expected) {
+	if !proto.Equal(&e, &expected) {
 		t.Errorf("expected: %v, got %v", expected, e)
 	}
 
@@ -136,7 +141,7 @@ func TestGet(t *testing.T) {
 	if err != nil {
 		t.Fatalf("get after set state: %v", err)
 	}
-	if !proto.Equal(e, expected) {
+	if !proto.Equal(&e, &expected) {
 		t.Errorf("get after set state: expected: %v, got %v", expected, e)
 	}
 }
@@ -179,9 +184,11 @@ func TestDequeue(t *testing.T) {
 		t.Fatalf("open db second time: %v", err)
 	}
 
-	select {
-	case e := <-db.Channel("channel", expected.Topic).Follow():
+	ctx, cancel := context.WithTimeout(context.Background(), time.Second)
+	defer cancel()
+
+	e, err := db.Channel("channel", expected.Topic).Next(ctx)
+	if err == nil {
 		t.Fatalf("recieved dequeued event: %v", e)
-	case <-time.After(time.Second / 8):
 	}
 }

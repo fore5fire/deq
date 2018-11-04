@@ -21,4 +21,3 @@ disown
 
 echo running tests
 TEST_TARGET_URL=localhost:8080 DEQ_HOST=localhost:80 go test -count 1 gitlab.com/katcheCode/deq/cmd/deqd_tests | sed -e 's/^/TEST: /;'
-! docker rm -f deqd &> /dev/null

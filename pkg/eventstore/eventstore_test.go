@@ -1,6 +1,7 @@
 package eventstore
 
 import (
+	"context"
 	"io/ioutil"
 	"os"
 	"reflect"
@@ -59,7 +60,7 @@ func TestPub(t *testing.T) {
 		t.Fatalf("open db: %v", err)
 	}
 
-	expected := &deq.Event{
+	expected := deq.Event{
 		Id:           "event1",
 		Topic:        "topic",
 		CreateTime:   time.Now().UnixNano(),
@@ -68,12 +69,15 @@ func TestPub(t *testing.T) {
 
 	channel := db.Channel("channel", expected.Topic)
 
-	err = db.Pub(*expected)
+	err = db.Pub(expected)
 	if err != nil {
 		t.Fatalf("pub: %v", err)
 	}
 
-	event := <-channel.Follow()
+	event, err := channel.Next(context.Background())
+	if err != nil {
+		t.Fatalf("get next: %v", err)
+	}
 	if !reflect.DeepEqual(event, expected) {
 		t.Errorf("expected %v, got %v", expected, event)
 	}

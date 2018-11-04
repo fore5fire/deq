@@ -23,10 +23,11 @@ type Subscriber struct {
 
 // SubscriberOpts are options for a Subscriber
 type SubscriberOpts struct {
-	Channel string
+	Channel      string
+	IdleTimeout  time.Duration
+	RequeueDelay time.Duration
 	// MinID   string
 	// MaxID   string
-	Follow bool
 }
 
 // NewSubscriber creates a new Subscriber.
@@ -62,11 +63,12 @@ func (sub *Subscriber) Sub(ctx context.Context, m Message, handler HandlerFunc) 
 	msgType := proto.MessageType(msgName)
 
 	stream, err := sub.client.Sub(ctx, &api.SubRequest{
-		Channel: sub.opts.Channel,
+		Channel:                 sub.opts.Channel,
+		IdleTimeoutMilliseconds: int32(sub.opts.IdleTimeout / time.Millisecond),
+		// RequeueDelayMilliseconds: int32(sub.opts.RequeueDelay / time.Millisecond),
 		// MinId:   c.opts.MinID,
 		// MaxId:   c.opts.MaxID,
-		Follow: sub.opts.Follow,
-		Topic:  msgName,
+		Topic: msgName,
 	})
 	if err != nil {
 		return err
@@ -172,21 +174,23 @@ func protoToEvent(event *api.Event, msg Message, sub *Subscriber) Event {
 	}
 
 	return Event{
-		ID:         event.Id,
-		Msg:        msg,
-		CreateTime: time.Unix(0, event.CreateTime),
-		State:      state,
-		sub:        sub,
+		ID:           event.Id,
+		Msg:          msg,
+		CreateTime:   time.Unix(0, event.CreateTime),
+		State:        state,
+		RequeueCount: int(event.RequeueCount),
+		sub:          sub,
 	}
 }
 
 // Event is a deserialized event that is sent to or recieved from deq.
 type Event struct {
-	ID         string
-	Msg        Message
-	CreateTime time.Time
-	State      EventState
-	sub        *Subscriber
+	ID           string
+	Msg          Message
+	CreateTime   time.Time
+	State        EventState
+	RequeueCount int
+	sub          *Subscriber
 }
 
 // EventState is the queue state of an event

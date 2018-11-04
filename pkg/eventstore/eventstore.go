@@ -186,7 +186,7 @@ func (s *Store) listenOut() {
 				case shared.in <- e:
 					// TODO: Move db write code here
 				default: // Skip if full, listeners can catch up from disk later
-					shared.SetMissed(true)
+					shared.setMissed(true)
 				}
 			}
 		}

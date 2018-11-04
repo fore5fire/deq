@@ -14,13 +14,14 @@ import (
 
 // Channel allows multiple listeners to synchronize processing of events
 type Channel struct {
-	topic  string
-	name   string
-	shared *sharedChannel
-	idle   bool
-	done   chan error
-	err    error
-	db     *badger.DB
+	topic    string
+	name     string
+	shared   *sharedChannel
+	idle     bool
+	done     chan error
+	errMutex sync.Mutex
+	err      error
+	db       *badger.DB
 }
 
 type channelKey struct {
@@ -44,7 +45,7 @@ type sharedChannel struct {
 	stateChansMutex sync.Mutex
 	// Pass in a response channel, when the event is dequeued the new state will
 	// be sent back on the response channel
-	stateChans map[string]chan chan deq.EventState
+	stateChans map[string]chan struct{}
 	db         *badger.DB
 }
 
@@ -60,7 +61,7 @@ func (s *Store) Channel(name, topic string) *Channel {
 			topic:      topic,
 			in:         make(chan *deq.Event, 20),
 			out:        make(chan *deq.Event, 20),
-			stateChans: make(map[string]chan chan deq.EventState),
+			stateChans: make(map[string]chan struct{}),
 			db:         s.db,
 		}
 		s.sharedChannels[key] = shared
@@ -86,9 +87,36 @@ func (s *Store) Channel(name, topic string) *Channel {
 	}
 }
 
-// Follow returns the next event in the queue, or nil if there are no events
-func (c *Channel) Follow() chan *deq.Event {
-	return c.shared.out
+// Next returns the next event in the queue, or nil if there are no events
+func (c *Channel) Next(ctx context.Context) (deq.Event, error) {
+
+	for {
+		select {
+		case <-ctx.Done():
+			return deq.Event{}, ctx.Err()
+		case e := <-c.shared.out:
+			if e == nil {
+				return deq.Event{}, c.Err()
+			}
+			txn := c.db.NewTransaction(false)
+			defer txn.Discard()
+
+			channel, err := getChannelEvent(txn, data.ChannelKey{
+				Channel: c.name,
+				Topic:   c.topic,
+				ID:      e.Id,
+			})
+			if err != nil {
+				return deq.Event{}, err
+			}
+
+			if channel.EventState != deq.EventState_QUEUED {
+				continue
+			}
+
+			return *e, nil
+		}
+	}
 }
 
 // func (c *sharedChannel) enqueue(*deq.Event) {
@@ -129,15 +157,29 @@ func (c *Channel) Close() {
 
 // Err returns the error that caused this channel to fail, or nil if the channel closed cleanly
 func (c *Channel) Err() error {
+	c.errMutex.Lock()
+	defer c.errMutex.Unlock()
 	return c.err
 }
 
+// setErr sets this channel's error
+func (c *Channel) setErr(err error) {
+	c.errMutex.Lock()
+	defer c.errMutex.Unlock()
+	c.err = err
+}
+
 // Get returns the event for an event ID, or ErrNotFound if none is found
-func (c *Channel) Get(eventID string) (*deq.Event, error) {
+func (c *Channel) Get(eventID string) (deq.Event, error) {
 	txn := c.db.NewTransaction(false)
 	defer txn.Discard()
 
-	return getEvent(txn, c.topic, eventID, c.name)
+	e, err := getEvent(txn, c.topic, eventID, c.name)
+	if err != nil {
+		return deq.Event{}, err
+	}
+
+	return *e, nil
 }
 
 // SetEventState sets the state of an event for this channel
@@ -152,7 +194,14 @@ func (c *Channel) SetEventState(id string, state deq.EventState) error {
 		ID:      id,
 	}
 
-	err := setEventState(txn, key, state)
+	channelEvent, err := getChannelEvent(txn, key)
+	if err != nil {
+		return err
+	}
+
+	channelEvent.EventState = state
+
+	err = setChannelEvent(txn, key, channelEvent)
 	if err != nil {
 		return err
 	}
@@ -165,17 +214,8 @@ func (c *Channel) SetEventState(id string, state deq.EventState) error {
 	c.shared.stateChansMutex.Lock()
 	stateChans := c.shared.stateChans[id]
 	if stateChans != nil {
-		done := false
-		for !done {
-			select {
-			case stateChan := <-stateChans:
-				stateChan <- state
-			default:
-				done = true
-			}
-		}
-		// TODO: cleanup (currently causing a deadlock because they need to have the lock to publish and we need it to read)
-		// c.shared.stateChans[id] = nil
+		close(stateChans)
+		c.shared.stateChans[id] = nil
 	}
 	c.shared.stateChansMutex.Unlock()
 
@@ -194,31 +234,105 @@ func (c *Channel) SetEventState(id string, state deq.EventState) error {
 // )
 
 // RequeueEvent adds the event back into the event queue for this channel
-func (c *Channel) RequeueEvent(e *deq.Event) {
-	c.shared.out <- e
+func (c *Channel) RequeueEvent(e deq.Event, delay time.Duration) error {
+
+	requeue := func() error {
+		requeueCount, err := c.incrementSavedRequeueCount(&e)
+		if err != nil {
+			return err
+		}
+		e.RequeueCount = int32(requeueCount)
+		c.shared.out <- &e
+
+		return nil
+	}
+
+	if delay == 0 {
+		return requeue()
+	}
+
+	go func() {
+		time.Sleep(delay)
+		err := requeue()
+		if err != nil {
+			log.Printf("requeue event: %v", err)
+		}
+	}()
+
+	return nil
 }
 
-// AwaitDequeue blocks until the event is dequeued, then returns it's state.
-func (c *Channel) AwaitDequeue(ctx context.Context, id string) (deq.EventState, error) {
+func (c *Channel) incrementSavedRequeueCount(e *deq.Event) (int, error) {
+
+	// retry for up to 10 conflicts.
+	for i := 0; i < 10; i++ {
+
+		txn := c.db.NewTransaction(true)
+		defer txn.Discard()
+
+		key := data.ChannelKey{
+			Channel: c.name,
+			Topic:   c.topic,
+			ID:      e.Id,
+		}
+
+		channelEvent, err := getChannelEvent(txn, key)
+		if err != nil {
+			return 0, err
+		}
+
+		channelEvent.RequeueCount++
+
+		err = setChannelEvent(txn, key, channelEvent)
+		if err != nil {
+			return 0, err
+		}
+
+		err = txn.Commit(nil)
+		if err == badger.ErrConflict {
+			time.Sleep(time.Second / 10)
+			// continue
+		}
+		if err != nil {
+			return 0, nil
+		}
+
+		return int(channelEvent.RequeueCount), nil
+	}
+
+	return 0, badger.ErrConflict
+}
+
+// AwaitEventStateChange blocks until the event is dequeued, then returns it's state.
+func (c *Channel) AwaitEventStateChange(ctx context.Context, id string) chan deq.EventState {
 
 	result := make(chan deq.EventState, 1)
 	c.shared.stateChansMutex.Lock()
-	if c.shared.stateChans[id] == nil {
-		c.shared.stateChans[id] = make(chan chan deq.EventState)
+	defer c.shared.stateChansMutex.Unlock()
+	await := c.shared.stateChans[id]
+	if await == nil {
+		await = make(chan struct{})
+		c.shared.stateChans[id] = await
 	}
-	c.shared.stateChansMutex.Unlock()
-	select {
-	case <-ctx.Done():
-		return deq.EventState_UNSPECIFIED_STATE, ctx.Err()
-	case c.shared.stateChans[id] <- result:
-		// Just move on.
-	}
-	select {
-	case state := <-result:
-		return state, nil
-	case <-ctx.Done():
-		return deq.EventState_UNSPECIFIED_STATE, ctx.Err()
-	}
+
+	go func() {
+		// Wait for state change (context done)
+		select {
+		case <-ctx.Done():
+			c.setErr(ctx.Err())
+			close(result)
+		case <-await:
+			e, err := c.Get(id)
+			if err != nil {
+				c.setErr(err)
+				close(result)
+				return
+			}
+			result <- e.State
+		}
+	}()
+
+	return result
 }
 
 func (s *sharedChannel) Idle() bool {
@@ -227,13 +341,13 @@ func (s *sharedChannel) Idle() bool {
 	return s.idle
 }
 
-func (s *sharedChannel) Missed() bool {
+func (s *sharedChannel) getMissed() bool {
 	s.missedMutex.Lock()
 	defer s.missedMutex.Unlock()
 	return s.missed
 }
 
-func (s *sharedChannel) SetMissed(m bool) {
+func (s *sharedChannel) setMissed(m bool) {
 	s.missedMutex.Lock()
 	s.missed = m
 	s.missedMutex.Unlock()
@@ -262,7 +376,7 @@ func (s *sharedChannel) start() {
 		}
 		// s.Unlock()
 
-		s.SetMissed(false)
+		s.setMissed(false)
 
 		cursor, err = s.catchUp(cursor)
 		if err != nil {
@@ -270,7 +384,7 @@ func (s *sharedChannel) start() {
 		}
 
 		// As long as we're up to date...
-		for !s.Missed() {
+		for !s.getMissed() {
 			// if we're already idle, we don't want idle getting set over and over.
 			// by leaving the timer expired, it won't trigger again.
 			// if !s.Idle() && len(s.in) == 0 {

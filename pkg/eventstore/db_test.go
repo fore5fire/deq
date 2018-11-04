@@ -53,28 +53,32 @@ func TestWriteEvent(t *testing.T) {
 		t.Fatal("write event: ", err)
 	}
 
+	dequeuePayload := data.ChannelPayload{
+		EventState: deq.EventState_DEQUEUED_OK,
+	}
+
 	channelKey := data.ChannelKey{
 		ID:      "event0",
 		Topic:   "topic",
 		Channel: "channel",
 	}
-	err = setEventState(txn, channelKey, deq.EventState_DEQUEUED_OK)
+	err = setChannelEvent(txn, channelKey, dequeuePayload)
 	if err != nil {
 		t.Fatalf("set event state: %v", err)
 	}
 	channelKey.ID = "event00"
-	err = setEventState(txn, channelKey, deq.EventState_DEQUEUED_OK)
+	err = setChannelEvent(txn, channelKey, dequeuePayload)
 	if err != nil {
 		t.Fatalf("set event state: %v", err)
 	}
 	channelKey.Channel = "channel2"
-	err = setEventState(txn, channelKey, deq.EventState_DEQUEUED_OK)
+	err = setChannelEvent(txn, channelKey, dequeuePayload)
 	if err != nil {
 		t.Fatalf("set event state: %v", err)
 	}
 
 	// Write actual event
-	expected := &deq.Event{
+	expected := deq.Event{
 		Topic:        "topic",
 		Id:           "event1",
 		CreateTime:   time.Now().UnixNano(),
@@ -84,7 +88,7 @@ func TestWriteEvent(t *testing.T) {
 		State: deq.EventState_DEQUEUED_ERROR,
 	}
 
-	err = writeEvent(txn, expected)
+	err = writeEvent(txn, &expected)
 	if err != nil {
 		t.Fatal("write event: ", err)
 	}
@@ -95,14 +99,14 @@ func TestWriteEvent(t *testing.T) {
 	if err != nil {
 		t.Fatalf("get event on channel: %v", err)
 	}
-	if !proto.Equal(e, expected) {
+	if !proto.Equal(e, &expected) {
 		t.Errorf("expected %v, got %v", expected, e)
 	}
 	e, err = getEvent(txn, expected.Topic, expected.Id, "channel2")
 	if err != nil {
 		t.Fatalf("get event on channel2: %v", err)
 	}
-	if !proto.Equal(e, expected) {
+	if !proto.Equal(e, &expected) {
 		t.Errorf("expected %v, got %v", expected, e)
 	}
 
@@ -112,7 +116,7 @@ func TestWriteEvent(t *testing.T) {
 	if err != nil {
 		t.Fatalf("get event on newchannel: %v", err)
 	}
-	if !proto.Equal(e, expected) {
+	if !proto.Equal(e, &expected) {
 		t.Errorf("expected %v, got %v", expected, e)
 	}
 

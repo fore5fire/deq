@@ -4,13 +4,13 @@ import (
 	"context"
 	"fmt"
 	"io"
+	"log"
 	"os"
 	"reflect"
 	"sync"
 	"testing"
 	"time"
 
-	"github.com/gogo/protobuf/proto"
 	"gitlab.com/katcheCode/deq"
 	"gitlab.com/katcheCode/deq/ack"
 	"gitlab.com/katcheCode/deq/pkg/test/model"
@@ -33,8 +33,8 @@ func gatherTestModels(conn *grpc.ClientConn, duration time.Duration) (result []*
 	defer cancel()
 
 	sub := deq.NewSubscriber(conn, deq.SubscriberOpts{
-		Channel: "TestChannel1",
-		Follow:  false,
+		Channel:     "TestChannel1",
+		IdleTimeout: time.Second / 3,
 	})
 
 	mut := sync.Mutex{}
@@ -116,7 +116,7 @@ func TestPubDuplicate(t *testing.T) {
 	// 	t.Fatalf("Error streaming events: %v", err)
 	// }
 
-	ctx, cancel := context.WithTimeout(context.Background(), time.Second*10)
+	ctx, cancel := context.WithTimeout(context.Background(), time.Second*5)
 	defer cancel()
 
 	// beforeTime := time.Now()
@@ -157,7 +157,7 @@ func TestPubDuplicate(t *testing.T) {
 
 func TestMassPublish(t *testing.T) {
 
-	ctx, cancel := context.WithTimeout(context.Background(), time.Second*10)
+	ctx, cancel := context.WithTimeout(context.Background(), time.Second*5)
 	defer cancel()
 
 	p := deq.NewPublisher(conn, deq.PublisherOpts{})
@@ -217,64 +217,48 @@ outer:
 
 func TestRequeue(t *testing.T) {
 
-	ctx, cancel := context.WithTimeout(context.Background(), time.Second*20)
+	ctx, cancel := context.WithTimeout(context.Background(), time.Second*60)
 	defer cancel()
 
 	p := deq.NewPublisher(conn, deq.PublisherOpts{})
-	expected := &model.TestModel{
-		Msg: "Hello world!",
-	}
 
-	_, err := p.Pub(ctx, deq.Event{
-		ID:  "requeue-" + time.Now().String(),
-		Msg: expected,
+	expected, err := p.Pub(ctx, deq.Event{
+		ID: "requeue-" + time.Now().String(),
+		Msg: &model.TestModel{
+			Msg: "Hello world of requeue!",
+		},
 	})
 	if err != nil {
 		t.Fatalf("Error Creating Event: %v", err)
 	}
 
+	time.Sleep(time.Second * 8)
+
 	consumer := deq.NewSubscriber(conn, deq.SubscriberOpts{
-		Channel: "TestChannel1",
-		Follow:  false,
+		Channel:     "TestChannel1",
+		IdleTimeout: time.Second * 10,
 	})
 
-	var result *model.TestModel
+	var results []deq.Event
 	err = consumer.Sub(ctx, &model.TestModel{}, func(e deq.Event) ack.Code {
-		result = e.Msg.(*model.TestModel)
-		return ack.RequeueConstant
-	})
-	if err != io.EOF {
-		t.Fatalf("Sub: %v", err)
-	}
-	if !proto.Equal(expected, result) {
-		t.Fatalf("Sub: expected %v, got %v", expected, result)
-	}
-
-	time.Sleep(time.Second * 8)
-
-	err = consumer.Sub(ctx, &model.TestModel{}, func(e deq.Event) ack.Code {
-		result = e.Msg.(*model.TestModel)
+		results = append(results, e)
+		log.Println(e.RequeueCount)
+		if e.RequeueCount < 2 {
+			return ack.RequeueExponential
+		}
+		if e.RequeueCount < 4 {
+			return ack.RequeueExponential
+		}
+		if e.RequeueCount < 10 {
+			return ack.RequeueExponential
+		}
 		return ack.DequeueOK
 	})
 	if err != io.EOF {
 		t.Fatalf("Sub: %v", err)
 	}
-	if !proto.Equal(expected, result) {
-		t.Fatalf("Sub: expected %v, got %v", expected, result)
+	if !reflect.DeepEqual(expected, results) {
+		t.Errorf("Sub: expected %+v, got %+v", expected, results)
 	}
-
-	time.Sleep(time.Second * 8)
-
-	recieved := false
-
-	err = consumer.Sub(ctx, &model.TestModel{}, func(e deq.Event) ack.Code {
-		recieved = true
-		return ack.DequeueOK
-	})
-	if err != io.EOF {
-		t.Fatalf("Sub: %v", err)
-	}
-	if recieved {
-		t.Fatalf("Sub: event not dequeued")
-	}
+	log.Println(results)
 }
