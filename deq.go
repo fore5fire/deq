@@ -26,6 +26,7 @@ type SubscriberOpts struct {
 	Channel      string
 	IdleTimeout  time.Duration
 	RequeueDelay time.Duration
+	Follow       bool
 	// MinID   string
 	// MaxID   string
 }
@@ -65,6 +66,7 @@ func (sub *Subscriber) Sub(ctx context.Context, m Message, handler HandlerFunc) 
 	stream, err := sub.client.Sub(ctx, &api.SubRequest{
 		Channel:                 sub.opts.Channel,
 		IdleTimeoutMilliseconds: int32(sub.opts.IdleTimeout / time.Millisecond),
+		Follow:                  sub.opts.Follow,
 		// RequeueDelayMilliseconds: int32(sub.opts.RequeueDelay / time.Millisecond),
 		// MinId:   c.opts.MinID,
 		// MaxId:   c.opts.MaxID,
