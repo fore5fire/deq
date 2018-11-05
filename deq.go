@@ -5,6 +5,7 @@ import (
 	"errors"
 	"fmt"
 	"reflect"
+	"sync"
 	"time"
 
 	"log"
@@ -76,13 +77,20 @@ func (sub *Subscriber) Sub(ctx context.Context, m Message, handler HandlerFunc) 
 		return err
 	}
 	defer stream.CloseSend()
+
+	wg := sync.WaitGroup{}
+
 	for {
 		event, err := stream.Recv()
 		if err != nil {
+			// wait for running requests to complete
+			wg.Wait()
 			return err
 		}
 
+		wg.Add(1)
 		go func() {
+			defer wg.Done()
 
 			msg := reflect.New(msgType.Elem()).Interface().(Message)
 			err := proto.Unmarshal(event.Payload, msg)
