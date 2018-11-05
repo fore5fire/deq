@@ -4,6 +4,7 @@ import (
 	"context"
 	"errors"
 	"fmt"
+	"io"
 	"reflect"
 	"sync"
 	"time"
@@ -68,7 +69,7 @@ func (sub *Subscriber) Sub(ctx context.Context, m Message, handler HandlerFunc) 
 		Channel:                 sub.opts.Channel,
 		IdleTimeoutMilliseconds: int32(sub.opts.IdleTimeout / time.Millisecond),
 		Follow:                  sub.opts.IdleTimeout <= 0,
-		// RequeueDelayMilliseconds: int32(sub.opts.RequeueDelay / time.Millisecond),
+		RequeueDelayMilliseconds: int32(sub.opts.RequeueDelay / time.Millisecond),
 		// MinId:   c.opts.MinID,
 		// MaxId:   c.opts.MaxID,
 		Topic: msgName,
@@ -85,6 +86,9 @@ func (sub *Subscriber) Sub(ctx context.Context, m Message, handler HandlerFunc) 
 		if err != nil {
 			// wait for running requests to complete
 			wg.Wait()
+			if err == io.EOF {
+				return nil
+			}
 			return err
 		}
 

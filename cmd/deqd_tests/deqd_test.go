@@ -3,13 +3,15 @@ package main_test
 import (
 	"context"
 	"fmt"
-	"io"
 	"log"
 	"os"
 	"reflect"
 	"sync"
 	"testing"
 	"time"
+
+	"google.golang.org/grpc/codes"
+	"google.golang.org/grpc/status"
 
 	"gitlab.com/katcheCode/deq"
 	"gitlab.com/katcheCode/deq/ack"
@@ -45,10 +47,10 @@ func gatherTestModels(conn *grpc.ClientConn, duration time.Duration) (result []*
 		result = append(result, e.Msg.(*model.TestModel))
 		return ack.DequeueOK
 	})
-	if err == io.EOF {
-		return result, nil
+	if err != nil {
+		return nil, err
 	}
-	return nil, err
+	return result, nil
 
 }
 
@@ -254,11 +256,37 @@ func TestRequeue(t *testing.T) {
 		}
 		return ack.DequeueOK
 	})
-	if err != io.EOF {
+	if err != nil {
 		t.Fatalf("Sub: %v", err)
 	}
 	if !reflect.DeepEqual(expected, results) {
 		t.Errorf("Sub: expected %+v, got %+v", expected, results)
 	}
-	log.Println(results)
+}
+
+func TestNoTimeout(t *testing.T) {
+	t.Parallel()
+
+	sub := deq.NewSubscriber(conn, deq.SubscriberOpts{
+		Channel:     "TestChannel-NoTimeout",
+		IdleTimeout: 0,
+	})
+
+	expected := status.Error(codes.DeadlineExceeded, context.DeadlineExceeded.Error())
+
+	deadline := time.Now().Add(time.Second * 4)
+
+	ctx, cancel := context.WithDeadline(context.Background(), deadline)
+	defer cancel()
+
+	err := sub.Sub(ctx, &model.TestModel{}, func(e deq.Event) ack.Code {
+		return ack.DequeueOK
+	})
+	if !reflect.DeepEqual(err, expected) {
+		t.Fatalf("expected %v, got %v", expected, err)
+	}
+	endTime := time.Now()
+	if endTime.Before(deadline) {
+		t.Errorf("sub ended %v before deadline", deadline.Sub(endTime))
+	}
 }
