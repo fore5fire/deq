@@ -27,7 +27,7 @@ type SubscriberOpts struct {
 	Channel      string
 	IdleTimeout  time.Duration
 	RequeueDelay time.Duration
-	Follow       bool
+	// Follow       bool
 	// MinID   string
 	// MaxID   string
 }
