@@ -67,7 +67,7 @@ func (sub *Subscriber) Sub(ctx context.Context, m Message, handler HandlerFunc) 
 	stream, err := sub.client.Sub(ctx, &api.SubRequest{
 		Channel:                 sub.opts.Channel,
 		IdleTimeoutMilliseconds: int32(sub.opts.IdleTimeout / time.Millisecond),
-		Follow:                  sub.opts.Follow,
+		Follow:                  sub.opts.IdleTimeout <= 0,
 		// RequeueDelayMilliseconds: int32(sub.opts.RequeueDelay / time.Millisecond),
 		// MinId:   c.opts.MinID,
 		// MaxId:   c.opts.MaxID,

@@ -80,7 +80,7 @@ func (s *Server) Sub(in *pb.SubRequest, stream pb.DEQ_SubServer) error {
 		baseRequeueDelay = 8 * time.Second
 	}
 	idleTimeout := time.Duration(in.IdleTimeoutMilliseconds) * time.Millisecond
-	if idleTimeout == 0 && in.Follow {
+	if idleTimeout == 0 && !in.Follow {
 		idleTimeout = time.Second
 	}
 
