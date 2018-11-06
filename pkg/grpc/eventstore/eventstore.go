@@ -87,9 +87,8 @@ func (s *Server) Sub(in *pb.SubRequest, stream pb.DEQ_SubServer) error {
 	channel := s.store.Channel(in.Channel, in.Topic)
 	defer channel.Close()
 
-	// No buffer here - we don't want to pull of the next event until we're at least sending the previous
-	events := make(chan pb.Event)
-	ready := make(chan struct{})
+	events := make(chan pb.Event, 1)
+	ready := make(chan struct{}, 1)
 	defer close(ready)
 	var nextErr error
 	go func() {
@@ -104,20 +103,37 @@ func (s *Server) Sub(in *pb.SubRequest, stream pb.DEQ_SubServer) error {
 		}
 	}()
 
-	idleTimer := time.NewTimer(time.Hour)
-	defer idleTimer.Stop()
+	var timer *time.Timer
 
+	// idleTimer := time.NewTimer(idleTimeout)
+	// defer idleTimer.Stop()
+	// var idleCalled bool
 	for {
-		if !idleTimer.Stop() {
-			<-idleTimer.C
-		}
+		// if !idleTimer.Stop() && !idleCalled {
+		// 	<-idleTimer.C
+		// }
+		// idleCalled = false
+		// if idleTimeout > 0 {
+		// 	idleTimer.Reset(idleTimeout)
+		// }
+		var idle <-chan time.Time
 		if idleTimeout > 0 {
-			idleTimer.Reset(idleTimeout)
+			if timer != nil {
+				timer.Stop()
+			}
+			timer = time.NewTimer(idleTimeout)
+			idle = timer.C
 		}
 		ready <- struct{}{}
 		select {
 		case e, ok := <-events:
 			if !ok {
+				if nextErr == context.DeadlineExceeded {
+					return status.Error(codes.DeadlineExceeded, "")
+				}
+				if nextErr == context.Canceled {
+					return status.Error(codes.Canceled, "")
+				}
 				if nextErr != nil {
 					log.Printf("read from channel: %v", nextErr)
 					return status.Error(codes.Internal, "")
@@ -142,7 +158,9 @@ func (s *Server) Sub(in *pb.SubRequest, stream pb.DEQ_SubServer) error {
 				return status.Error(codes.Internal, "")
 			}
 			// Poll for disconect when idle
-		case <-idleTimer.C:
+		// case <-idleTimer.C:
+		case <-idle:
+			// idleCalled = true
 			if channel.Idle() {
 				return nil
 			}

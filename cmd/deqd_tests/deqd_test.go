@@ -3,20 +3,17 @@ package main_test
 import (
 	"context"
 	"fmt"
-	"log"
 	"os"
 	"reflect"
 	"sync"
 	"testing"
 	"time"
 
-	"google.golang.org/grpc/codes"
-	"google.golang.org/grpc/status"
-
 	"gitlab.com/katcheCode/deq"
 	"gitlab.com/katcheCode/deq/ack"
 	"gitlab.com/katcheCode/deq/pkg/test/model"
 	"google.golang.org/grpc"
+	"google.golang.org/grpc/codes"
 )
 
 var conn *grpc.ClientConn
@@ -158,6 +155,7 @@ func TestPubDuplicate(t *testing.T) {
 }
 
 func TestMassPublish(t *testing.T) {
+	t.Parallel()
 
 	ctx, cancel := context.WithTimeout(context.Background(), time.Second*5)
 	defer cancel()
@@ -218,6 +216,7 @@ outer:
 }
 
 func TestRequeue(t *testing.T) {
+	t.Parallel()
 
 	ctx, cancel := context.WithTimeout(context.Background(), time.Second*60)
 	defer cancel()
@@ -226,7 +225,7 @@ func TestRequeue(t *testing.T) {
 
 	expected, err := p.Pub(ctx, deq.Event{
 		ID: "requeue-" + time.Now().String(),
-		Msg: &model.TestModel{
+		Msg: &model.TestRequeueModel{
 			Msg: "Hello world of requeue!",
 		},
 	})
@@ -242,9 +241,8 @@ func TestRequeue(t *testing.T) {
 	})
 
 	var results []deq.Event
-	err = consumer.Sub(ctx, &model.TestModel{}, func(e deq.Event) ack.Code {
+	err = consumer.Sub(ctx, &model.TestRequeueModel{}, func(e deq.Event) ack.Code {
 		results = append(results, e)
-		log.Println(e.RequeueCount)
 		if e.RequeueCount < 2 {
 			return ack.RequeueExponential
 		}
@@ -268,24 +266,72 @@ func TestNoTimeout(t *testing.T) {
 	t.Parallel()
 
 	sub := deq.NewSubscriber(conn, deq.SubscriberOpts{
-		Channel:     "TestChannel-NoTimeout",
+		Channel:     "TestChannel1",
 		IdleTimeout: 0,
 	})
 
-	expected := status.Error(codes.DeadlineExceeded, context.DeadlineExceeded.Error())
+	expected := []deq.Event{
+		deq.Event{
+			ID: "NoTimeout-TestEvent1",
+			Msg: &model.TestNoTimeoutModel{
+				Msg: "hello no timeout!",
+			},
+		},
+		deq.Event{
+			ID: "NoTimeout-TestEvent2",
+			Msg: &model.TestNoTimeoutModel{
+				Msg: "hello no timeout!",
+			},
+		},
+		deq.Event{
+			ID: "NoTimeout-TestEvent3",
+			Msg: &model.TestNoTimeoutModel{
+				Msg: "hello no timeout!",
+			},
+		},
+	}
 
 	deadline := time.Now().Add(time.Second * 4)
 
 	ctx, cancel := context.WithDeadline(context.Background(), deadline)
 	defer cancel()
 
-	err := sub.Sub(ctx, &model.TestModel{}, func(e deq.Event) ack.Code {
-		return ack.DequeueOK
-	})
-	if !reflect.DeepEqual(err, expected) {
-		t.Fatalf("expected %v, got %v", expected, err)
+	var subErr error
+	events := make(chan deq.Event)
+	go func() {
+		subErr = sub.Sub(ctx, &model.TestNoTimeoutModel{}, func(e deq.Event) ack.Code {
+			events <- e
+			return ack.DequeueOK
+		})
+		close(events)
+	}()
+
+	pub := deq.NewPublisher(conn, deq.PublisherOpts{})
+
+	for i, e := range expected {
+		created, err := pub.Pub(ctx, e)
+		if err != nil {
+			t.Fatalf("pub: %v", err)
+		}
+		next, ok := <-events
+		if !ok {
+			t.Fatalf("stream closed before %d", i)
+		}
+		if !reflect.DeepEqual(created.ID, next.ID) {
+			t.Errorf("%d: expected %v, got %v", i, created.ID, next.ID)
+		}
 	}
-	endTime := time.Now()
+
+	for e := range events {
+		t.Errorf("extra event %v", e)
+	}
+
+	// Allow one millisecond of lee-way
+	endTime := time.Now().Add(time.Millisecond)
+
+	if grpc.Code(subErr) != codes.DeadlineExceeded {
+		t.Fatal(subErr)
+	}
 	if endTime.Before(deadline) {
 		t.Errorf("sub ended %v before deadline", deadline.Sub(endTime))
 	}

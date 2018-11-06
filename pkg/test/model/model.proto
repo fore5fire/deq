@@ -4,3 +4,11 @@ package model;
 message TestModel {
   string msg = 1;
 }
+
+message TestRequeueModel {
+  string msg = 1;
+}
+
+message TestNoTimeoutModel {
+  string msg = 1;
+}

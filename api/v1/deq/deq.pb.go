@@ -51,7 +51,7 @@ func (x EventState) String() string {
 	return proto.EnumName(EventState_name, int32(x))
 }
 func (EventState) EnumDescriptor() ([]byte, []int) {
-	return fileDescriptor_deq_7c26cf0aa49a0952, []int{0}
+	return fileDescriptor_deq_518b2e94cb2fd50b, []int{0}
 }
 
 type AckCode int32
@@ -89,7 +89,7 @@ func (x AckCode) String() string {
 	return proto.EnumName(AckCode_name, int32(x))
 }
 func (AckCode) EnumDescriptor() ([]byte, []int) {
-	return fileDescriptor_deq_7c26cf0aa49a0952, []int{1}
+	return fileDescriptor_deq_518b2e94cb2fd50b, []int{1}
 }
 
 type Event struct {
@@ -122,7 +122,7 @@ func (m *Event) Reset()         { *m = Event{} }
 func (m *Event) String() string { return proto.CompactTextString(m) }
 func (*Event) ProtoMessage()    {}
 func (*Event) Descriptor() ([]byte, []int) {
-	return fileDescriptor_deq_7c26cf0aa49a0952, []int{0}
+	return fileDescriptor_deq_518b2e94cb2fd50b, []int{0}
 }
 func (m *Event) XXX_Unmarshal(b []byte) error {
 	return m.Unmarshal(b)
@@ -203,7 +203,7 @@ func (m *Event) GetRequeueCount() int32 {
 type PubRequest struct {
 	// Required.
 	Event *Event `protobuf:"bytes,1,opt,name=event" json:"event,omitempty"`
-	// If set, the request will not complete until the published event has been dequeued by this channel
+	// If set, the request will not complete until the published event has been dequeued by this channel.
 	AwaitChannel         string   `protobuf:"bytes,2,opt,name=await_channel,json=awaitChannel,proto3" json:"await_channel,omitempty"`
 	XXX_NoUnkeyedLiteral struct{} `json:"-"`
 	XXX_sizecache        int32    `json:"-"`
@@ -213,7 +213,7 @@ func (m *PubRequest) Reset()         { *m = PubRequest{} }
 func (m *PubRequest) String() string { return proto.CompactTextString(m) }
 func (*PubRequest) ProtoMessage()    {}
 func (*PubRequest) Descriptor() ([]byte, []int) {
-	return fileDescriptor_deq_7c26cf0aa49a0952, []int{1}
+	return fileDescriptor_deq_518b2e94cb2fd50b, []int{1}
 }
 func (m *PubRequest) XXX_Unmarshal(b []byte) error {
 	return m.Unmarshal(b)
@@ -265,11 +265,12 @@ type SubRequest struct {
 	// string min_id = 3;
 	// // Events with id lexiographically greater than max_id will not be sent.
 	// string max_id = 4;
-	// If true, the request will not complete when the channel is idle.
-	Follow                  bool  `protobuf:"varint,5,opt,name=follow,proto3" json:"follow,omitempty"`
+	// Deprecated. If true, equivelant to idle_timout_milliseconds = 1000.
+	Follow bool `protobuf:"varint,5,opt,name=follow,proto3" json:"follow,omitempty"`
+	// If positive, the request will not complete until the channel is idle for the specified number of milliseconds.
 	IdleTimeoutMilliseconds int32 `protobuf:"varint,7,opt,name=idle_timeout_milliseconds,json=idleTimeoutMilliseconds,proto3" json:"idle_timeout_milliseconds,omitempty"`
-	// Number of milliseconds to wait before requeuing the event if it
-	// is not dequeued.
+	// Number of milliseconds to wait before requeuing the event if it is not dequeued.
+	// Defaults to 8000.
 	RequeueDelayMilliseconds int32    `protobuf:"varint,6,opt,name=requeue_delay_milliseconds,json=requeueDelayMilliseconds,proto3" json:"requeue_delay_milliseconds,omitempty"`
 	XXX_NoUnkeyedLiteral     struct{} `json:"-"`
 	XXX_sizecache            int32    `json:"-"`
@@ -279,7 +280,7 @@ func (m *SubRequest) Reset()         { *m = SubRequest{} }
 func (m *SubRequest) String() string { return proto.CompactTextString(m) }
 func (*SubRequest) ProtoMessage()    {}
 func (*SubRequest) Descriptor() ([]byte, []int) {
-	return fileDescriptor_deq_7c26cf0aa49a0952, []int{2}
+	return fileDescriptor_deq_518b2e94cb2fd50b, []int{2}
 }
 func (m *SubRequest) XXX_Unmarshal(b []byte) error {
 	return m.Unmarshal(b)
@@ -360,7 +361,7 @@ func (m *AckRequest) Reset()         { *m = AckRequest{} }
 func (m *AckRequest) String() string { return proto.CompactTextString(m) }
 func (*AckRequest) ProtoMessage()    {}
 func (*AckRequest) Descriptor() ([]byte, []int) {
-	return fileDescriptor_deq_7c26cf0aa49a0952, []int{3}
+	return fileDescriptor_deq_518b2e94cb2fd50b, []int{3}
 }
 func (m *AckRequest) XXX_Unmarshal(b []byte) error {
 	return m.Unmarshal(b)
@@ -426,7 +427,7 @@ func (m *AckResponse) Reset()         { *m = AckResponse{} }
 func (m *AckResponse) String() string { return proto.CompactTextString(m) }
 func (*AckResponse) ProtoMessage()    {}
 func (*AckResponse) Descriptor() ([]byte, []int) {
-	return fileDescriptor_deq_7c26cf0aa49a0952, []int{4}
+	return fileDescriptor_deq_518b2e94cb2fd50b, []int{4}
 }
 func (m *AckResponse) XXX_Unmarshal(b []byte) error {
 	return m.Unmarshal(b)
@@ -470,7 +471,7 @@ func (m *GetRequest) Reset()         { *m = GetRequest{} }
 func (m *GetRequest) String() string { return proto.CompactTextString(m) }
 func (*GetRequest) ProtoMessage()    {}
 func (*GetRequest) Descriptor() ([]byte, []int) {
-	return fileDescriptor_deq_7c26cf0aa49a0952, []int{5}
+	return fileDescriptor_deq_518b2e94cb2fd50b, []int{5}
 }
 func (m *GetRequest) XXX_Unmarshal(b []byte) error {
 	return m.Unmarshal(b)
@@ -533,7 +534,7 @@ func (m *DelRequest) Reset()         { *m = DelRequest{} }
 func (m *DelRequest) String() string { return proto.CompactTextString(m) }
 func (*DelRequest) ProtoMessage()    {}
 func (*DelRequest) Descriptor() ([]byte, []int) {
-	return fileDescriptor_deq_7c26cf0aa49a0952, []int{6}
+	return fileDescriptor_deq_518b2e94cb2fd50b, []int{6}
 }
 func (m *DelRequest) XXX_Unmarshal(b []byte) error {
 	return m.Unmarshal(b)
@@ -585,7 +586,7 @@ func (m *Empty) Reset()         { *m = Empty{} }
 func (m *Empty) String() string { return proto.CompactTextString(m) }
 func (*Empty) ProtoMessage()    {}
 func (*Empty) Descriptor() ([]byte, []int) {
-	return fileDescriptor_deq_7c26cf0aa49a0952, []int{7}
+	return fileDescriptor_deq_518b2e94cb2fd50b, []int{7}
 }
 func (m *Empty) XXX_Unmarshal(b []byte) error {
 	return m.Unmarshal(b)
@@ -626,7 +627,7 @@ func (m *EventV0) Reset()         { *m = EventV0{} }
 func (m *EventV0) String() string { return proto.CompactTextString(m) }
 func (*EventV0) ProtoMessage()    {}
 func (*EventV0) Descriptor() ([]byte, []int) {
-	return fileDescriptor_deq_7c26cf0aa49a0952, []int{8}
+	return fileDescriptor_deq_518b2e94cb2fd50b, []int{8}
 }
 func (m *EventV0) XXX_Unmarshal(b []byte) error {
 	return m.Unmarshal(b)
@@ -687,7 +688,7 @@ func (m *Any) Reset()         { *m = Any{} }
 func (m *Any) String() string { return proto.CompactTextString(m) }
 func (*Any) ProtoMessage()    {}
 func (*Any) Descriptor() ([]byte, []int) {
-	return fileDescriptor_deq_7c26cf0aa49a0952, []int{9}
+	return fileDescriptor_deq_518b2e94cb2fd50b, []int{9}
 }
 func (m *Any) XXX_Unmarshal(b []byte) error {
 	return m.Unmarshal(b)
@@ -2862,9 +2863,9 @@ var (
 	ErrIntOverflowDeq   = fmt.Errorf("proto: integer overflow")
 )
 
-func init() { proto.RegisterFile("deq.proto", fileDescriptor_deq_7c26cf0aa49a0952) }
+func init() { proto.RegisterFile("deq.proto", fileDescriptor_deq_518b2e94cb2fd50b) }
 
-var fileDescriptor_deq_7c26cf0aa49a0952 = []byte{
+var fileDescriptor_deq_518b2e94cb2fd50b = []byte{
 	// 730 bytes of a gzipped FileDescriptorProto
 	0x1f, 0x8b, 0x08, 0x00, 0x00, 0x00, 0x00, 0x00, 0x02, 0xff, 0x9c, 0x54, 0xcd, 0x6e, 0xf3, 0x44,
 	0x14, 0xed, 0xc4, 0x75, 0xd2, 0xde, 0xfc, 0x7c, 0xee, 0x50, 0xa8, 0xdb, 0x45, 0x88, 0x0c, 0x48,
