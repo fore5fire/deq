@@ -1,5 +1,5 @@
 syntax = "proto3";
-package model;
+package main;
 
 message TestModel {
   string msg = 1;
@@ -10,5 +10,9 @@ message TestRequeueModel {
 }
 
 message TestNoTimeoutModel {
+  string msg = 1;
+}
+
+message TestAwaitModel {
   string msg = 1;
 }

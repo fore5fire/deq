@@ -196,7 +196,6 @@ func getEventTimePayload(txn *badger.Txn, key data.EventTimeKey) (payload data.E
 	}
 	item, err := txn.Get(rawKey)
 	if err == badger.ErrKeyNotFound {
-		log.Printf("get %s", key)
 		return payload, ErrNotFound
 	}
 	if err != nil {

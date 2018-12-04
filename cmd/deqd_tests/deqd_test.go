@@ -1,17 +1,18 @@
-package main_test
+//go:generate protoc -I=. -I$GOPATH/src -I=$GOPATH/src/github.com/gogo/protobuf/protobuf --gogofaster_out=plugins=grpc,Mgoogle/protobuf/any.proto=github.com/gogo/protobuf/types,Mgoogle/protobuf/empty.proto=github.com/gogo/protobuf/types:. model.proto
+
+package main
 
 import (
 	"context"
 	"fmt"
 	"os"
-	"reflect"
 	"sync"
 	"testing"
 	"time"
 
+	"github.com/google/go-cmp/cmp"
 	"gitlab.com/katcheCode/deq"
 	"gitlab.com/katcheCode/deq/ack"
-	"gitlab.com/katcheCode/deq/pkg/test/model"
 	"google.golang.org/grpc"
 	"google.golang.org/grpc/codes"
 )
@@ -26,7 +27,7 @@ func init() {
 	}
 }
 
-func gatherTestModels(conn *grpc.ClientConn, duration time.Duration) (result []*model.TestModel, err error) {
+func gatherTestModels(conn *grpc.ClientConn, duration time.Duration) (result []*TestModel, err error) {
 
 	ctx, cancel := context.WithTimeout(context.Background(), duration)
 	defer cancel()
@@ -38,10 +39,10 @@ func gatherTestModels(conn *grpc.ClientConn, duration time.Duration) (result []*
 
 	mut := sync.Mutex{}
 
-	err = sub.Sub(ctx, &model.TestModel{}, func(e deq.Event) ack.Code {
+	err = sub.Sub(ctx, &TestModel{}, func(e deq.Event) ack.Code {
 		mut.Lock()
 		defer mut.Unlock()
-		result = append(result, e.Msg.(*model.TestModel))
+		result = append(result, e.Msg.(*TestModel))
 		return ack.DequeueOK
 	})
 	if err != nil {
@@ -67,8 +68,8 @@ func TestCreateAndReceive(t *testing.T) {
 	// beforeTime := time.Now()
 
 	p := deq.NewPublisher(conn, deq.PublisherOpts{})
-	expected := []*model.TestModel{
-		&model.TestModel{
+	expected := []*TestModel{
+		&TestModel{
 			Msg: "Hello world!",
 		},
 	}
@@ -82,9 +83,10 @@ func TestCreateAndReceive(t *testing.T) {
 	if err != nil {
 		t.Fatalf("Error Creating Event: %v", err)
 	}
+	expectedE.State = deq.EventStateQueued
 	expectedE.CreateTime = e.CreateTime
-	if !reflect.DeepEqual(expectedE, e) {
-		t.Errorf("expected %v, got %v", expectedE, e)
+	if !cmp.Equal(expectedE, e) {
+		t.Errorf("(-want +got)\n%s", cmp.Diff(expectedE, e))
 	}
 
 	// TODO: fix test if server time is out of sync with local time... or just move to unit test
@@ -100,8 +102,8 @@ func TestCreateAndReceive(t *testing.T) {
 	if err != nil {
 		t.Fatalf("Sub: %v", err)
 	}
-	if !reflect.DeepEqual(expected, messages) {
-		t.Fatalf("Sub: expected %v, got %v", expected, messages)
+	if !cmp.Equal(expected, messages) {
+		t.Fatalf("Sub: (-want +got)\n%s", cmp.Diff(expected, messages))
 	}
 }
 
@@ -121,8 +123,8 @@ func TestPubDuplicate(t *testing.T) {
 	// beforeTime := time.Now()
 
 	p := deq.NewPublisher(conn, deq.PublisherOpts{})
-	expected := []*model.TestModel{
-		&model.TestModel{
+	expected := []*TestModel{
+		&TestModel{
 			Msg: "Hello world!",
 		},
 	}
@@ -140,12 +142,13 @@ func TestPubDuplicate(t *testing.T) {
 	if err != nil {
 		t.Fatalf("Error Creating Event: %v", err)
 	}
+	expectedE.State = deq.EventStateQueued
 	expectedE.CreateTime = e.CreateTime
-	if !reflect.DeepEqual(expectedE, e) {
-		t.Errorf("expected %v, got %v", expectedE, e)
+	if !cmp.Equal(expectedE, e) {
+		t.Errorf("(-want +got)\n%s", cmp.Diff(expectedE, e))
 	}
 
-	expectedE.Msg = &model.TestModel{
+	expectedE.Msg = &TestModel{
 		Msg: "Hello world #2!",
 	}
 	e, err = p.Pub(ctx, expectedE)
@@ -166,7 +169,7 @@ func TestMassPublish(t *testing.T) {
 	for i := 0; i < 500; i++ {
 		_, err := p.Pub(ctx, deq.Event{
 			ID: fmt.Sprintf("%d-%.3d", now, i),
-			Msg: &model.TestModel{
+			Msg: &TestModel{
 				Msg: fmt.Sprintf("Test Message - %.3d", i),
 			},
 		})
@@ -183,7 +186,7 @@ func TestMassPublish(t *testing.T) {
 	for i := 500; i < 1000; i++ {
 		_, err = p.Pub(ctx, deq.Event{
 			ID: fmt.Sprintf("%d-%d", now, i),
-			Msg: &model.TestModel{
+			Msg: &TestModel{
 				Msg: fmt.Sprintf("Test Message - %.3d", i),
 			},
 		})
@@ -225,13 +228,14 @@ func TestRequeue(t *testing.T) {
 
 	expected, err := p.Pub(ctx, deq.Event{
 		ID: "requeue-" + time.Now().String(),
-		Msg: &model.TestRequeueModel{
+		Msg: &TestRequeueModel{
 			Msg: "Hello world of requeue!",
 		},
 	})
 	if err != nil {
 		t.Fatalf("Error Creating Event: %v", err)
 	}
+	expected.RequeueCount = 4
 
 	time.Sleep(time.Second * 8)
 
@@ -241,7 +245,7 @@ func TestRequeue(t *testing.T) {
 	})
 
 	var results []deq.Event
-	err = consumer.Sub(ctx, &model.TestRequeueModel{}, func(e deq.Event) ack.Code {
+	err = consumer.Sub(ctx, &TestRequeueModel{}, func(e deq.Event) ack.Code {
 		results = append(results, e)
 		if e.RequeueCount < 2 {
 			return ack.RequeueExponential
@@ -257,8 +261,8 @@ func TestRequeue(t *testing.T) {
 	if err != nil {
 		t.Fatalf("Sub: %v", err)
 	}
-	if !reflect.DeepEqual(expected, results) {
-		t.Errorf("Sub: expected %+v, got %+v", expected, results)
+	if !cmp.Equal(expected, results) {
+		t.Errorf("Sub: (-want +got)\n%s", cmp.Diff(expected, results))
 	}
 }
 
@@ -273,19 +277,19 @@ func TestNoTimeout(t *testing.T) {
 	expected := []deq.Event{
 		deq.Event{
 			ID: "NoTimeout-TestEvent1",
-			Msg: &model.TestNoTimeoutModel{
+			Msg: &TestNoTimeoutModel{
 				Msg: "hello no timeout!",
 			},
 		},
 		deq.Event{
 			ID: "NoTimeout-TestEvent2",
-			Msg: &model.TestNoTimeoutModel{
+			Msg: &TestNoTimeoutModel{
 				Msg: "hello no timeout!",
 			},
 		},
 		deq.Event{
 			ID: "NoTimeout-TestEvent3",
-			Msg: &model.TestNoTimeoutModel{
+			Msg: &TestNoTimeoutModel{
 				Msg: "hello no timeout!",
 			},
 		},
@@ -299,7 +303,7 @@ func TestNoTimeout(t *testing.T) {
 	var subErr error
 	events := make(chan deq.Event)
 	go func() {
-		subErr = sub.Sub(ctx, &model.TestNoTimeoutModel{}, func(e deq.Event) ack.Code {
+		subErr = sub.Sub(ctx, &TestNoTimeoutModel{}, func(e deq.Event) ack.Code {
 			events <- e
 			return ack.DequeueOK
 		})
@@ -317,8 +321,8 @@ func TestNoTimeout(t *testing.T) {
 		if !ok {
 			t.Fatalf("stream closed before %d", i)
 		}
-		if !reflect.DeepEqual(created.ID, next.ID) {
-			t.Errorf("%d: expected %v, got %v", i, created.ID, next.ID)
+		if !cmp.Equal(created.ID, next.ID) {
+			t.Errorf("%d: (-want +got)\n%s", i, cmp.Diff(created.ID, next.ID))
 		}
 	}
 
@@ -327,12 +331,68 @@ func TestNoTimeout(t *testing.T) {
 	}
 
 	// Allow one millisecond of lee-way
-	endTime := time.Now().Add(time.Millisecond)
+	endTime := time.Now()
 
 	if grpc.Code(subErr) != codes.DeadlineExceeded {
 		t.Fatal(subErr)
 	}
 	if endTime.Before(deadline) {
 		t.Errorf("sub ended %v before deadline", deadline.Sub(endTime))
+	}
+}
+
+func TestAwait(t *testing.T) {
+	t.Parallel()
+
+	ctx, cancel := context.WithTimeout(context.Background(), time.Second*5)
+	defer cancel()
+
+	sub := deq.NewSubscriber(conn, deq.SubscriberOpts{
+		Channel: "AwaitTestChannel",
+	})
+	pub := deq.NewPublisher(conn, deq.PublisherOpts{})
+
+	expected, err := pub.Pub(ctx, deq.Event{
+		ID: "id-1",
+		Msg: &TestAwaitModel{
+			Msg: "abc 123",
+		},
+	})
+	if err != nil {
+		t.Fatal(err)
+	}
+
+	var msg TestAwaitModel
+	e, err := sub.Await(ctx, "id-1", &msg)
+	if !cmp.Equal(e, expected) {
+		t.Errorf("(-want +got)\n%s", cmp.Diff(expected, e))
+	}
+
+	var awaitErr error
+	var wg sync.WaitGroup
+	wg.Add(1)
+	go func() {
+		defer wg.Done()
+		e, awaitErr = sub.Await(ctx, "id-2", &msg)
+	}()
+
+	time.Sleep(time.Second / 4)
+
+	expected, err = pub.Pub(ctx, deq.Event{
+		ID: "id-2",
+		Msg: &TestAwaitModel{
+			Msg: "abc 123",
+		},
+	})
+	if err != nil {
+		t.Fatalf("pub: %v", err)
+	}
+
+	wg.Wait()
+	if awaitErr != nil {
+		t.Fatalf("await: %v", awaitErr)
+	}
+	if !cmp.Equal(e, expected) {
+		t.Errorf("(-want +got)\n%s", cmp.Diff(expected, e))
 	}
 }

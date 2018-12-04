@@ -75,7 +75,7 @@ func (s *Store) Close() error {
 }
 
 // Pub publishes an event
-func (s *Store) Pub(e deq.Event) error {
+func (s *Store) Pub(e deq.Event) (deq.Event, error) {
 
 	txn := s.db.NewTransaction(true)
 	defer txn.Discard()
@@ -85,15 +85,15 @@ func (s *Store) Pub(e deq.Event) error {
 		// Supress the error if the new and existing events have matching payloads.
 		existing, err := getEvent(txn, e.Topic, e.Id, "")
 		if err != nil {
-			return fmt.Errorf("get existing event: %v", err)
+			return deq.Event{}, fmt.Errorf("get existing event: %v", err)
 		}
 		if !bytes.Equal(existing.Payload, e.Payload) {
-			return ErrAlreadyExists
+			return deq.Event{}, ErrAlreadyExists
 		}
-		return nil
+		return *existing, nil
 	}
 	if err != nil {
-		return err
+		return deq.Event{}, err
 	}
 
 	err = txn.Commit(nil)
@@ -102,22 +102,28 @@ func (s *Store) Pub(e deq.Event) error {
 		defer txn.Discard()
 		existing, err := getEvent(txn, e.Topic, e.Id, "")
 		if err != nil {
-			return fmt.Errorf("get conflicting event: %v", err)
+			return deq.Event{}, fmt.Errorf("get conflicting event: %v", err)
 		}
 		if !bytes.Equal(existing.Payload, e.Payload) {
-			return ErrAlreadyExists
+			return deq.Event{}, ErrAlreadyExists
 		}
-		return nil
+		return *existing, nil
 	}
 	if err != nil {
-		return err
+		return deq.Event{}, err
 	}
+
+	e.State = e.DefaultState
 
 	if e.DefaultState == deq.EventState_QUEUED {
 		s.out <- &e
 	}
 
-	return nil
+	for _, channel := range s.sharedChannels {
+		channel.broadcastEventUpdated(e.Id)
+	}
+
+	return e, nil
 }
 
 // // Get returns the event for an event ID, or ErrNotFound if none is found

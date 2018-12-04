@@ -101,6 +101,9 @@ message GetRequest {
   string topic = 2;
   // Required.
   string channel = 3;
+  // If await is true, the request will not respond until the
+  // event is published instead of returning code NOT_FOUND.
+  bool await = 4;
 }
 
 message DelRequest {

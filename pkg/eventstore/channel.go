@@ -182,6 +182,10 @@ func (c *Channel) Get(eventID string) (deq.Event, error) {
 	return *e, nil
 }
 
+// func (c *Channel) Await(eventID string) (deq.Event, error) {
+
+// }
+
 // SetEventState sets the state of an event for this channel
 func (c *Channel) SetEventState(id string, state deq.EventState) error {
 
@@ -211,13 +215,7 @@ func (c *Channel) SetEventState(id string, state deq.EventState) error {
 		return err
 	}
 
-	c.shared.stateChansMutex.Lock()
-	stateChans := c.shared.stateChans[id]
-	if stateChans != nil {
-		close(stateChans)
-		c.shared.stateChans[id] = nil
-	}
-	c.shared.stateChansMutex.Unlock()
+	c.shared.broadcastEventUpdated(id)
 
 	return nil
 }
@@ -541,6 +539,16 @@ func (s *sharedChannel) getCursor(topic string) ([]byte, error) {
 	// }
 
 	return current, nil
+}
+
+func (s *sharedChannel) broadcastEventUpdated(id string) {
+	s.stateChansMutex.Lock()
+	stateChans := s.stateChans[id]
+	if stateChans != nil {
+		close(stateChans)
+		s.stateChans[id] = nil
+	}
+	s.stateChansMutex.Unlock()
 }
 
 func (s *sharedChannel) broadcastErr(err error) {
