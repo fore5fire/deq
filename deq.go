@@ -35,6 +35,9 @@ type SubscriberOpts struct {
 // NewSubscriber creates a new Subscriber.
 // conn can be used by multiple Producers and Consumers in parallel
 func NewSubscriber(conn *grpc.ClientConn, opts SubscriberOpts) *Subscriber {
+	if opts.Channel == "" {
+		panic("opts.Channel is required")
+	}
 	return &Subscriber{api.NewDEQClient(conn), opts}
 }
 
