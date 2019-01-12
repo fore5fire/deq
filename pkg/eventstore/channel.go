@@ -32,21 +32,21 @@ type channelKey struct {
 type sharedChannel struct {
 	// Mutex protects idleChans and doneChans
 	sync.Mutex
-	name            string
-	topic           string
-	missedMutex     sync.Mutex
-	missed          bool
-	in              chan *deq.Event
-	out             chan *deq.Event
-	done            chan error
-	idleMutex       sync.RWMutex
-	idle            bool
-	doneChans       []chan error
-	stateChansMutex sync.Mutex
+	name           string
+	topic          string
+	missedMutex    sync.Mutex
+	missed         bool
+	in             chan *deq.Event
+	out            chan *deq.Event
+	done           chan error
+	idleMutex      sync.RWMutex
+	idle           bool
+	doneChans      []chan error
+	stateSubsMutex sync.RWMutex
 	// Pass in a response channel, when the event is dequeued the new state will
 	// be sent back on the response channel
-	stateChans map[string]chan struct{}
-	db         *badger.DB
+	stateSubs map[string]map[*EventStateSubscription]struct{}
+	db        *badger.DB
 }
 
 // Channel returns the channel for a given name
@@ -57,12 +57,12 @@ func (s *Store) Channel(name, topic string) *Channel {
 	shared, ok := s.sharedChannels[key]
 	if !ok {
 		shared = &sharedChannel{
-			name:       name,
-			topic:      topic,
-			in:         make(chan *deq.Event, 20),
-			out:        make(chan *deq.Event, 20),
-			stateChans: make(map[string]chan struct{}),
-			db:         s.db,
+			name:      name,
+			topic:     topic,
+			in:        make(chan *deq.Event, 20),
+			out:       make(chan *deq.Event, 20),
+			stateSubs: make(map[string]map[*EventStateSubscription]struct{}),
+			db:        s.db,
 		}
 		s.sharedChannels[key] = shared
 
@@ -220,7 +220,7 @@ func (c *Channel) SetEventState(id string, state deq.EventState) error {
 		return err
 	}
 
-	c.shared.broadcastEventUpdated(id)
+	c.shared.broadcastEventUpdated(id, state)
 
 	return nil
 }
@@ -306,36 +306,57 @@ func (c *Channel) incrementSavedRequeueCount(e *deq.Event) (int, error) {
 	return 0, badger.ErrConflict
 }
 
-// AwaitEventStateChange blocks until the event is dequeued, then returns it's state.
-func (c *Channel) AwaitEventStateChange(ctx context.Context, id string) chan deq.EventState {
+type EventStateSubscription struct {
+	C <-chan deq.EventState
+	c chan deq.EventState
 
-	result := make(chan deq.EventState, 1)
-	c.shared.stateChansMutex.Lock()
-	defer c.shared.stateChansMutex.Unlock()
-	await := c.shared.stateChans[id]
-	if await == nil {
-		await = make(chan struct{})
-		c.shared.stateChans[id] = await
+	eventID string
+	channel *Channel
+}
+
+// NewEventStateSubscription returns a new EventStateSubscription.
+func (c *Channel) NewEventStateSubscription(id string) *EventStateSubscription {
+
+	sub := &EventStateSubscription{
+		eventID: id,
+		channel: c,
+		c:       make(chan deq.EventState, 2),
+	}
+	sub.C = sub.c
+
+	c.shared.stateSubsMutex.Lock()
+	defer c.shared.stateSubsMutex.Unlock()
+
+	subs := c.shared.stateSubs[id]
+	if subs == nil {
+		subs = make(map[*EventStateSubscription]struct{})
+		c.shared.stateSubs[id] = subs
+	}
+	subs[sub] = struct{}{}
+
+	return sub
+}
+
+func (sub *EventStateSubscription) Next(ctx context.Context) (deq.EventState, error) {
+	select {
+	case <-ctx.Done():
+		return deq.EventState_UNSPECIFIED_STATE, ctx.Err()
+	case state := <-sub.C:
+		return state, nil
+	}
+}
+
+func (sub *EventStateSubscription) Close() {
+	sub.channel.shared.stateSubsMutex.Lock()
+	defer sub.channel.shared.stateSubsMutex.Unlock()
+
+	subs := sub.channel.shared.stateSubs[sub.eventID]
+	delete(subs, sub)
+	if len(subs) == 0 {
+		delete(sub.channel.shared.stateSubs, sub.eventID)
 	}
 
-	go func() {
-		// Wait for state change (context done)
-		select {
-		case <-ctx.Done():
-			c.setErr(ctx.Err())
-			close(result)
-		case <-await:
-			e, err := c.Get(id)
-			if err != nil {
-				c.setErr(err)
-				close(result)
-				return
-			}
-			result <- e.State
-		}
-	}()
-
-	return result
+	close(sub.c)
 }
 
 func (s *sharedChannel) Idle() bool {
@@ -546,14 +567,12 @@ func (s *sharedChannel) getCursor(topic string) ([]byte, error) {
 	return current, nil
 }
 
-func (s *sharedChannel) broadcastEventUpdated(id string) {
-	s.stateChansMutex.Lock()
-	stateChans := s.stateChans[id]
-	if stateChans != nil {
-		close(stateChans)
-		s.stateChans[id] = nil
+func (s *sharedChannel) broadcastEventUpdated(id string, state deq.EventState) {
+	s.stateSubsMutex.RLock()
+	for sub := range s.stateSubs[id] {
+		sub.c <- state
 	}
-	s.stateChansMutex.Unlock()
+	s.stateSubsMutex.RUnlock()
 }
 
 func (s *sharedChannel) broadcastErr(err error) {

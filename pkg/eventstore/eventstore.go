@@ -120,7 +120,7 @@ func (s *Store) Pub(e deq.Event) (deq.Event, error) {
 	}
 
 	for _, channel := range s.sharedChannels {
-		channel.broadcastEventUpdated(e.Id)
+		channel.broadcastEventUpdated(e.Id, e.State)
 	}
 
 	return e, nil

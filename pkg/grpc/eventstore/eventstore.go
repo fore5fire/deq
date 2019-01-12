@@ -42,9 +42,10 @@ func (s *Server) Pub(ctx context.Context, in *pb.PubRequest) (*pb.Event, error) 
 
 	channel := s.store.Channel(in.AwaitChannel, in.Event.Topic)
 
-	var await chan pb.EventState
+	var sub *eventstore.EventStateSubscription
 	if in.AwaitChannel != "" {
-		await = channel.AwaitEventStateChange(ctx, in.Event.Id)
+		sub = channel.NewEventStateSubscription(in.Event.Id)
+		defer sub.Close()
 	}
 
 	e, err := s.store.Pub(*in.Event)
@@ -56,21 +57,15 @@ func (s *Server) Pub(ctx context.Context, in *pb.PubRequest) (*pb.Event, error) 
 		return nil, status.Error(codes.Internal, "")
 	}
 
-	if await != nil {
-		for {
-			select {
-			case state, ok := <-await:
-				if !ok {
-					log.Printf("await event dequeue: %v", channel.Err())
-					return nil, status.Error(codes.Internal, "")
-				}
-				if state != pb.EventState_DEQUEUED_ERROR && state != pb.EventState_DEQUEUED_OK {
-					continue
-				}
-				in.Event.State = state
-				break
-			case <-ctx.Done():
+	if sub != nil {
+		for e.State == pb.EventState_QUEUED {
+			e.State, err = sub.Next(ctx)
+			if err == context.DeadlineExceeded || err == context.Canceled {
 				return nil, status.FromContextError(ctx.Err()).Err()
+			}
+			if err != nil {
+				log.Printf("create event: await dequeue: %v", err)
+				return nil, status.Error(codes.Internal, "")
 			}
 		}
 	}
@@ -274,39 +269,41 @@ func (s *Server) Get(ctx context.Context, in *pb.GetRequest) (*pb.Event, error) 
 
 	channel := s.store.Channel(in.Channel, in.Topic)
 
-	// start await before the first read so we won't miss the notification
-	var await chan pb.EventState
+	// start subscription before the read so we won't miss the notification
+	var sub *eventstore.EventStateSubscription
 	if in.Await {
-		await = channel.AwaitEventStateChange(ctx, in.EventId)
+		sub = channel.NewEventStateSubscription(in.EventId)
+		defer sub.Close()
+	}
+
+	await := func() (*pb.Event, error) {
+		_, err := sub.Next(ctx)
+		if err == context.DeadlineExceeded || err == context.Canceled {
+			return nil, status.FromContextError(ctx.Err()).Err()
+		}
+		if err != nil {
+			log.Printf("Get: await creation: %v", err)
+			return nil, status.Error(codes.Internal, "")
+		}
+		e, err := channel.Get(in.EventId)
+		if err != nil {
+			log.Println("Get: retry after await: %v", err)
+			return nil, status.Error(codes.Internal, "")
+		}
+
+		return &e, nil
 	}
 
 	e, err := channel.Get(in.EventId)
-	if err != nil && err != eventstore.ErrNotFound {
-		log.Printf("Get: %v", err)
-		return nil, status.Error(codes.Internal, "")
-	}
-	if err == eventstore.ErrNotFound && await == nil {
+	if err == eventstore.ErrNotFound && sub == nil {
 		return nil, status.Error(codes.NotFound, "")
 	}
-	if err == nil {
-		return &e, nil
+	if err == eventstore.ErrNotFound {
+		return await()
 	}
-
-	select {
-	case _, ok := <-await:
-		if !ok {
-			log.Printf("await event: %v", channel.Err())
-			return nil, status.Error(codes.Internal, "")
-		}
-
-		e, err := channel.Get(in.EventId)
-		if err != nil {
-			log.Printf("Get: %v", err)
-			return nil, status.Error(codes.Internal, "")
-		}
-		return &e, nil
-	case <-ctx.Done():
-		return nil, status.FromContextError(ctx.Err()).Err()
+	if err != nil {
+		log.Printf("Get: %v", err)
+		return nil, status.Error(codes.Internal, "")
 	}
 
 	return &e, nil
