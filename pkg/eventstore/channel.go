@@ -189,19 +189,24 @@ func (c *Channel) Get(eventID string) (deq.Event, error) {
 // SetEventState sets the state of an event for this channel
 func (c *Channel) SetEventState(id string, state deq.EventState) error {
 
-	txn := c.db.NewTransaction(true)
-	defer txn.Discard()
-
 	key := data.ChannelKey{
 		Topic:   c.topic,
 		Channel: c.name,
 		ID:      id,
 	}
 
+	// We need to load channel event in a seperate transaction because we don't want to
+	// cause conflicts if multiple people set event state at the same time.
+	txn := c.db.NewTransaction(false)
+	defer txn.Discard()
+
 	channelEvent, err := getChannelEvent(txn, key)
 	if err != nil {
 		return err
 	}
+
+	txn = c.db.NewTransaction(true)
+	defer txn.Discard()
 
 	channelEvent.EventState = state
 
