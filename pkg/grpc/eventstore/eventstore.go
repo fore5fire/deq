@@ -92,92 +92,45 @@ func (s *Server) Sub(in *pb.SubRequest, stream pb.DEQ_SubServer) error {
 	channel := s.store.Channel(in.Channel, in.Topic)
 	defer channel.Close()
 
-	events := make(chan pb.Event, 1)
-	ready := make(chan struct{}, 1)
-	defer close(ready)
-	var nextErr error
-	go func() {
-		for range ready {
-			e, err := channel.Next(stream.Context())
-			if err != nil {
-				nextErr = err
-				close(events)
-				return
-			}
-			events <- e
-		}
-	}()
+	nextCtx := stream.Context()
+	cancel := func() {}
+	defer cancel()
 
-	var timer *time.Timer
-
-	// idleTimer := time.NewTimer(idleTimeout)
-	// defer idleTimer.Stop()
-	// var idleCalled bool
 	for {
-		// if !idleTimer.Stop() && !idleCalled {
-		// 	<-idleTimer.C
-		// }
-		// idleCalled = false
-		// if idleTimeout > 0 {
-		// 	idleTimer.Reset(idleTimeout)
-		// }
-		var idle <-chan time.Time
+
 		if idleTimeout > 0 {
-			if timer != nil {
-				timer.Stop()
-			}
-			timer = time.NewTimer(idleTimeout)
-			idle = timer.C
+			cancel()
+			nextCtx, cancel = context.WithTimeout(stream.Context(), idleTimeout)
 		}
-		ready <- struct{}{}
-		select {
-		case e, ok := <-events:
-			if !ok {
-				if nextErr == context.DeadlineExceeded {
-					return status.Error(codes.DeadlineExceeded, "")
-				}
-				if nextErr == context.Canceled {
-					return status.Error(codes.Canceled, "")
-				}
-				if nextErr != nil {
-					log.Printf("read from channel: %v", nextErr)
-					return status.Error(codes.Internal, "")
-				}
-				// Event stream closed, shutting down...
-				// TODO: expose running streams metric
-				return nil
-			}
 
-			if baseRequeueDelay > 0 {
-				err := channel.RequeueEvent(e, time.Duration(math.Pow(2, float64(e.RequeueCount)))*baseRequeueDelay)
-				if err != nil {
-					log.Printf("send event: requeue: %v", err)
-					return status.Error(codes.Internal, "")
-				}
+		e, err := channel.Next(nextCtx)
+		if err == context.DeadlineExceeded || err == context.Canceled {
+			if err == stream.Context().Err() { // error is from actual request context
+				return status.FromContextError(stream.Context().Err()).Err()
 			}
-
-			err := stream.Send(&e)
-			if err != nil {
-				// channel.RequeueEvent(e, 0)
-				log.Printf("send event: %v", err)
-				return status.Error(codes.Internal, "")
-			}
-			// Poll for disconect when idle
-		// case <-idleTimer.C:
-		case <-idle:
-			// idleCalled = true
 			if channel.Idle() {
 				return nil
 			}
-			// // Poll to check if stream closed so we can free up memory
-			// err := stream.Context().Err()
-			// if err == context.Canceled || err == context.DeadlineExceeded {
-			// 	return nil
-			// }
-			// if err != nil {
-			// 	log.Printf("Stream failed: %v", err)
-			// 	return nil
-			// }
+			continue
+		}
+		if err != nil {
+			log.Printf("Sub: get next event from channel: %v", err)
+			return status.Error(codes.Internal, "")
+		}
+
+		if baseRequeueDelay > 0 {
+			err := channel.RequeueEvent(e, time.Duration(math.Pow(2, float64(e.RequeueCount)))*baseRequeueDelay)
+			if err != nil {
+				log.Printf("send event: requeue: %v", err)
+				return status.Error(codes.Internal, "")
+			}
+		}
+
+		err = stream.Send(&e)
+		if err != nil {
+			// channel.RequeueEvent(e, 0)
+			log.Printf("send event: %v", err)
+			return status.Error(codes.Internal, "")
 		}
 	}
 }
