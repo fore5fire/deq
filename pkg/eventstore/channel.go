@@ -2,6 +2,7 @@ package eventstore
 
 import (
 	"context"
+	"fmt"
 	"log"
 	"sync"
 	"time"
@@ -285,14 +286,14 @@ func (c *Channel) incrementSavedRequeueCount(e *deq.Event) (int, error) {
 
 		channelEvent, err := getChannelEvent(txn, key)
 		if err != nil {
-			return 0, err
+			return -1, err
 		}
 
 		channelEvent.RequeueCount++
 
 		err = setChannelEvent(txn, key, channelEvent)
 		if err != nil {
-			return 0, err
+			return -1, err
 		}
 
 		err = txn.Commit(nil)
@@ -301,13 +302,13 @@ func (c *Channel) incrementSavedRequeueCount(e *deq.Event) (int, error) {
 			continue
 		}
 		if err != nil {
-			return 0, nil
+			return -1, fmt.Errorf("commit channel event: %v", err)
 		}
 
 		return int(channelEvent.RequeueCount), nil
 	}
 
-	return 0, badger.ErrConflict
+	return -1, badger.ErrConflict
 }
 
 type EventStateSubscription struct {
