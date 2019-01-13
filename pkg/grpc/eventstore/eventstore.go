@@ -118,7 +118,8 @@ func (s *Server) Sub(in *pb.SubRequest, stream pb.DEQ_SubServer) error {
 			return status.Error(codes.Internal, "")
 		}
 
-		err = channel.RequeueEvent(e, time.Duration(math.Pow(2, float64(e.RequeueCount)))*baseRequeueDelay)
+		cappedRequeue := math.Max(float64(e.RequeueCount), 12)
+		err = channel.RequeueEvent(e, time.Duration(math.Pow(2, cappedRequeue))*baseRequeueDelay)
 		if err != nil {
 			log.Printf("send event: requeue: %v", err)
 			return status.Error(codes.Internal, "")
@@ -198,10 +199,6 @@ func (s *Server) Ack(ctx context.Context, in *pb.AckRequest) (*pb.AckResponse, e
 
 		if delay < 0 || delay > time.Hour {
 			delay = time.Hour
-		}
-
-		if delay < time.Second {
-			log.Println("[WARN] unexpected requeue delay:", delay, "requeue count:", e.RequeueCount, in)
 		}
 
 		channel.RequeueEvent(e, delay)

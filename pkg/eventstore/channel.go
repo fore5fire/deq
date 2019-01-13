@@ -245,7 +245,7 @@ func (c *Channel) SetEventState(id string, state deq.EventState) error {
 func (c *Channel) RequeueEvent(e deq.Event, delay time.Duration) error {
 
 	requeue := func() error {
-		log.Printf("REQUEUING %s/%s count: %d", e.Topic, e.Id, e.RequeueCount)
+		// log.Printf("REQUEUING %s/%s count: %d", e.Topic, e.Id, e.RequeueCount)
 		requeueCount, err := c.incrementSavedRequeueCount(&e)
 		if err != nil {
 			return err
@@ -480,7 +480,7 @@ func (s *sharedChannel) start() {
 				s.idleMutex.Lock()
 				s.idle = false
 				s.idleMutex.Unlock()
-				log.Printf("READING FROM MEMORY %s/%s count: %d", e.Topic, e.Id, e.RequeueCount)
+				// log.Printf("READING FROM MEMORY %s/%s count: %d", e.Topic, e.Id, e.RequeueCount)
 				s.out <- e
 				cursor, _ = data.EventKey{
 					Topic:      e.Topic,
@@ -552,7 +552,7 @@ func (s *sharedChannel) catchUp(cursor []byte) ([]byte, error) {
 			continue
 		}
 
-		log.Printf("READING FROM DISK %s/%s count: %d", key.Topic, key.ID, channel.RequeueCount)
+		// log.Printf("READING FROM DISK %s/%s count: %d", key.Topic, key.ID, channel.RequeueCount)
 
 		s.out <- &deq.Event{
 			Id:           key.ID,
