@@ -117,7 +117,7 @@ func (s *Server) Sub(in *pb.SubRequest, stream pb.DEQ_SubServer) error {
 			log.Printf("Sub: get next event from channel: %v", err)
 			return status.Error(codes.Internal, "")
 		}
-
+		log.Println("SENDING", e, baseRequeueDelay)
 		err = channel.RequeueEvent(e, time.Duration(math.Pow(2, float64(e.RequeueCount)))*baseRequeueDelay)
 		if err != nil {
 			log.Printf("send event: requeue: %v", err)
