@@ -294,7 +294,7 @@ func (c *Channel) incrementSavedRequeueCount(e *deq.Event) (int, error) {
 		err = txn.Commit(nil)
 		if err == badger.ErrConflict {
 			time.Sleep(time.Second / 10)
-			// continue
+			continue
 		}
 		if err != nil {
 			return 0, nil

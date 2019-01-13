@@ -118,12 +118,10 @@ func (s *Server) Sub(in *pb.SubRequest, stream pb.DEQ_SubServer) error {
 			return status.Error(codes.Internal, "")
 		}
 
-		if baseRequeueDelay > 0 {
-			err := channel.RequeueEvent(e, time.Duration(math.Pow(2, float64(e.RequeueCount)))*baseRequeueDelay)
-			if err != nil {
-				log.Printf("send event: requeue: %v", err)
-				return status.Error(codes.Internal, "")
-			}
+		err = channel.RequeueEvent(e, time.Duration(math.Pow(2, float64(e.RequeueCount)))*baseRequeueDelay)
+		if err != nil {
+			log.Printf("send event: requeue: %v", err)
+			return status.Error(codes.Internal, "")
 		}
 
 		err = stream.Send(&e)
