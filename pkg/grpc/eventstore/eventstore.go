@@ -192,7 +192,8 @@ func (s *Server) Ack(ctx context.Context, in *pb.AckRequest) (*pb.AckResponse, e
 		case pb.AckCode_REQUEUE_LINEAR:
 			delay = baseTime * time.Duration(e.RequeueCount+1)
 		case pb.AckCode_REQUEUE_EXPONENTIAL:
-			delay = time.Duration(math.Pow(2, float64(e.RequeueCount))) * baseTime
+			cappedRequeue := math.Min(float64(e.RequeueCount), 12)
+			delay = time.Duration(math.Pow(2, cappedRequeue)) * baseTime
 		}
 
 		if delay < 0 || delay > time.Hour {
