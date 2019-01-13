@@ -108,11 +108,10 @@ func (s *Server) Sub(in *pb.SubRequest, stream pb.DEQ_SubServer) error {
 			if err == stream.Context().Err() { // error is from actual request context
 				return status.FromContextError(stream.Context().Err()).Err()
 			}
-			// if channel.Idle() {
-			// 	return nil
-			// }
-			// continue
-			return nil
+			if channel.Idle() {
+				return nil
+			}
+			continue
 		}
 		if err != nil {
 			log.Printf("Sub: get next event from channel: %v", err)
