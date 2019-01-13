@@ -245,6 +245,7 @@ func (c *Channel) SetEventState(id string, state deq.EventState) error {
 func (c *Channel) RequeueEvent(e deq.Event, delay time.Duration) error {
 
 	requeue := func() error {
+		log.Printf("REQUEUING %s/%s count: %d", e.Topic, e.Id, e.RequeueCount)
 		requeueCount, err := c.incrementSavedRequeueCount(&e)
 		if err != nil {
 			return err
@@ -311,21 +312,39 @@ func (c *Channel) incrementSavedRequeueCount(e *deq.Event) (int, error) {
 	return -1, badger.ErrConflict
 }
 
+// EventStateSubscription allows you to get updates when a particular event's state is updated.
 type EventStateSubscription struct {
 	C <-chan deq.EventState
 	c chan deq.EventState
 
 	eventID string
 	channel *Channel
+	missed  bool
+	latest  deq.EventState
 }
 
 // NewEventStateSubscription returns a new EventStateSubscription.
+//
+// EventStateSubscription begins caching updates as soon as it's created, even before
+// Next is called. Close should always be called when the EventStateSubscription
+// is no longer needed.
+// Example usage:
+// ```
+// sub := channel.NewEventStateSubscription(id)
+// defer sub.Close()
+// for {
+// 	 state := sub.Next(ctx)
+//   if state != deq.EventState_QUEUED {
+//     break
+//	 }
+// }
+// ```
 func (c *Channel) NewEventStateSubscription(id string) *EventStateSubscription {
 
 	sub := &EventStateSubscription{
 		eventID: id,
 		channel: c,
-		c:       make(chan deq.EventState, 2),
+		c:       make(chan deq.EventState, 3),
 	}
 	sub.C = sub.c
 
@@ -342,6 +361,11 @@ func (c *Channel) NewEventStateSubscription(id string) *EventStateSubscription {
 	return sub
 }
 
+// Next blocks until an update is recieved, then returns the new state.
+//
+// It's possible for a subscription to miss updates if its internal buffer is full. In this case,
+// it will skip earlier updates while preserving update order, such that the current state is always
+// at the end of a full buffer.
 func (sub *EventStateSubscription) Next(ctx context.Context) (deq.EventState, error) {
 	select {
 	case <-ctx.Done():
@@ -351,6 +375,14 @@ func (sub *EventStateSubscription) Next(ctx context.Context) (deq.EventState, er
 	}
 }
 
+// Close closes the EventStateSubscription.
+//
+// This method should always be called when the EventStateSubscription is no longer needed.
+// For example:
+// ```
+// sub := channel.NewEventStateSubscription(id)
+// defer sub.Close()
+// ```
 func (sub *EventStateSubscription) Close() {
 	sub.channel.shared.stateSubsMutex.Lock()
 	defer sub.channel.shared.stateSubsMutex.Unlock()
@@ -362,6 +394,15 @@ func (sub *EventStateSubscription) Close() {
 	}
 
 	close(sub.c)
+}
+
+// add adds an event to this subscription. It is not safe for concurrent use.
+func (sub *EventStateSubscription) add(state deq.EventState) {
+	// If our buffer is full, drop the least recent update
+	if len(sub.c) == cap(sub.c) {
+		<-sub.c
+	}
+	sub.c <- state
 }
 
 func (s *sharedChannel) Idle() bool {
@@ -397,6 +438,8 @@ func (s *sharedChannel) start() {
 	defer timer.Stop()
 
 	for {
+		s.setMissed(false)
+
 		// Let's drain our events so have room for some that might come in while we catch up.
 		// We'll read these off the disk, so it's ok to discard them
 		// s.Lock()
@@ -404,8 +447,6 @@ func (s *sharedChannel) start() {
 			<-s.in
 		}
 		// s.Unlock()
-
-		s.setMissed(false)
 
 		cursor, err = s.catchUp(cursor)
 		if err != nil {
@@ -439,6 +480,7 @@ func (s *sharedChannel) start() {
 				s.idleMutex.Lock()
 				s.idle = false
 				s.idleMutex.Unlock()
+				log.Printf("READING FROM MEMORY %s/%s count: %d", e.Topic, e.Id, e.RequeueCount)
 				s.out <- e
 				cursor, _ = data.EventKey{
 					Topic:      e.Topic,
@@ -470,12 +512,13 @@ func (s *sharedChannel) catchUp(cursor []byte) ([]byte, error) {
 		return nil, err
 	}
 
-	for it.Seek(append(cursor, 0)); it.ValidForPrefix(prefix); it.Next() {
+	// TODO: is there any way to not read over all events when we get behind without losing requeued
+	// events? Currently we ignore the cursor, can we still use it?
+	for it.Seek(append(prefix, 0)); it.ValidForPrefix(prefix); it.Next() {
 
 		item := it.Item()
 		lastKey = item.KeyCopy(lastKey)
 
-		state := deq.EventState_QUEUED
 		var key data.EventKey
 		err = data.UnmarshalTo(lastKey, &key)
 		if err != nil {
@@ -483,39 +526,18 @@ func (s *sharedChannel) catchUp(cursor []byte) ([]byte, error) {
 			continue
 		}
 
-		channelKey, err := data.ChannelKey{
+		channel, err := getChannelEvent(txn, data.ChannelKey{
 			Channel: s.name,
 			Topic:   key.Topic,
 			ID:      key.ID,
-		}.Marshal()
+		})
 		if err != nil {
-			log.Printf("marshal channel key: %v", err)
+			log.Printf("get channel event: %v", err)
 			continue
 		}
-		channelItem, err := txn.Get(channelKey)
-		if err != nil && err != badger.ErrKeyNotFound {
-			log.Printf("get event %s channel status: %v", key.ID, err)
+		if channel.EventState != deq.EventState_QUEUED {
+			// Not queued, don't send
 			continue
-		}
-		if err == nil {
-			buf, err := channelItem.Value()
-			if err != nil {
-				log.Printf("get event %s channel status: %v", key.ID, err)
-				continue
-			}
-
-			var channel data.ChannelPayload
-			err = proto.Unmarshal(buf, &channel)
-			if err != nil {
-				log.Printf("get event %s channel status: %v", key.ID, err)
-				continue
-			}
-			if channel.EventState != deq.EventState_QUEUED {
-				// Not queued, don't send
-				continue
-			}
-
-			state = channel.EventState
 		}
 
 		val, err := item.Value()
@@ -530,12 +552,15 @@ func (s *sharedChannel) catchUp(cursor []byte) ([]byte, error) {
 			continue
 		}
 
+		log.Printf("READING FROM DISK %s/%s count: %d", key.Topic, key.ID, channel.RequeueCount)
+
 		s.out <- &deq.Event{
 			Id:           key.ID,
 			Topic:        key.Topic,
 			CreateTime:   key.CreateTime.UnixNano(),
 			Payload:      e.Payload,
-			State:        state,
+			RequeueCount: channel.RequeueCount,
+			State:        channel.EventState,
 			DefaultState: e.DefaultEventState,
 		}
 	}
@@ -575,7 +600,7 @@ func (s *sharedChannel) getCursor(topic string) ([]byte, error) {
 func (s *sharedChannel) broadcastEventUpdated(id string, state deq.EventState) {
 	s.stateSubsMutex.RLock()
 	for sub := range s.stateSubs[id] {
-		sub.c <- state
+		sub.add(state)
 	}
 	s.stateSubsMutex.RUnlock()
 }
