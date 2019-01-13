@@ -189,40 +189,44 @@ func (c *Channel) Get(eventID string) (deq.Event, error) {
 // SetEventState sets the state of an event for this channel
 func (c *Channel) SetEventState(id string, state deq.EventState) error {
 
-	key := data.ChannelKey{
-		Topic:   c.topic,
-		Channel: c.name,
-		ID:      id,
+	// Retry for up to 10 conflicts
+	for i := 0; i < 10; i++ {
+		key := data.ChannelKey{
+			Topic:   c.topic,
+			Channel: c.name,
+			ID:      id,
+		}
+
+		txn := c.db.NewTransaction(true)
+		defer txn.Discard()
+
+		channelEvent, err := getChannelEvent(txn, key)
+		if err != nil {
+			return err
+		}
+
+		channelEvent.EventState = state
+
+		err = setChannelEvent(txn, key, channelEvent)
+		if err != nil {
+			return err
+		}
+
+		err = txn.Commit(nil)
+		if err == badger.ErrConflict {
+			time.Sleep(time.Second / 10)
+			continue
+		}
+		if err != nil {
+			return err
+		}
+
+		c.shared.broadcastEventUpdated(id, state)
+
+		return nil
 	}
 
-	// We need to load channel event in a seperate transaction because we don't want to
-	// cause conflicts if multiple people set event state at the same time.
-	txn := c.db.NewTransaction(false)
-	defer txn.Discard()
-
-	channelEvent, err := getChannelEvent(txn, key)
-	if err != nil {
-		return err
-	}
-
-	txn = c.db.NewTransaction(true)
-	defer txn.Discard()
-
-	channelEvent.EventState = state
-
-	err = setChannelEvent(txn, key, channelEvent)
-	if err != nil {
-		return err
-	}
-
-	err = txn.Commit(nil)
-	if err != nil {
-		return err
-	}
-
-	c.shared.broadcastEventUpdated(id, state)
-
-	return nil
+	return badger.ErrConflict
 }
 
 // // EventStatus is the processing state of an event on a particular channel
