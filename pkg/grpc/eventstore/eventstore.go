@@ -118,7 +118,7 @@ func (s *Server) Sub(in *pb.SubRequest, stream pb.DEQ_SubServer) error {
 			return status.Error(codes.Internal, "")
 		}
 
-		cappedRequeue := math.Max(float64(e.RequeueCount), 12)
+		cappedRequeue := math.Min(float64(e.RequeueCount), 12)
 		err = channel.RequeueEvent(e, time.Duration(math.Pow(2, cappedRequeue))*baseRequeueDelay)
 		if err != nil {
 			log.Printf("send event: requeue: %v", err)
