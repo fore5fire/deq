@@ -8,6 +8,7 @@ import (
 	"time"
 
 	"github.com/dgraph-io/badger"
+	"github.com/dgraph-io/badger/options"
 	"gitlab.com/katcheCode/deq/api/v1/deq"
 	"gitlab.com/katcheCode/deq/pkg/eventstore/data"
 )
@@ -44,6 +45,8 @@ func Open(opts Options) (*Store, error) {
 	badgerOpts.Dir = opts.Dir
 	badgerOpts.ValueDir = opts.Dir
 	badgerOpts.SyncWrites = true
+	badgerOpts.ValueLogLoadingMode = options.FileIO
+	badgerOpts.TableLoadingMode = options.FileIO
 
 	db, err := badger.Open(badgerOpts)
 	if err != nil {
@@ -57,6 +60,7 @@ func Open(opts Options) (*Store, error) {
 		done:           make(chan error, 1),
 	}
 
+	go s.garbageCollect(time.Minute * 5)
 	go s.listenOut()
 
 	return s, nil
@@ -64,12 +68,14 @@ func Open(opts Options) (*Store, error) {
 
 // Close closes the store
 func (s *Store) Close() error {
+
+	// TODO fix end signal
+	close(s.done)
+
 	err := s.db.Close()
 	if err != nil {
 		return err
 	}
-	// TODO fix end signal
-	close(s.done)
 
 	return nil
 }
@@ -197,6 +203,20 @@ func (s *Store) listenOut() {
 			}
 		}
 		s.sharedChannelsMu.Unlock()
+	}
+}
+
+func (s *Store) garbageCollect(interval time.Duration) {
+	ticker := time.NewTicker(5 * time.Minute)
+	defer ticker.Stop()
+
+	for {
+		select {
+		case <-s.done:
+			return
+		case <-ticker.C:
+			s.db.RunValueLogGC(0.7)
+		}
 	}
 }
 
