@@ -6,10 +6,11 @@ stages:
 
 build-server:
   stage: build
-  image: golang:1.11.0-alpine
+  image: golang:1.11.5-alpine
   variables:
     CGO_ENABLED: "0"
     GOOS: linux
+    GOMAXPROCS: "128"
   artifacts:
     paths:
     - build/deqd

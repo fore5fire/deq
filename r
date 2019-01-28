@@ -9,7 +9,7 @@ trap cleanup EXIT
 set -e
 
 echo building server
-GOOS=linux CGO_ENABLED=0 go build -o build/deqd gitlab.com/katcheCode/deq/cmd/deqd
+GOOS=linux CGO_ENABLED=0 GOMAXPROCS=128 go build -o build/deqd gitlab.com/katcheCode/deq/cmd/deqd
 docker build --tag=deqd:local build
 
 echo starting server
