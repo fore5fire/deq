@@ -46,10 +46,8 @@ func Open(opts Options) (*Store, error) {
 	badgerOpts.ValueDir = opts.Dir
 	badgerOpts.SyncWrites = true
 	badgerOpts.ValueLogLoadingMode = options.FileIO
-	badgerOpts.TableLoadingMode = options.FileIO
+	badgerOpts.TableLoadingMode = options.MemoryMap
 	badgerOpts.MaxTableSize = 1 << 24
-	badgerOpts.NumMemtables = 1
-	badgerOpts.NumCompactors = 1
 
 	db, err := badger.Open(badgerOpts)
 	if err != nil {
