@@ -50,7 +50,7 @@ func main() {
 		log.Fatal(err)
 	}
 
-	log.Println("Graceful shutdown")
+	log.Println("graceful shutdown complete")
 }
 
 func run(dbDir, address string) error {
@@ -96,7 +96,8 @@ func run(dbDir, address string) error {
 		select {
 		case <-ctx.Done():
 			return
-		case <-sig:
+		case s := <-sig:
+			log.Printf("recieved signal %v: shutting down...", s)
 			grpcServer.Stop()
 		}
 	}()
