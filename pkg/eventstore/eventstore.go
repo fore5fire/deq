@@ -57,7 +57,7 @@ func Open(opts Options) (*Store, error) {
 		in:             make(chan eventPromise, 20),
 		out:            make(chan *deq.Event, 20),
 		sharedChannels: make(map[channelKey]*sharedChannel),
-		done:           make(chan error, 1),
+		done:           make(chan error),
 	}
 
 	go s.garbageCollect(time.Minute * 5)
@@ -69,7 +69,6 @@ func Open(opts Options) (*Store, error) {
 // Close closes the store
 func (s *Store) Close() error {
 
-	// TODO fix end signal
 	close(s.done)
 
 	err := s.db.Close()
