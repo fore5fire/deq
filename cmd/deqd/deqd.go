@@ -5,9 +5,12 @@ import (
 	"fmt"
 	"log"
 	"net"
+	"net/http"
+	_ "net/http/pprof"
 	"os"
 	"os/signal"
 	"syscall"
+	"time"
 
 	pb "gitlab.com/katcheCode/deq/api/v1/deq"
 	"gitlab.com/katcheCode/deq/pkg/eventstore"
@@ -16,17 +19,20 @@ import (
 )
 
 var (
-	// Debug indicates if debug mode is set
+	// debug indicates if debug mode is set
 	debug = os.Getenv("DEBUG") == "true"
 
-	// Develop indicates if development mode is set
+	// develop indicates if development mode is set
 	develop = os.Getenv("DEVELOP") == "true"
 
-	// ListenAddress is the address that the grpc server will listen on
+	// listenAddress is the address that the grpc server will listen on
 	listenAddress = os.Getenv("DEQ_LISTEN_ADDRESS")
 
-	// DataDir is the database directory
+	// dataDir is the database directory
 	dataDir = os.Getenv("DEQ_DATA_DIR")
+
+	// statsAddress is the address that deq publishes stats on
+	statsAddress = os.Getenv("DEQ_STATS_ADDRESS")
 )
 
 func init() {
@@ -45,7 +51,7 @@ func main() {
 	}
 
 	// run start code in seperate function so we can both defer and os.Exit
-	err := run(dataDir, listenAddress)
+	err := run(dataDir, listenAddress, statsAddress)
 	if err != nil {
 		log.Fatal(err)
 	}
@@ -53,9 +59,33 @@ func main() {
 	log.Println("graceful shutdown complete")
 }
 
-func run(dbDir, address string) error {
+func run(dbDir, address, statsAddress string) error {
 	ctx, cancel := context.WithCancel(context.Background())
 	defer cancel()
+
+	if statsAddress != "" {
+		statsServer := http.Server{
+			Addr:    statsAddress,
+			Handler: http.DefaultServeMux,
+		}
+		defer func() {
+			// Give the stats server 20 seconds to finish
+			ctx, cancel := context.WithTimeout(context.Background(), time.Second*20)
+			defer cancel()
+			err := statsServer.Shutdown(ctx)
+			if err != nil {
+				log.Printf("shutdown stats server gracefully: %v", err)
+				statsServer.Close()
+			}
+		}()
+		go func() {
+			log.Printf("stats server listening on %s", statsAddress)
+			err := statsServer.ListenAndServe()
+			if err != http.ErrServerClosed {
+				log.Printf("stats server listen: %v", err)
+			}
+		}()
+	}
 
 	err := os.MkdirAll(dbDir, os.ModePerm)
 	if err != nil {
