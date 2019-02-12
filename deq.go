@@ -1,3 +1,56 @@
+//go:generate go generate ./api/...
+//go:generate go generate ./pkg/...
+//go:generate go generate ./cmd/...
+
+/*
+Package deq provides a go client for DEQ.
+
+To connect to a DEQ server, dial the server with GRPC:
+
+	conn, err := grpc.Dial("deq.example.com", grpc.WithInsecure())
+	if err != nil {
+		// Handle error
+	}
+
+grpc connections are multiplexed, so you can create multiple publishers and subscribers with different settings
+using a single connection.
+
+
+To publish events to a DEQ server, create a new Publisher:
+
+	publisher := deq.NewPublisher(conn, deq.PublisherOpts{})
+
+and call Pub:
+
+	event, err := publisher.Pub(ctx, deq.Event{
+		ID: "some-id", // IDs are used for idempotency, so choose them appropriately.
+		Msg: &types.Empty{}, // Add payload as protobuf message here.
+	})
+	if err != nil {
+		// Handle error
+	}
+
+
+To subscribe to events from a DEQ server, create a new Subscriber:
+
+	subscriber := deq.NewSubscriber(conn, deq.SubscriberOpts{
+		Channel: "some-channel",
+	})
+
+and call Sub:
+
+	err := subscriber.Sub(ctx, &types.Empty{}, func(e deq.Event) ack.Code {
+		msg := e.Msg.(*types.Empty)
+		// process the event
+		return ack.DequeueOK
+	})
+	if err != nil {
+		// Subscription failed, handle error
+	}
+
+subscribers can also Get and Await events.
+
+*/
 package deq
 
 import (
@@ -24,6 +77,7 @@ type Subscriber struct {
 
 // SubscriberOpts are options for a Subscriber
 type SubscriberOpts struct {
+	// Required
 	Channel      string
 	IdleTimeout  time.Duration
 	RequeueDelay time.Duration
@@ -60,6 +114,7 @@ func (f HandlerFunc) HandleEvent(e Event) ack.Code {
 // }
 
 // Sub begins listening for events on the requested channel.
+//
 // m is used to determine the subscribed type url. All messages passed to handler are guarenteed to be of the same concrete type as m
 // Because github.com/gogo/protobuf is used to lookup the typeURL and concrete type of m, m must be a registered type with the same instance of gogo/proto as this binary (ie. no vendoring or github.com/golang/protobuf)
 func (sub *Subscriber) Sub(ctx context.Context, m Message, handler HandlerFunc) error {
@@ -68,9 +123,9 @@ func (sub *Subscriber) Sub(ctx context.Context, m Message, handler HandlerFunc) 
 	msgType := proto.MessageType(msgName)
 
 	stream, err := sub.client.Sub(ctx, &api.SubRequest{
-		Channel:                 sub.opts.Channel,
-		IdleTimeoutMilliseconds: int32(sub.opts.IdleTimeout / time.Millisecond),
-		Follow:                  sub.opts.IdleTimeout <= 0,
+		Channel:                  sub.opts.Channel,
+		IdleTimeoutMilliseconds:  int32(sub.opts.IdleTimeout / time.Millisecond),
+		Follow:                   sub.opts.IdleTimeout <= 0,
 		RequeueDelayMilliseconds: int32(sub.opts.RequeueDelay / time.Millisecond),
 		// MinId:   c.opts.MinID,
 		// MaxId:   c.opts.MaxID,
@@ -131,8 +186,10 @@ func (sub *Subscriber) Sub(ctx context.Context, m Message, handler HandlerFunc) 
 	}
 }
 
-// Get returns an event for a given id and message type (topic). The message type is inferred from `result`.
-// The event payload is also deserialized into `result`, such that `e.Msg == result`.
+// Get returns an event for a given id and message type (topic).
+//
+// The message topic is inferred from the type of `result`. The event payload is also deserialized
+// into `result`, such that `e.Msg == result`.
 func (sub *Subscriber) Get(ctx context.Context, eventID string, result Message) (e Event, err error) {
 
 	event, err := sub.client.Get(ctx, &api.GetRequest{
@@ -154,7 +211,10 @@ func (sub *Subscriber) Get(ctx context.Context, eventID string, result Message) 
 	return res, nil
 }
 
-// Await returns an event for a given id, waiting until it is published if it doesn't exist. See Get for more details.
+// Await returns an event for a given id, waiting until it is published if it doesn't exist.
+//
+// The message topic is inferred from the type of `result`. The event payload is also deserialized
+// into `result`, such that `e.Msg == result`.
 func (sub *Subscriber) Await(ctx context.Context, eventID string, result Message) (Event, error) {
 	e, err := sub.client.Get(ctx, &api.GetRequest{
 		EventId: eventID,

@@ -3,6 +3,7 @@ package main
 import (
 	"context"
 	"flag"
+	"fmt"
 	"io"
 	"log"
 	"math/rand"
@@ -17,10 +18,10 @@ import (
 func main() {
 	rand.Seed(time.Now().UnixNano())
 
-	host := flag.String("host", "localhost:3000", "specify deq host and port. defaults to localhost:8080")
-	channel := flag.String("c", strconv.FormatInt(int64(rand.Int()), 16), "specify channel. defaults to random")
-	follow := flag.Bool("f", false, "continue streaming when idling. defaults to false")
-	topic := flag.String("t", "", "topic to print. required")
+	host := flag.String("host", "localhost:3000", "specify deq host and port.")
+	channel := flag.String("c", strconv.FormatInt(int64(rand.Int()), 16), "specify channel.")
+	follow := flag.Bool("f", false, "continue streaming when idling.")
+	topic := flag.String("t", "", "topic to print. required.")
 
 	flag.Parse()
 
@@ -40,6 +41,7 @@ func main() {
 
 		stream, err := deqc.Sub(context.Background(), &deq.SubRequest{
 			Channel: *channel,
+			Topic:   *topic,
 			Follow:  *follow,
 		})
 		if err != nil {
@@ -54,7 +56,7 @@ func main() {
 			if err != nil {
 				log.Fatalf("recieve message: %v", err)
 			}
-			log.Printf("id: %v, topic: %s", e.Id, e.Topic)
+			fmt.Printf("id: %v, topic: %s, %s\n", e.Id, e.Topic, e.Payload)
 		}
 
 	case "help":
