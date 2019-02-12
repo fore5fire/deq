@@ -1,6 +1,0 @@
-syntax = "proto3";
-package model;
-
-message TestModel {
-  string msg = 1;
-}

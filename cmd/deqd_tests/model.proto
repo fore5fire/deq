@@ -1,0 +1,18 @@
+syntax = "proto3";
+package main;
+
+message TestModel {
+  string msg = 1;
+}
+
+message TestRequeueModel {
+  string msg = 1;
+}
+
+message TestNoTimeoutModel {
+  string msg = 1;
+}
+
+message TestAwaitModel {
+  string msg = 1;
+}

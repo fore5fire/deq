@@ -1,26 +1,25 @@
 package eventstore
 
 import (
+	"bytes"
 	"errors"
-
-	"github.com/dgraph-io/badger"
-	"github.com/gogo/protobuf/proto"
-
-	// "github.com/satori/go.uuid"
-	"encoding/binary"
+	"fmt"
 	"sync"
 	"time"
 
-	"gitlab.com/katcheCode/deqd/api/v1/deq"
+	"github.com/dgraph-io/badger"
+	"github.com/dgraph-io/badger/options"
+	"gitlab.com/katcheCode/deq/api/v1/deq"
+	"gitlab.com/katcheCode/deq/pkg/eventstore/data"
 )
 
 // Store is an EventStore connected to a specific database
 type Store struct {
 	db               *badger.DB
 	in               chan eventPromise
-	out              chan deq.Event
-	sharedChannelsMu sync.RWMutex
-	sharedChannels   map[string]*sharedChannel
+	out              chan *deq.Event
+	sharedChannelsMu sync.Mutex
+	sharedChannels   map[channelKey]*sharedChannel
 	// done is used for signaling to our store's go routine
 	done chan error
 }
@@ -38,10 +37,17 @@ type eventPromise struct {
 // Open opens a store from disk, or creates a new store if it does not already exist
 func Open(opts Options) (*Store, error) {
 
+	if opts.Dir == "" {
+		return nil, errors.New("option Dir is required")
+	}
+
 	badgerOpts := badger.DefaultOptions
 	badgerOpts.Dir = opts.Dir
 	badgerOpts.ValueDir = opts.Dir
 	badgerOpts.SyncWrites = true
+	badgerOpts.ValueLogLoadingMode = options.FileIO
+	badgerOpts.TableLoadingMode = options.MemoryMap
+	badgerOpts.MaxTableSize = 1 << 24
 
 	db, err := badger.Open(badgerOpts)
 	if err != nil {
@@ -50,94 +56,167 @@ func Open(opts Options) (*Store, error) {
 	s := &Store{
 		db:             db,
 		in:             make(chan eventPromise, 20),
-		out:            make(chan deq.Event, 20),
-		sharedChannels: make(map[string]*sharedChannel),
+		out:            make(chan *deq.Event, 20),
+		sharedChannels: make(map[channelKey]*sharedChannel),
+		done:           make(chan error),
 	}
 
-	go s.startIn()
-	go s.startOut()
+	go s.garbageCollect(time.Minute * 5)
+	go s.listenOut()
 
 	return s, nil
 }
 
 // Close closes the store
 func (s *Store) Close() error {
+
+	close(s.done)
+
 	err := s.db.Close()
 	if err != nil {
 		return err
 	}
-	// TODO fix end signal
-	close(s.done)
 
 	return nil
 }
 
-// Create inserts an event into the store after assigning it an id
-func (s *Store) Create(e deq.Event) (deq.Event, error) {
-	e.Id = nil
-	return s.insert(e)
-}
+// Pub publishes an event
+func (s *Store) Pub(e deq.Event) (deq.Event, error) {
 
-// Insert inserts a new event into the store
-func (s *Store) Insert(e deq.Event) (deq.Event, error) {
-	return s.insert(e)
-}
+	txn := s.db.NewTransaction(true)
+	defer txn.Discard()
 
-func (s *Store) insert(e deq.Event) (deq.Event, error) {
-
-	done := make(chan error, 1)
-
-	s.in <- eventPromise{
-		event: &e,
-		done:  done,
+	err := writeEvent(txn, &e)
+	if err == ErrAlreadyExists {
+		// Supress the error if the new and existing events have matching payloads.
+		existing, err := getEvent(txn, e.Topic, e.Id, "")
+		if err != nil {
+			return deq.Event{}, fmt.Errorf("get existing event: %v", err)
+		}
+		if !bytes.Equal(existing.Payload, e.Payload) {
+			return deq.Event{}, ErrAlreadyExists
+		}
+		return *existing, nil
+	}
+	if err != nil {
+		return deq.Event{}, err
 	}
 
-	return e, <-done
-}
-
-func (s *Store) startIn() {
-
-	var counter uint32
-
-	for promise := range s.in {
-
-		promise.event.Key = GenerateID(counter)
-		counter++
-
-		if promise.event.Id == nil {
-			promise.event.Id = promise.event.Key
-		}
-
-		txn := s.db.NewTransaction(true)
+	err = txn.Commit(nil)
+	if err == badger.ErrConflict {
+		txn := s.db.NewTransaction(false)
 		defer txn.Discard()
-
-		data, err := proto.Marshal(promise.event)
+		existing, err := getEvent(txn, e.Topic, e.Id, "")
 		if err != nil {
-			promise.done <- err
+			return deq.Event{}, fmt.Errorf("get conflicting event: %v", err)
 		}
-
-		txn.Set(prefixEvent(promise.event.Key), data)
-		err = txn.Commit(nil)
-		if err != nil {
-			promise.done <- err
+		if !bytes.Equal(existing.Payload, e.Payload) {
+			return deq.Event{}, ErrAlreadyExists
 		}
-
-		s.out <- *promise.event
-		close(promise.done)
+		return *existing, nil
 	}
+	if err != nil {
+		return deq.Event{}, err
+	}
+
+	e.State = e.DefaultState
+
+	if e.DefaultState == deq.EventState_QUEUED {
+		s.out <- &e
+	}
+
+	for _, channel := range s.sharedChannels {
+		channel.broadcastEventUpdated(e.Id, e.State)
+	}
+
+	return e, nil
 }
 
-func (s *Store) startOut() {
+// // Get returns the event for an event ID, or ErrNotFound if none is found
+// func (s *Store) Get(topic, eventID, channel string) (*deq.Event, error) {
+// 	txn := s.db.NewTransaction(false)
+// 	defer txn.Discard()
+//
+// 	return getEvent(txn, topic, eventID, channel)
+// }
+
+// Del deletes an event
+func (s *Store) Del(topic, id string) error {
+
+	txn := s.db.NewTransaction(true)
+	defer txn.Discard()
+
+	// TODO: refactor this, we really don't need the whole event, just
+	// the create time
+	e, err := getEvent(txn, topic, id, "")
+	if err != nil {
+		return err
+	}
+
+	eventTimeKey, err := data.EventTimeKey{
+		ID:    id,
+		Topic: topic,
+	}.Marshal()
+	if err != nil {
+		return fmt.Errorf("marshal event time key: %v", err)
+	}
+
+	eventKey, err := data.EventKey{
+		ID:         id,
+		Topic:      topic,
+		CreateTime: time.Unix(0, e.CreateTime),
+	}.Marshal()
+	if err != nil {
+		return fmt.Errorf("marshal event key: %v", err)
+	}
+
+	// TODO: cleanup channel keys
+
+	err = txn.Delete(eventTimeKey)
+	if err != nil {
+		return fmt.Errorf("delete event time: %v", err)
+	}
+	err = txn.Delete(eventKey)
+	if err != nil {
+		return fmt.Errorf("delete event key: %v", err)
+	}
+
+	err = txn.Commit(nil)
+	if err != nil {
+		return err
+	}
+
+	return nil
+}
+
+func (s *Store) listenOut() {
 	for e := range s.out {
-		s.sharedChannelsMu.RLock()
+		s.sharedChannelsMu.Lock()
 		for _, shared := range s.sharedChannels {
-			select {
-			case shared.in <- e:
-				// TODO: Move db write code here
-			default: // Skip if full, listeners can catch up from disk later
+			if shared.topic == e.Topic {
+				select {
+				case shared.in <- e:
+					// TODO: Move db write code here
+				default: // Skip if full, listeners can catch up from disk later
+					shared.setMissed(true)
+				}
 			}
 		}
-		s.sharedChannelsMu.RUnlock()
+		s.sharedChannelsMu.Unlock()
+	}
+}
+
+func (s *Store) garbageCollect(interval time.Duration) {
+	ticker := time.NewTicker(5 * time.Minute)
+	defer ticker.Stop()
+
+	for {
+		select {
+		case <-s.done:
+			return
+		case <-ticker.C:
+			s.db.RunValueLogGC(0.7)
+		}
 	}
 }
 
@@ -155,45 +234,10 @@ func (s *Store) startOut() {
 // If a fetch has already been called on this iterator, ErrIteratorAlreadyStarted will be returned.
 
 var (
-	// ErrChannelNotFound is returned when attempting to access a channel that has not been created
-	ErrChannelNotFound = errors.New("Attempted to read from a channel that does not exist")
-	// ErrKeyNotFound is returned when attempting to set event status for an event that does not exist
-	ErrKeyNotFound = errors.New("Key not found")
+	// ErrNotFound is returned when a requested event doesn't exist in the store
+	ErrNotFound = errors.New("event not found")
 	// ErrInternal is returned when an interanl error occurs
-	ErrInternal = errors.New("Internal error")
+	ErrInternal = errors.New("internal error")
+	// ErrAlreadyExists is returned when creating an event with a key that is in use
+	ErrAlreadyExists = errors.New("already exists")
 )
-
-var (
-	sequenceKey   = []byte("__event-store-sequence-key__")
-	channelPrefix = []byte("C")
-	cursorPrefix  = []byte("c")
-	eventPrefix   = []byte("E")
-)
-
-func prefixEvent(in []byte) []byte {
-	out := make([]byte, len(in)+len(eventPrefix))
-	copy(out, eventPrefix)
-	copy(out[len(eventPrefix):], in)
-	return out
-}
-func prefixCursor(in []byte) []byte {
-	out := make([]byte, len(in)+len(cursorPrefix))
-	copy(out, cursorPrefix)
-	copy(out[len(cursorPrefix):], in)
-	return out
-}
-func prefixChannel(in []byte) []byte {
-	out := make([]byte, len(in)+len(channelPrefix))
-	copy(out, channelPrefix)
-	copy(out[len(channelPrefix):], in)
-	return out
-}
-
-// GenerateID returns a new id using the current time
-func GenerateID(count uint32) []byte {
-	id := make([]byte, 10)
-	timePart := uint64(time.Now().UnixNano()) / uint64(time.Millisecond)
-	binary.BigEndian.PutUint64(id, timePart<<16)
-	binary.BigEndian.PutUint32(id[6:], count)
-	return id
-}
