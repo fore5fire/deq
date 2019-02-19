@@ -1,3 +1,7 @@
+/*
+Package ack provides ack codes for sending acknowledgements to the DEQ server. These are returned by
+handlers
+*/
 package ack
 
 import (

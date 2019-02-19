@@ -2,6 +2,8 @@ package data
 
 import (
 	"testing"
+
+	"github.com/google/go-cmp/cmp"
 )
 
 func TestMarshalEventTimeKey(t *testing.T) {
@@ -23,6 +25,6 @@ func TestMarshalEventTimeKey(t *testing.T) {
 		t.Fatalf("unmarshal: %v", err)
 	}
 	if expected != unmarshaled {
-		t.Errorf("expected: %v, got: %v", expected, unmarshaled)
+		t.Errorf("%s", cmp.Diff(expected, unmarshaled))
 	}
 }

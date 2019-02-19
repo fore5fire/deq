@@ -1,4 +1,4 @@
-package eventstore
+package deq
 
 import (
 	"context"
@@ -9,27 +9,80 @@ import (
 	"time"
 
 	"github.com/gogo/protobuf/proto"
+	"github.com/google/go-cmp/cmp"
 	"gitlab.com/katcheCode/deq/api/v1/deq"
 )
+
+func TestList(t *testing.T) {
+	t.Parallel()
+
+	db, discard := newTestDB()
+	defer discard()
+
+	ctx := context.Background()
+
+	createTime := time.Now().UnixNano()
+
+	created := []deq.Event{
+		{
+			Id:         "event2",
+			Topic:      "topic1",
+			CreateTime: createTime,
+		},
+		{
+			Id:         "event1",
+			Topic:      "topic2",
+			CreateTime: createTime,
+		},
+		{
+			Id:         "event1",
+			Topic:      "topic1",
+			CreateTime: createTime,
+		},
+	}
+
+	for _, e := range created {
+		_, err := db.Pub(e)
+		if err != nil {
+			t.Fatalf("pub: %v", err)
+		}
+	}
+
+	expected := []deq.Event{
+		{
+			Id:         "event1",
+			Topic:      "topic1",
+			CreateTime: createTime,
+			State:      deq.EventState_QUEUED,
+		},
+		{
+			Id:         "event2",
+			Topic:      "topic1",
+			CreateTime: createTime,
+			State:      deq.EventState_QUEUED,
+		},
+	}
+
+	channel := db.Channel("channel1", "topic1")
+	events, err := channel.List(ctx, ListOpts{})
+	if err != nil {
+		t.Fatalf("list topics: %v", err)
+	}
+	if !cmp.Equal(events, expected) {
+		t.Errorf("\n%s", cmp.Diff(expected, events))
+	}
+}
 
 func TestAwaitChannelTimeout(t *testing.T) {
 	t.Parallel()
 
+	db, discard := newTestDB()
+	defer discard()
+
 	ctx, cancel := context.WithTimeout(context.Background(), time.Second/4)
 	defer cancel()
 
-	dir, err := ioutil.TempDir("", "")
-	if err != nil {
-		t.Fatalf("create temp dir: %v", err)
-	}
-	defer os.RemoveAll(dir)
-
-	db, err := Open(Options{Dir: dir})
-	if err != nil {
-		t.Fatalf("open db: %v", err)
-	}
-
-	err = db.Pub(deq.Event{
+	_, err := db.Pub(deq.Event{
 		Id:         "event1",
 		Topic:      "topic",
 		CreateTime: time.Now().UnixNano(),
@@ -39,12 +92,47 @@ func TestAwaitChannelTimeout(t *testing.T) {
 	}
 
 	channel := db.Channel("channel", "topic")
+	sub := channel.NewEventStateSubscription("event1")
+	defer sub.Close()
 
-	_, ok := <-channel.AwaitEventStateChange(ctx, "event1")
-	if ok {
+	_, err = sub.Next(ctx)
+	if err == nil {
 		t.Fatalf("await dequeue returned without dequeue")
 	}
-	if channel.Err() != ctx.Err() {
+	if err != ctx.Err() {
+		t.Errorf("await dequeue: %v", err)
+	}
+}
+
+func TestAwaitChannelClose(t *testing.T) {
+	t.Parallel()
+
+	db, discard := newTestDB()
+	defer discard()
+
+	ctx := context.Background()
+
+	_, err := db.Pub(deq.Event{
+		Id:         "event1",
+		Topic:      "topic",
+		CreateTime: time.Now().UnixNano(),
+	})
+	if err != nil {
+		t.Fatalf("pub: %v", err)
+	}
+
+	channel := db.Channel("channel", "topic")
+	sub := channel.NewEventStateSubscription("event1")
+	go func() {
+		time.Sleep(time.Second / 4)
+		sub.Close()
+	}()
+
+	_, err = sub.Next(ctx)
+	if err == nil {
+		t.Fatalf("await dequeue returned without dequeue")
+	}
+	if err != ErrSubscriptionClosed {
 		t.Errorf("await dequeue: %v", err)
 	}
 }
@@ -52,22 +140,13 @@ func TestAwaitChannelTimeout(t *testing.T) {
 func TestAwaitChannel(t *testing.T) {
 	t.Parallel()
 
+	db, discard := newTestDB()
+	defer discard()
+
 	ctx, cancel := context.WithTimeout(context.Background(), time.Second*3)
 	defer cancel()
 
-	dir, err := ioutil.TempDir("", "")
-	if err != nil {
-		t.Fatalf("create temp dir: %v", err)
-	}
-	defer os.RemoveAll(dir)
-
-	db, err := Open(Options{Dir: dir})
-	if err != nil {
-		t.Fatalf("open db: %v", err)
-	}
-	defer db.Close()
-
-	err = db.Pub(deq.Event{
+	_, err := db.Pub(deq.Event{
 		Id:         "event1",
 		Topic:      "topic",
 		CreateTime: time.Now().UnixNano(),
@@ -85,10 +164,12 @@ func TestAwaitChannel(t *testing.T) {
 	}()
 
 	channel := db.Channel("channel", "topic")
+	sub := channel.NewEventStateSubscription("event1")
+	defer sub.Close()
 
-	state, ok := <-channel.AwaitEventStateChange(ctx, "event1")
-	if !ok {
-		t.Fatalf("await dequeue: %v", channel.Err())
+	state, err := sub.Next(ctx)
+	if err != nil {
+		t.Fatalf("await dequeue: %v", err)
 	}
 	if state != deq.EventState_DEQUEUED_OK {
 		t.Fatalf("returned incorrect state: %s", state.String())
@@ -96,17 +177,10 @@ func TestAwaitChannel(t *testing.T) {
 }
 
 func TestGet(t *testing.T) {
-	dir, err := ioutil.TempDir("", "")
-	if err != nil {
-		t.Fatalf("create temp dir: %v", err)
-	}
-	defer os.RemoveAll(dir)
+	t.Parallel()
 
-	db, err := Open(Options{Dir: dir})
-	if err != nil {
-		t.Fatalf("open db: %v", err)
-	}
-	defer db.Close()
+	db, discard := newTestDB()
+	defer discard()
 
 	expected := deq.Event{
 		Id:         "event1",
@@ -115,7 +189,7 @@ func TestGet(t *testing.T) {
 		State:      deq.EventState_QUEUED,
 	}
 
-	err = db.Pub(expected)
+	_, err := db.Pub(expected)
 	if err != nil {
 		t.Fatalf("pub: %v", err)
 	}
@@ -147,6 +221,8 @@ func TestGet(t *testing.T) {
 }
 
 func TestDequeue(t *testing.T) {
+	t.Parallel()
+
 	dir, err := ioutil.TempDir("", "")
 	if err != nil {
 		t.Fatalf("create temp dir: %v", err)
@@ -165,7 +241,7 @@ func TestDequeue(t *testing.T) {
 		State:      deq.EventState_QUEUED,
 	}
 
-	err = db.Pub(*expected)
+	_, err = db.Pub(*expected)
 	if err != nil {
 		t.Fatalf("pub: %v", err)
 	}

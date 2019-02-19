@@ -1,6 +1,10 @@
 package data
 
-import "testing"
+import (
+	"testing"
+
+	"github.com/google/go-cmp/cmp"
+)
 
 func TestMarshalChannelKey(t *testing.T) {
 	expected := ChannelKey{
@@ -22,6 +26,6 @@ func TestMarshalChannelKey(t *testing.T) {
 		t.Fatalf("unmarshal: %v", err)
 	}
 	if expected != unmarshaled {
-		t.Errorf("expected: %v, got: %v", expected, unmarshaled)
+		t.Errorf("%s", cmp.Diff(expected, unmarshaled))
 	}
 }

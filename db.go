@@ -1,4 +1,4 @@
-package eventstore
+package deq
 
 import (
 	"fmt"
@@ -7,15 +7,14 @@ import (
 
 	"github.com/dgraph-io/badger"
 	"github.com/gogo/protobuf/proto"
-	"gitlab.com/katcheCode/deq/api/v1/deq"
-	"gitlab.com/katcheCode/deq/pkg/eventstore/data"
+	"gitlab.com/katcheCode/deq/internal/data"
 )
 
 var defaultChannelState = data.ChannelPayload{
-	EventState: deq.EventState_QUEUED,
+	EventState: data.EventState_QUEUED,
 }
 
-func getEvent(txn *badger.Txn, topic, eventID, channel string) (*deq.Event, error) {
+func getEvent(txn *badger.Txn, topic, eventID, channel string) (*Event, error) {
 	eventTime, err := getEventTimePayload(txn, data.EventTimeKey{
 		ID:    eventID,
 		Topic: topic,
@@ -49,14 +48,14 @@ func getEvent(txn *badger.Txn, topic, eventID, channel string) (*deq.Event, erro
 		}
 	}
 
-	return &deq.Event{
-		Id:           eventID,
+	return &Event{
+		ID:           eventID,
 		Topic:        topic,
 		Payload:      event.Payload,
-		CreateTime:   eventTime.CreateTime,
-		RequeueCount: channelState.RequeueCount,
-		State:        channelState.EventState,
-		DefaultState: event.DefaultEventState,
+		CreateTime:   time.Unix(0, eventTime.CreateTime),
+		RequeueCount: int(channelState.RequeueCount),
+		State:        protoToEventState(channelState.EventState),
+		DefaultState: protoToEventState(event.DefaultEventState),
 	}, nil
 }
 
@@ -78,10 +77,10 @@ func printKeys(txn *badger.Txn) {
 	}
 }
 
-func writeEvent(txn *badger.Txn, e *deq.Event) error {
+func writeEvent(txn *badger.Txn, e *Event) error {
 	key, err := data.EventTimeKey{
 		Topic: e.Topic,
-		ID:    e.Id,
+		ID:    e.ID,
 	}.Marshal()
 	if err != nil {
 		return fmt.Errorf("marshal event time key: %v", err)
@@ -96,7 +95,7 @@ func writeEvent(txn *badger.Txn, e *deq.Event) error {
 	}
 
 	val, err := proto.Marshal(&data.EventTimePayload{
-		CreateTime: e.CreateTime,
+		CreateTime: e.CreateTime.UnixNano(),
 	})
 	if err != nil {
 		return fmt.Errorf("marshal event time payload: %v", err)
@@ -109,8 +108,8 @@ func writeEvent(txn *badger.Txn, e *deq.Event) error {
 
 	key, err = data.EventKey{
 		Topic:      e.Topic,
-		CreateTime: time.Unix(0, e.CreateTime),
-		ID:         e.Id,
+		CreateTime: e.CreateTime,
+		ID:         e.ID,
 	}.Marshal()
 	if err != nil {
 		return fmt.Errorf("marshal event time key: %v", err)
@@ -118,7 +117,7 @@ func writeEvent(txn *badger.Txn, e *deq.Event) error {
 
 	val, err = proto.Marshal(&data.EventPayload{
 		Payload:           e.Payload,
-		DefaultEventState: e.DefaultState,
+		DefaultEventState: e.DefaultState.toProto(),
 	})
 	if err != nil {
 		return fmt.Errorf("marshal event time payload: %v", err)
@@ -129,7 +128,7 @@ func writeEvent(txn *badger.Txn, e *deq.Event) error {
 		return err
 	}
 
-	if e.DefaultState != deq.EventState_UNSPECIFIED_STATE && e.DefaultState != deq.EventState_QUEUED {
+	if e.DefaultState != EventStateUnspecified && e.DefaultState != EventStateQueued {
 
 		it := txn.NewIterator(badger.DefaultIteratorOptions)
 		defer it.Close()
@@ -154,12 +153,12 @@ func writeEvent(txn *badger.Txn, e *deq.Event) error {
 			newKey := data.ChannelKey{
 				Topic:   e.Topic,
 				Channel: key.Channel,
-				ID:      e.Id,
+				ID:      e.ID,
 			}
 
 			err = setChannelEvent(txn, newKey, data.ChannelPayload{
-				EventState:   e.DefaultState,
-				RequeueCount: e.RequeueCount,
+				EventState:   e.DefaultState.toProto(),
+				RequeueCount: int32(e.RequeueCount),
 			})
 			if err != nil {
 				return fmt.Errorf("set event state on channel %s: %v", key.Channel, err)
@@ -237,7 +236,7 @@ func getEventPayload(txn *badger.Txn, key data.EventKey) (payload data.EventPayl
 }
 
 var defaultChannelPayload = data.ChannelPayload{
-	EventState: deq.EventState_QUEUED,
+	EventState: EventStateQueued.toProto(),
 }
 
 func getChannelEvent(txn *badger.Txn, key data.ChannelKey) (data.ChannelPayload, error) {
@@ -266,4 +265,34 @@ func getChannelEvent(txn *badger.Txn, key data.ChannelKey) (data.ChannelPayload,
 	}
 
 	return channelState, nil
+}
+
+func (e EventState) toProto() data.EventState {
+	switch e {
+	case EventStateUnspecified:
+		return data.EventState_UNSPECIFIED_STATE
+	case EventStateQueued:
+		return data.EventState_QUEUED
+	case EventStateDequeuedOK:
+		return data.EventState_DEQUEUED_OK
+	case EventStateDequeuedError:
+		return data.EventState_DEQUEUED_ERROR
+	default:
+		panic("unrecognized EventState")
+	}
+}
+
+func protoToEventState(e data.EventState) EventState {
+	switch e {
+	case data.EventState_UNSPECIFIED_STATE:
+		return EventStateUnspecified
+	case data.EventState_QUEUED:
+		return EventStateQueued
+	case data.EventState_DEQUEUED_OK:
+		return EventStateDequeuedOK
+	case data.EventState_DEQUEUED_ERROR:
+		return EventStateDequeuedError
+	default:
+		panic("unrecognized EventState")
+	}
 }

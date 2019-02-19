@@ -1,7 +1,9 @@
-package eventstore
+package deq
 
 import (
+	"bytes"
 	"context"
+	"errors"
 	"fmt"
 	"log"
 	"sync"
@@ -9,8 +11,7 @@ import (
 
 	"github.com/dgraph-io/badger"
 	"github.com/gogo/protobuf/proto"
-	"gitlab.com/katcheCode/deq/api/v1/deq"
-	"gitlab.com/katcheCode/deq/pkg/eventstore/data"
+	"gitlab.com/katcheCode/deq/internal/data"
 )
 
 // Channel allows multiple listeners to synchronize processing of events
@@ -37,8 +38,8 @@ type sharedChannel struct {
 	topic          string
 	missedMutex    sync.Mutex
 	missed         bool
-	in             chan *deq.Event
-	out            chan *deq.Event
+	in             chan *Event
+	out            chan *Event
 	done           chan error
 	idleMutex      sync.RWMutex
 	idle           bool
@@ -60,8 +61,8 @@ func (s *Store) Channel(name, topic string) *Channel {
 		shared = &sharedChannel{
 			name:      name,
 			topic:     topic,
-			in:        make(chan *deq.Event, 20),
-			out:       make(chan *deq.Event, 20),
+			in:        make(chan *Event, 20),
+			out:       make(chan *Event, 20),
 			stateSubs: make(map[string]map[*EventStateSubscription]struct{}),
 			db:        s.db,
 		}
@@ -89,15 +90,15 @@ func (s *Store) Channel(name, topic string) *Channel {
 }
 
 // Next returns the next event in the queue, or nil if there are no events
-func (c *Channel) Next(ctx context.Context) (deq.Event, error) {
+func (c *Channel) Next(ctx context.Context) (Event, error) {
 
 	for {
 		select {
 		case <-ctx.Done():
-			return deq.Event{}, ctx.Err()
+			return Event{}, ctx.Err()
 		case e := <-c.shared.out:
 			if e == nil {
-				return deq.Event{}, c.Err()
+				return Event{}, c.Err()
 			}
 			txn := c.db.NewTransaction(false)
 			defer txn.Discard()
@@ -105,13 +106,13 @@ func (c *Channel) Next(ctx context.Context) (deq.Event, error) {
 			channel, err := getChannelEvent(txn, data.ChannelKey{
 				Channel: c.name,
 				Topic:   c.topic,
-				ID:      e.Id,
+				ID:      e.ID,
 			})
 			if err != nil {
-				return deq.Event{}, err
+				return Event{}, err
 			}
 
-			if channel.EventState != deq.EventState_QUEUED {
+			if channel.EventState != data.EventState_QUEUED {
 				continue
 			}
 
@@ -120,7 +121,7 @@ func (c *Channel) Next(ctx context.Context) (deq.Event, error) {
 	}
 }
 
-// func (c *sharedChannel) enqueue(*deq.Event) {
+// func (c *sharedChannel) enqueue(*Event) {
 // 	requeue := make(chan *pb.Event, 20)
 // 	requeueNow := make(chan struct{}, 1)
 // 	defer close(requeue)
@@ -135,7 +136,7 @@ func (c *Channel) Next(ctx context.Context) (deq.Event, error) {
 // 			timer.Reset(requeueDelay)
 // 			select {
 // 			case <-timer.C:
-// 				if channel.Get(e.Id)
+// 				if channel.Get(e.ID)
 // 				channel.RequeueEvent(e)
 // 			case <-requeueNow:
 // 				channel.RequeueEvent(e)
@@ -171,24 +172,117 @@ func (c *Channel) setErr(err error) {
 }
 
 // Get returns the event for an event ID, or ErrNotFound if none is found
-func (c *Channel) Get(eventID string) (deq.Event, error) {
+func (c *Channel) Get(eventID string) (Event, error) {
 	txn := c.db.NewTransaction(false)
 	defer txn.Discard()
 
 	e, err := getEvent(txn, c.topic, eventID, c.name)
 	if err != nil {
-		return deq.Event{}, err
+		return Event{}, err
 	}
 
 	return *e, nil
 }
 
-// func (c *Channel) Await(eventID string) (deq.Event, error) {
+// ListOpts is the available options for
+type ListOpts struct {
+	// MinID and MaxID specify inclusive bounds for the returned results.
+	MinID, MaxID string
+	// Reversed specifies if the listed results are sorted in reverse order.
+	Reversed bool
+	// Destination is the slice where listed events are copied. If nil, a slice of length 20 is used.
+	// No more than len(Destination) events will be copied.
+	Destination []Event
+}
+
+// List copies events in a specified range of IDs into opts.Destination and returns a slice of the
+// copied events.
+//
+// See ListOpts for details on specific options.
+func (c *Channel) List(ctx context.Context, opts ListOpts) ([]Event, error) {
+
+	if opts.Destination == nil {
+		opts.Destination = make([]Event, 20)
+	}
+	if opts.MaxID == "" {
+		opts.MaxID = "\xff\xff\xff\xff"
+	}
+
+	txn := c.db.NewTransaction(false)
+	defer txn.Discard()
+
+	printKeys(txn)
+
+	iterOpts := badger.DefaultIteratorOptions
+	iterOpts.Reverse = opts.Reversed
+	it := txn.NewIterator(iterOpts)
+	defer it.Close()
+
+	prefix, err := data.EventTopicPrefix(c.topic)
+	if err != nil {
+		return nil, err
+	}
+	maxKey := append(prefix, opts.MaxID...)
+	dst := opts.Destination[:0]
+	// TODO: try to consolidate this loop with catchUp function's loop
+	for it.Seek(append(prefix, opts.MinID...)); it.ValidForPrefix(prefix); it.Next() {
+		fmt.Println(len(dst), len(opts.Destination))
+		if len(dst) >= len(opts.Destination) {
+			break
+		}
+		if opts.MaxID != "" && bytes.Compare(maxKey, it.Item().Key()) < 0 {
+			break
+		}
+		item := it.Item()
+
+		var key data.EventKey
+		err = data.UnmarshalTo(item.Key(), &key)
+		if err != nil {
+			log.Printf("parse event key %s: %v", item.Key(), err)
+			continue
+		}
+
+		channel, err := getChannelEvent(txn, data.ChannelKey{
+			Channel: c.name,
+			Topic:   key.Topic,
+			ID:      key.ID,
+		})
+		if err != nil {
+			log.Printf("get channel event: %v", err)
+			return dst, err
+		}
+
+		val, err := item.Value()
+		if err != nil {
+			return dst, fmt.Errorf("get item value: %v", err)
+		}
+
+		var e data.EventPayload
+		err = proto.Unmarshal(val, &e)
+		if err != nil {
+			return dst, fmt.Errorf("unmarshal event: %v", err)
+		}
+
+		dst = append(dst, Event{
+			ID:           key.ID,
+			Topic:        key.Topic,
+			CreateTime:   key.CreateTime,
+			Payload:      e.Payload,
+			RequeueCount: int(channel.RequeueCount),
+			State:        protoToEventState(channel.EventState),
+			DefaultState: protoToEventState(e.DefaultEventState),
+		})
+	}
+
+	return dst, nil
+}
+
+// func (c *Channel) Await(eventID string) (Event, error) {
 
 // }
 
 // SetEventState sets the state of an event for this channel
-func (c *Channel) SetEventState(id string, state deq.EventState) error {
+func (c *Channel) SetEventState(id string, state EventState) error {
 
 	// Retry for up to 10 conflicts
 	for i := 0; i < 10; i++ {
@@ -206,7 +300,7 @@ func (c *Channel) SetEventState(id string, state deq.EventState) error {
 			return err
 		}
 
-		channelEvent.EventState = state
+		channelEvent.EventState = state.toProto()
 
 		err = setChannelEvent(txn, key, channelEvent)
 		if err != nil {
@@ -242,15 +336,15 @@ func (c *Channel) SetEventState(id string, state deq.EventState) error {
 // )
 
 // RequeueEvent adds the event back into the event queue for this channel
-func (c *Channel) RequeueEvent(e deq.Event, delay time.Duration) error {
+func (c *Channel) RequeueEvent(e Event, delay time.Duration) error {
 
 	requeue := func() error {
-		// log.Printf("REQUEUING %s/%s count: %d", e.Topic, e.Id, e.RequeueCount)
+		// log.Printf("REQUEUING %s/%s count: %d", e.Topic, e.ID, e.RequeueCount)
 		requeueCount, err := c.incrementSavedRequeueCount(&e)
 		if err != nil {
 			return err
 		}
-		e.RequeueCount = int32(requeueCount)
+		e.RequeueCount = requeueCount
 		c.shared.out <- &e
 
 		return nil
@@ -271,7 +365,7 @@ func (c *Channel) RequeueEvent(e deq.Event, delay time.Duration) error {
 	return nil
 }
 
-func (c *Channel) incrementSavedRequeueCount(e *deq.Event) (int, error) {
+func (c *Channel) incrementSavedRequeueCount(e *Event) (int, error) {
 
 	// retry for up to 10 conflicts.
 	for i := 0; i < 10; i++ {
@@ -282,7 +376,7 @@ func (c *Channel) incrementSavedRequeueCount(e *deq.Event) (int, error) {
 		key := data.ChannelKey{
 			Channel: c.name,
 			Topic:   c.topic,
-			ID:      e.Id,
+			ID:      e.ID,
 		}
 
 		channelEvent, err := getChannelEvent(txn, key)
@@ -314,14 +408,20 @@ func (c *Channel) incrementSavedRequeueCount(e *deq.Event) (int, error) {
 
 // EventStateSubscription allows you to get updates when a particular event's state is updated.
 type EventStateSubscription struct {
-	C <-chan deq.EventState
-	c chan deq.EventState
+	C <-chan EventState
+	c chan EventState
 
 	eventID string
 	channel *Channel
 	missed  bool
-	latest  deq.EventState
+	latest  EventState
 }
+
+var (
+	// ErrSubscriptionClosed indicates that the operation was interrupted because Close() was called
+	// on the EventStateSubscription.
+	ErrSubscriptionClosed = errors.New("subscription closed")
+)
 
 // NewEventStateSubscription returns a new EventStateSubscription.
 //
@@ -329,22 +429,22 @@ type EventStateSubscription struct {
 // Next is called. Close should always be called when the EventStateSubscription
 // is no longer needed.
 // Example usage:
-// ```
-// sub := channel.NewEventStateSubscription(id)
-// defer sub.Close()
-// for {
-// 	 state := sub.Next(ctx)
-//   if state != deq.EventState_QUEUED {
-//     break
-//	 }
-// }
-// ```
+//
+//   sub := channel.NewEventStateSubscription(id)
+// 	 defer sub.Close()
+// 	 for {
+// 	   state := sub.Next(ctx)
+//   	 if state != EventState_QUEUED {
+//       break
+//     }
+//   }
+//
 func (c *Channel) NewEventStateSubscription(id string) *EventStateSubscription {
 
 	sub := &EventStateSubscription{
 		eventID: id,
 		channel: c,
-		c:       make(chan deq.EventState, 3),
+		c:       make(chan EventState, 3),
 	}
 	sub.C = sub.c
 
@@ -366,11 +466,14 @@ func (c *Channel) NewEventStateSubscription(id string) *EventStateSubscription {
 // It's possible for a subscription to miss updates if its internal buffer is full. In this case,
 // it will skip earlier updates while preserving update order, such that the current state is always
 // at the end of a full buffer.
-func (sub *EventStateSubscription) Next(ctx context.Context) (deq.EventState, error) {
+func (sub *EventStateSubscription) Next(ctx context.Context) (EventState, error) {
 	select {
 	case <-ctx.Done():
-		return deq.EventState_UNSPECIFIED_STATE, ctx.Err()
-	case state := <-sub.C:
+		return EventStateUnspecified, ctx.Err()
+	case state, ok := <-sub.C:
+		if !ok {
+			return EventStateUnspecified, ErrSubscriptionClosed
+		}
 		return state, nil
 	}
 }
@@ -379,10 +482,10 @@ func (sub *EventStateSubscription) Next(ctx context.Context) (deq.EventState, er
 //
 // This method should always be called when the EventStateSubscription is no longer needed.
 // For example:
-// ```
-// sub := channel.NewEventStateSubscription(id)
-// defer sub.Close()
-// ```
+//
+// 	sub := channel.NewEventStateSubscription(id)
+// 	defer sub.Close()
+//
 func (sub *EventStateSubscription) Close() {
 	sub.channel.shared.stateSubsMutex.Lock()
 	defer sub.channel.shared.stateSubsMutex.Unlock()
@@ -397,7 +500,7 @@ func (sub *EventStateSubscription) Close() {
 }
 
 // add adds an event to this subscription. It is not safe for concurrent use.
-func (sub *EventStateSubscription) add(state deq.EventState) {
+func (sub *EventStateSubscription) add(state EventState) {
 	// If our buffer is full, drop the least recent update
 	if len(sub.c) == cap(sub.c) {
 		<-sub.c
@@ -480,12 +583,12 @@ func (s *sharedChannel) start() {
 				s.idleMutex.Lock()
 				s.idle = false
 				s.idleMutex.Unlock()
-				// log.Printf("READING FROM MEMORY %s/%s count: %d", e.Topic, e.Id, e.RequeueCount)
+				// log.Printf("READING FROM MEMORY %s/%s count: %d", e.Topic, e.ID, e.RequeueCount)
 				s.out <- e
 				cursor, _ = data.EventKey{
 					Topic:      e.Topic,
-					CreateTime: time.Unix(0, e.CreateTime),
-					ID:         e.Id,
+					CreateTime: e.CreateTime,
+					ID:         e.ID,
 				}.Marshal()
 			}
 		}
@@ -507,7 +610,7 @@ func (s *sharedChannel) catchUp(cursor []byte) ([]byte, error) {
 	defer it.Close()
 
 	var lastKey []byte
-	prefix, err := data.EventPrefix(s.topic)
+	prefix, err := data.EventTopicPrefix(s.topic)
 	if err != nil {
 		return nil, err
 	}
@@ -535,7 +638,7 @@ func (s *sharedChannel) catchUp(cursor []byte) ([]byte, error) {
 			log.Printf("get channel event: %v", err)
 			continue
 		}
-		if channel.EventState != deq.EventState_QUEUED {
+		if channel.EventState != data.EventState_QUEUED {
 			// Not queued, don't send
 			continue
 		}
@@ -554,14 +657,14 @@ func (s *sharedChannel) catchUp(cursor []byte) ([]byte, error) {
 
 		// log.Printf("READING FROM DISK %s/%s count: %d", key.Topic, key.ID, channel.RequeueCount)
 
-		s.out <- &deq.Event{
-			Id:           key.ID,
+		s.out <- &Event{
+			ID:           key.ID,
 			Topic:        key.Topic,
-			CreateTime:   key.CreateTime.UnixNano(),
+			CreateTime:   key.CreateTime,
 			Payload:      e.Payload,
-			RequeueCount: channel.RequeueCount,
-			State:        channel.EventState,
-			DefaultState: e.DefaultEventState,
+			RequeueCount: int(channel.RequeueCount),
+			State:        protoToEventState(channel.EventState),
+			DefaultState: protoToEventState(e.DefaultEventState),
 		}
 	}
 
@@ -576,7 +679,7 @@ func (s *sharedChannel) getCursor(topic string) ([]byte, error) {
 	// iter := txn.NewIterator(opts)
 	// defer iter.Close()
 
-	prefix, err := data.EventPrefix(s.topic)
+	prefix, err := data.EventTopicPrefix(s.topic)
 	if err != nil {
 		return nil, err
 	}
@@ -597,7 +700,7 @@ func (s *sharedChannel) getCursor(topic string) ([]byte, error) {
 	return current, nil
 }
 
-func (s *sharedChannel) broadcastEventUpdated(id string, state deq.EventState) {
+func (s *sharedChannel) broadcastEventUpdated(id string, state EventState) {
 	s.stateSubsMutex.RLock()
 	for sub := range s.stateSubs[id] {
 		sub.add(state)

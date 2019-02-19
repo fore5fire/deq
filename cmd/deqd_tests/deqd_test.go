@@ -11,8 +11,8 @@ import (
 	"time"
 
 	"github.com/google/go-cmp/cmp"
-	"gitlab.com/katcheCode/deq"
 	"gitlab.com/katcheCode/deq/ack"
+	"gitlab.com/katcheCode/deq/deqc"
 	"google.golang.org/grpc"
 	"google.golang.org/grpc/codes"
 )
@@ -32,14 +32,14 @@ func gatherTestModels(conn *grpc.ClientConn, duration time.Duration) (result []*
 	ctx, cancel := context.WithTimeout(context.Background(), duration)
 	defer cancel()
 
-	sub := deq.NewSubscriber(conn, deq.SubscriberOpts{
+	sub := deqc.NewSubscriber(conn, deqc.SubscriberOpts{
 		Channel:     "TestChannel1",
 		IdleTimeout: time.Second / 3,
 	})
 
 	mut := sync.Mutex{}
 
-	err = sub.Sub(ctx, &TestModel{}, func(e deq.Event) ack.Code {
+	err = sub.Sub(ctx, &TestModel{}, func(e deqc.Event) ack.Code {
 		mut.Lock()
 		defer mut.Unlock()
 		result = append(result, e.Msg.(*TestModel))
@@ -67,14 +67,14 @@ func TestCreateAndReceive(t *testing.T) {
 
 	// beforeTime := time.Now()
 
-	p := deq.NewPublisher(conn, deq.PublisherOpts{})
+	p := deqc.NewPublisher(conn, deqc.PublisherOpts{})
 	expected := []*TestModel{
 		&TestModel{
 			Msg: "Hello world!",
 		},
 	}
 
-	expectedE := deq.Event{
+	expectedE := deqc.Event{
 		ID:  time.Now().String(),
 		Msg: expected[0],
 	}
@@ -83,7 +83,7 @@ func TestCreateAndReceive(t *testing.T) {
 	if err != nil {
 		t.Fatalf("Error Creating Event: %v", err)
 	}
-	expectedE.State = deq.EventStateQueued
+	expectedE.State = deqc.EventStateQueued
 	expectedE.CreateTime = e.CreateTime
 	if !cmp.Equal(expectedE, e) {
 		t.Errorf("(-want +got)\n%s", cmp.Diff(expectedE, e))
@@ -91,7 +91,7 @@ func TestCreateAndReceive(t *testing.T) {
 
 	// TODO: fix test if server time is out of sync with local time... or just move to unit test
 	// t.Logf("Event ID: %v", e.GetId())
-	// createTime := deq.TimeFromID(e.GetId())
+	// createTime := deqc.TimeFromID(e.GetId())
 	// afterTime := time.Now()
 	//
 	// if createTime.Before(beforeTime) || createTime.After(afterTime) {
@@ -122,14 +122,14 @@ func TestPubDuplicate(t *testing.T) {
 
 	// beforeTime := time.Now()
 
-	p := deq.NewPublisher(conn, deq.PublisherOpts{})
+	p := deqc.NewPublisher(conn, deqc.PublisherOpts{})
 	expected := []*TestModel{
 		&TestModel{
 			Msg: "Hello world!",
 		},
 	}
 
-	expectedE := deq.Event{
+	expectedE := deqc.Event{
 		ID:  time.Now().String(),
 		Msg: expected[0],
 	}
@@ -142,7 +142,7 @@ func TestPubDuplicate(t *testing.T) {
 	if err != nil {
 		t.Fatalf("Error Creating Event: %v", err)
 	}
-	expectedE.State = deq.EventStateQueued
+	expectedE.State = deqc.EventStateQueued
 	expectedE.CreateTime = e.CreateTime
 	if !cmp.Equal(expectedE, e) {
 		t.Errorf("(-want +got)\n%s", cmp.Diff(expectedE, e))
@@ -163,11 +163,11 @@ func TestMassPublish(t *testing.T) {
 	ctx, cancel := context.WithTimeout(context.Background(), time.Second*5)
 	defer cancel()
 
-	p := deq.NewPublisher(conn, deq.PublisherOpts{})
+	p := deqc.NewPublisher(conn, deqc.PublisherOpts{})
 	now := time.Now().UnixNano()
 
 	for i := 0; i < 500; i++ {
-		_, err := p.Pub(ctx, deq.Event{
+		_, err := p.Pub(ctx, deqc.Event{
 			ID: fmt.Sprintf("%d-%.3d", now, i),
 			Msg: &TestModel{
 				Msg: fmt.Sprintf("Test Message - %.3d", i),
@@ -184,7 +184,7 @@ func TestMassPublish(t *testing.T) {
 	}
 
 	for i := 500; i < 1000; i++ {
-		_, err = p.Pub(ctx, deq.Event{
+		_, err = p.Pub(ctx, deqc.Event{
 			ID: fmt.Sprintf("%d-%d", now, i),
 			Msg: &TestModel{
 				Msg: fmt.Sprintf("Test Message - %.3d", i),
@@ -224,9 +224,9 @@ func TestRequeue(t *testing.T) {
 	ctx, cancel := context.WithTimeout(context.Background(), time.Second*60)
 	defer cancel()
 
-	p := deq.NewPublisher(conn, deq.PublisherOpts{})
+	p := deqc.NewPublisher(conn, deqc.PublisherOpts{})
 
-	expected, err := p.Pub(ctx, deq.Event{
+	expected, err := p.Pub(ctx, deqc.Event{
 		ID: "requeue-" + time.Now().String(),
 		Msg: &TestRequeueModel{
 			Msg: "Hello world of requeue!",
@@ -239,13 +239,13 @@ func TestRequeue(t *testing.T) {
 
 	time.Sleep(time.Second * 8)
 
-	consumer := deq.NewSubscriber(conn, deq.SubscriberOpts{
+	consumer := deqc.NewSubscriber(conn, deqc.SubscriberOpts{
 		Channel:     "TestChannel1",
 		IdleTimeout: time.Second * 10,
 	})
 
-	var results []deq.Event
-	err = consumer.Sub(ctx, &TestRequeueModel{}, func(e deq.Event) ack.Code {
+	var results []deqc.Event
+	err = consumer.Sub(ctx, &TestRequeueModel{}, func(e deqc.Event) ack.Code {
 		results = append(results, e)
 		if e.RequeueCount < 2 {
 			return ack.RequeueExponential
@@ -269,25 +269,25 @@ func TestRequeue(t *testing.T) {
 func TestNoTimeout(t *testing.T) {
 	t.Parallel()
 
-	sub := deq.NewSubscriber(conn, deq.SubscriberOpts{
+	sub := deqc.NewSubscriber(conn, deqc.SubscriberOpts{
 		Channel:     "TestChannel1",
 		IdleTimeout: 0,
 	})
 
-	expected := []deq.Event{
-		deq.Event{
+	expected := []deqc.Event{
+		deqc.Event{
 			ID: "NoTimeout-TestEvent1",
 			Msg: &TestNoTimeoutModel{
 				Msg: "hello no timeout!",
 			},
 		},
-		deq.Event{
+		deqc.Event{
 			ID: "NoTimeout-TestEvent2",
 			Msg: &TestNoTimeoutModel{
 				Msg: "hello no timeout!",
 			},
 		},
-		deq.Event{
+		deqc.Event{
 			ID: "NoTimeout-TestEvent3",
 			Msg: &TestNoTimeoutModel{
 				Msg: "hello no timeout!",
@@ -301,16 +301,16 @@ func TestNoTimeout(t *testing.T) {
 	defer cancel()
 
 	var subErr error
-	events := make(chan deq.Event)
+	events := make(chan deqc.Event)
 	go func() {
-		subErr = sub.Sub(ctx, &TestNoTimeoutModel{}, func(e deq.Event) ack.Code {
+		subErr = sub.Sub(ctx, &TestNoTimeoutModel{}, func(e deqc.Event) ack.Code {
 			events <- e
 			return ack.DequeueOK
 		})
 		close(events)
 	}()
 
-	pub := deq.NewPublisher(conn, deq.PublisherOpts{})
+	pub := deqc.NewPublisher(conn, deqc.PublisherOpts{})
 
 	for i, e := range expected {
 		created, err := pub.Pub(ctx, e)
@@ -347,12 +347,12 @@ func TestAwait(t *testing.T) {
 	ctx, cancel := context.WithTimeout(context.Background(), time.Second*5)
 	defer cancel()
 
-	sub := deq.NewSubscriber(conn, deq.SubscriberOpts{
+	sub := deqc.NewSubscriber(conn, deqc.SubscriberOpts{
 		Channel: "AwaitTestChannel",
 	})
-	pub := deq.NewPublisher(conn, deq.PublisherOpts{})
+	pub := deqc.NewPublisher(conn, deqc.PublisherOpts{})
 
-	expected, err := pub.Pub(ctx, deq.Event{
+	expected, err := pub.Pub(ctx, deqc.Event{
 		ID: "id-1",
 		Msg: &TestAwaitModel{
 			Msg: "abc 123",
@@ -378,7 +378,7 @@ func TestAwait(t *testing.T) {
 
 	time.Sleep(time.Second / 4)
 
-	expected, err = pub.Pub(ctx, deq.Event{
+	expected, err = pub.Pub(ctx, deqc.Event{
 		ID: "id-2",
 		Msg: &TestAwaitModel{
 			Msg: "abc 123",

@@ -1,4 +1,4 @@
-package eventstore
+package handlers
 
 import (
 	"context"
@@ -6,19 +6,19 @@ import (
 	"math"
 	"time"
 
+	"gitlab.com/katcheCode/deq"
 	pb "gitlab.com/katcheCode/deq/api/v1/deq"
-	"gitlab.com/katcheCode/deq/pkg/eventstore"
 	"google.golang.org/grpc/codes"
 	"google.golang.org/grpc/status"
 )
 
 // Server represents the gRPC server
 type Server struct {
-	store *eventstore.Store
+	store *deq.Store
 }
 
 // NewServer creates a new event store server initalized with a backing event store
-func NewServer(eventStore *eventstore.Store) *Server {
+func NewServer(eventStore *deq.Store) *Server {
 	return &Server{eventStore}
 }
 
@@ -42,14 +42,14 @@ func (s *Server) Pub(ctx context.Context, in *pb.PubRequest) (*pb.Event, error) 
 
 	channel := s.store.Channel(in.AwaitChannel, in.Event.Topic)
 
-	var sub *eventstore.EventStateSubscription
+	var sub *deq.EventStateSubscription
 	if in.AwaitChannel != "" {
 		sub = channel.NewEventStateSubscription(in.Event.Id)
 		defer sub.Close()
 	}
 
-	e, err := s.store.Pub(*in.Event)
-	if err == eventstore.ErrAlreadyExists {
+	e, err := s.store.Pub(protoToEvent(in.Event))
+	if err == deq.ErrAlreadyExists {
 		return nil, status.Error(codes.AlreadyExists, "a different event with the same id already exists")
 	}
 	if err != nil {
@@ -58,7 +58,7 @@ func (s *Server) Pub(ctx context.Context, in *pb.PubRequest) (*pb.Event, error) 
 	}
 
 	if sub != nil {
-		for e.State == pb.EventState_QUEUED {
+		for e.State == deq.EventStateQueued {
 			e.State, err = sub.Next(ctx)
 			if err == context.DeadlineExceeded || err == context.Canceled {
 				return nil, status.FromContextError(ctx.Err()).Err()
@@ -70,7 +70,7 @@ func (s *Server) Pub(ctx context.Context, in *pb.PubRequest) (*pb.Event, error) 
 		}
 	}
 
-	return &e, nil
+	return eventToProto(e), nil
 }
 
 // Sub implements DEQ.Sub
@@ -125,7 +125,7 @@ func (s *Server) Sub(in *pb.SubRequest, stream pb.DEQ_SubServer) error {
 			return status.Error(codes.Internal, "")
 		}
 
-		err = stream.Send(&e)
+		err = stream.Send(eventToProto(e))
 		if err != nil {
 			// channel.RequeueEvent(e, 0)
 			log.Printf("send event: %v", err)
@@ -147,14 +147,14 @@ func (s *Server) Ack(ctx context.Context, in *pb.AckRequest) (*pb.AckResponse, e
 		return nil, status.Error(codes.InvalidArgument, "Missing required argument 'event_id'")
 	}
 
-	var eventState pb.EventState
+	var eventState deq.EventState
 	switch in.Code {
 	case pb.AckCode_DEQUEUE_OK:
-		eventState = pb.EventState_DEQUEUED_OK
+		eventState = deq.EventStateDequeuedOK
 	case pb.AckCode_DEQUEUE_ERROR:
-		eventState = pb.EventState_DEQUEUED_ERROR
+		eventState = deq.EventStateDequeuedError
 	case pb.AckCode_REQUEUE_CONSTANT, pb.AckCode_REQUEUE_LINEAR, pb.AckCode_REQUEUE_EXPONENTIAL:
-		eventState = pb.EventState_QUEUED
+		eventState = deq.EventStateQueued
 	case pb.AckCode_RESET_TIMEOUT:
 
 	case pb.AckCode_UNSPECIFIED:
@@ -166,7 +166,7 @@ func (s *Server) Ack(ctx context.Context, in *pb.AckRequest) (*pb.AckResponse, e
 	channel := s.store.Channel(in.Channel, in.Topic)
 
 	e, err := channel.Get(in.EventId)
-	if err == eventstore.ErrNotFound {
+	if err == deq.ErrNotFound {
 		return nil, status.Error(codes.NotFound, "")
 	}
 	if err != nil {
@@ -175,7 +175,7 @@ func (s *Server) Ack(ctx context.Context, in *pb.AckRequest) (*pb.AckResponse, e
 	}
 
 	err = channel.SetEventState(in.EventId, eventState)
-	if err == eventstore.ErrNotFound {
+	if err == deq.ErrNotFound {
 		return nil, status.Error(codes.NotFound, "")
 	}
 	if err != nil {
@@ -183,7 +183,7 @@ func (s *Server) Ack(ctx context.Context, in *pb.AckRequest) (*pb.AckResponse, e
 		return nil, status.Error(codes.Internal, "")
 	}
 
-	if eventState == pb.EventState_QUEUED {
+	if eventState == deq.EventStateQueued {
 
 		baseTime := time.Second
 		var delay time.Duration
@@ -223,7 +223,7 @@ func (s *Server) Get(ctx context.Context, in *pb.GetRequest) (*pb.Event, error) 
 	channel := s.store.Channel(in.Channel, in.Topic)
 
 	// start subscription before the read so we won't miss the notification
-	var sub *eventstore.EventStateSubscription
+	var sub *deq.EventStateSubscription
 	if in.Await {
 		sub = channel.NewEventStateSubscription(in.EventId)
 		defer sub.Close()
@@ -244,14 +244,14 @@ func (s *Server) Get(ctx context.Context, in *pb.GetRequest) (*pb.Event, error) 
 			return nil, status.Error(codes.Internal, "")
 		}
 
-		return &e, nil
+		return eventToProto(e), nil
 	}
 
 	e, err := channel.Get(in.EventId)
-	if err == eventstore.ErrNotFound && sub == nil {
+	if err == deq.ErrNotFound && sub == nil {
 		return nil, status.Error(codes.NotFound, "")
 	}
-	if err == eventstore.ErrNotFound {
+	if err == deq.ErrNotFound {
 		return await()
 	}
 	if err != nil {
@@ -259,7 +259,41 @@ func (s *Server) Get(ctx context.Context, in *pb.GetRequest) (*pb.Event, error) 
 		return nil, status.Error(codes.Internal, "")
 	}
 
-	return &e, nil
+	return eventToProto(e), nil
+}
+
+// List implements DEQ.List
+func (s *Server) List(ctx context.Context, in *pb.ListRequest) (*pb.ListResponse, error) {
+
+	if in.Topic == "" {
+		return nil, status.Error(codes.InvalidArgument, "topic is required")
+	}
+	if in.Channel == "" {
+		return nil, status.Error(codes.InvalidArgument, "argument channel is required")
+	}
+
+	channel := s.store.Channel(in.Channel, in.Topic)
+	events := make([]deq.Event, in.PageSize)
+
+	events, err := channel.List(ctx, deq.ListOpts{
+		MaxID:       in.MaxId,
+		MinID:       in.MinId,
+		Reversed:    in.Reversed,
+		Destination: events,
+	})
+	if err != nil {
+		log.Printf("Get: %v", err)
+		return nil, status.Error(codes.Internal, "")
+	}
+
+	results := make([]*pb.Event, len(events))
+	for i, e := range events {
+		results[i] = eventToProto(e)
+	}
+
+	return &pb.ListResponse{
+		Events: results,
+	}, nil
 }
 
 // Del implements DEQ.Del
@@ -273,7 +307,7 @@ func (s *Server) Del(ctx context.Context, in *pb.DelRequest) (*pb.Empty, error) 
 	}
 
 	err := s.store.Del(in.Topic, in.EventId)
-	if err == eventstore.ErrNotFound {
+	if err == deq.ErrNotFound {
 		return nil, status.Error(codes.NotFound, "")
 	}
 	if err != nil {
@@ -282,4 +316,74 @@ func (s *Server) Del(ctx context.Context, in *pb.DelRequest) (*pb.Empty, error) 
 	}
 
 	return &pb.Empty{}, nil
+}
+
+// Topics implements DEQ.Topics
+func (s *Server) Topics(ctx context.Context, in *pb.TopicsRequest) (*pb.TopicsResponse, error) {
+
+	topics, err := s.store.Topics(ctx)
+	if err != nil && err == ctx.Err() {
+		return nil, status.FromContextError(err).Err()
+	}
+	if err != nil {
+
+	}
+
+	return &pb.TopicsResponse{
+		Topics: topics,
+	}, nil
+}
+
+func eventToProto(e deq.Event) *pb.Event {
+	return &pb.Event{
+		Id:           e.ID,
+		Topic:        e.Topic,
+		Payload:      e.Payload,
+		CreateTime:   e.CreateTime.UnixNano(),
+		DefaultState: stateToProto(e.DefaultState),
+		State:        stateToProto(e.State),
+		RequeueCount: int32(e.RequeueCount),
+	}
+}
+
+func protoToEvent(e *pb.Event) deq.Event {
+	return deq.Event{
+		ID:           e.Id,
+		Topic:        e.Topic,
+		Payload:      e.Payload,
+		CreateTime:   time.Unix(0, e.CreateTime),
+		DefaultState: protoToState(e.DefaultState),
+		State:        protoToState(e.State),
+		RequeueCount: int(e.RequeueCount),
+	}
+}
+
+func protoToState(s pb.EventState) deq.EventState {
+	switch s {
+	case pb.EventState_UNSPECIFIED_STATE:
+		return deq.EventStateUnspecified
+	case pb.EventState_QUEUED:
+		return deq.EventStateQueued
+	case pb.EventState_DEQUEUED_OK:
+		return deq.EventStateDequeuedOK
+	case pb.EventState_DEQUEUED_ERROR:
+		return deq.EventStateDequeuedError
+	default:
+		panic("unrecognized EventState")
+	}
+}
+
+func stateToProto(s deq.EventState) pb.EventState {
+	switch s {
+	case deq.EventStateUnspecified:
+		return pb.EventState_UNSPECIFIED_STATE
+	case deq.EventStateQueued:
+		return pb.EventState_QUEUED
+	case deq.EventStateDequeuedOK:
+		return pb.EventState_DEQUEUED_OK
+	case deq.EventStateDequeuedError:
+		return pb.EventState_DEQUEUED_ERROR
+	default:
+		panic("unrecognized EventState")
+	}
 }

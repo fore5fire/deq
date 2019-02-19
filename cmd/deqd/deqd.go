@@ -12,9 +12,9 @@ import (
 	"syscall"
 	"time"
 
+	"gitlab.com/katcheCode/deq"
 	pb "gitlab.com/katcheCode/deq/api/v1/deq"
-	"gitlab.com/katcheCode/deq/pkg/eventstore"
-	eventserver "gitlab.com/katcheCode/deq/pkg/grpc/eventstore"
+	eventserver "gitlab.com/katcheCode/deq/internal/handlers"
 	"google.golang.org/grpc"
 )
 
@@ -92,7 +92,7 @@ func run(dbDir, address, statsAddress string) error {
 		return fmt.Errorf("Error creating data directory: %v", err)
 	}
 
-	store, err := eventstore.Open(eventstore.Options{
+	store, err := deq.Open(deq.Options{
 		Dir: dbDir,
 	})
 	if err != nil {

@@ -10,6 +10,9 @@ import (
 
 // EventKey is a key for EventPayloads. It can be marshalled and used
 // in a key-value store.
+//
+// The marshalled format of an EventKey is:
+// EventTag + Sep + Topic as string data + Sep + CreateTime as 8 byte unix nano integer + Sep + ID
 type EventKey struct {
 	// Topic must not contain the null character
 	Topic string
@@ -86,8 +89,8 @@ func UnmarshalEventKey(buf []byte, key *EventKey) error {
 	return nil
 }
 
-// EventPrefix creates a prefix for EventKeys of a given topic
-func EventPrefix(topic string) ([]byte, error) {
+// EventTopicPrefix creates a prefix for EventKeys of a given topic
+func EventTopicPrefix(topic string) ([]byte, error) {
 	if strings.ContainsRune(topic, 0) {
 		return nil, errors.New("Topic cannot contain null character")
 	}
@@ -98,6 +101,20 @@ func EventPrefix(topic string) ([]byte, error) {
 	copy(buf, topic)
 	buf = buf[len(topic):]
 	buf[0] = Sep
+
+	return ret, nil
+}
+
+// EventTopicCursor returns an event topic cursor with the given topic.
+//
+// Pass topic as the empty string for a cursor before the first topic.
+func EventTopicCursor(topic string) ([]byte, error) {
+	if strings.ContainsRune(topic, 0) {
+		return nil, errors.New("Topic cannot contain null character")
+	}
+	ret := make([]byte, len(topic)+2)
+	ret[0], ret[1] = EventTag, Sep
+	copy(ret[2:], topic)
 
 	return ret, nil
 }

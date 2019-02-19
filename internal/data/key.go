@@ -19,6 +19,11 @@ const (
 	Sep          byte = 0
 )
 
+var (
+	// EventPrefix is the prefix for all event keys.
+	EventPrefix = []byte{EventTag, Sep}
+)
+
 // Key is an object which can be marshalled and unmarshalled by this library
 type Key interface {
 	Marshal() ([]byte, error)

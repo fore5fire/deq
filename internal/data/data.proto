@@ -1,9 +1,7 @@
 syntax = "proto3";
 
-import "api/v1/deq/deq.proto";
-
 message ChannelPayload {
-  deq.EventState event_state = 1;
+  EventState event_state = 1;
   int32 requeue_count = 2;
 }
 
@@ -13,5 +11,12 @@ message EventTimePayload {
 
 message EventPayload {
   bytes payload = 1;
-  deq.EventState default_event_state = 2;
+  EventState default_event_state = 2;
+}
+
+enum EventState {
+  UNSPECIFIED_STATE = 0;
+  QUEUED = 1;
+  DEQUEUED_OK = 2;
+  DEQUEUED_ERROR = 3;
 }

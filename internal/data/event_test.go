@@ -4,6 +4,8 @@ import (
 	"bytes"
 	"testing"
 	"time"
+
+	"github.com/google/go-cmp/cmp"
 )
 
 func TestMarshalEventKey(t *testing.T) {
@@ -33,11 +35,11 @@ func TestMarshalEventKey(t *testing.T) {
 	}
 
 	expectedPrefix := buf[:len(expected.Topic)+3]
-	prefix, err := EventPrefix(expected.Topic)
+	prefix, err := EventTopicPrefix(expected.Topic)
 	if err != nil {
 		t.Fatalf("marshal prefix: %v", err)
 	}
 	if !bytes.Equal(expectedPrefix, prefix) {
-		t.Errorf("marshal prefix: expected %v, got %v", expectedPrefix, prefix)
+		t.Errorf("marshal prefix:\n%s", cmp.Diff(expectedPrefix, prefix))
 	}
 }

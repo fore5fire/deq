@@ -1,4 +1,4 @@
-package eventstore
+package deq
 
 import (
 	"io/ioutil"
@@ -9,7 +9,7 @@ import (
 	"github.com/dgraph-io/badger"
 	"github.com/gogo/protobuf/proto"
 	"gitlab.com/katcheCode/deq/api/v1/deq"
-	"gitlab.com/katcheCode/deq/pkg/eventstore/data"
+	"gitlab.com/katcheCode/deq/internal/data"
 )
 
 func TestWriteEvent(t *testing.T) {
