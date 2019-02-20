@@ -27,11 +27,18 @@ type Event struct {
 	RequeueCount int
 }
 
+// EventState is the state of an event on a specific channel.
 type EventState int
 
 const (
+	// EventStateUnspecified is the default value of an EventState.
 	EventStateUnspecified EventState = iota
+	// EventStateQueued indicates that the event is queued on the channel.
 	EventStateQueued
+	// EventStateDequeuedOK indicates that the event was processed successfully and is not queued on
+	// the channel.
 	EventStateDequeuedOK
+	// EventStateDequeuedError indicates that the event was not processed successfully and is not
+	// queued on the channel.
 	EventStateDequeuedError
 )

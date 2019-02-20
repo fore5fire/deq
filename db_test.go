@@ -7,8 +7,7 @@ import (
 	"time"
 
 	"github.com/dgraph-io/badger"
-	"github.com/gogo/protobuf/proto"
-	"gitlab.com/katcheCode/deq/api/v1/deq"
+	"github.com/google/go-cmp/cmp"
 	"gitlab.com/katcheCode/deq/internal/data"
 )
 
@@ -34,19 +33,19 @@ func TestWriteEvent(t *testing.T) {
 
 	// Setup existing channels - currently we have to ack an existing event on the
 	// channels we want
-	err = writeEvent(txn, &deq.Event{
+	err = writeEvent(txn, &Event{
 		Topic:      "topic",
-		Id:         "event0",
-		CreateTime: time.Now().UnixNano(),
+		ID:         "event0",
+		CreateTime: time.Now(),
 		Payload:    []byte{1},
 	})
 	if err != nil {
 		t.Fatal("write event: ", err)
 	}
-	err = writeEvent(txn, &deq.Event{
+	err = writeEvent(txn, &Event{
 		Topic:      "topic",
-		Id:         "event00",
-		CreateTime: time.Now().UnixNano(),
+		ID:         "event00",
+		CreateTime: time.Now(),
 		Payload:    []byte{1},
 	})
 	if err != nil {
@@ -54,7 +53,7 @@ func TestWriteEvent(t *testing.T) {
 	}
 
 	dequeuePayload := data.ChannelPayload{
-		EventState: deq.EventState_DEQUEUED_OK,
+		EventState: data.EventState_DEQUEUED_OK,
 	}
 
 	channelKey := data.ChannelKey{
@@ -78,46 +77,46 @@ func TestWriteEvent(t *testing.T) {
 	}
 
 	// Write actual event
-	expected := deq.Event{
+	expected := &Event{
 		Topic:        "topic",
-		Id:           "event1",
-		CreateTime:   time.Now().UnixNano(),
+		ID:           "event1",
+		CreateTime:   time.Now(),
 		Payload:      []byte{1, 2, 3},
-		DefaultState: deq.EventState_DEQUEUED_OK,
+		DefaultState: EventStateDequeuedOK,
 		// Should be ignored.
-		State: deq.EventState_DEQUEUED_ERROR,
+		State: EventStateDequeuedError,
 	}
 
-	err = writeEvent(txn, &expected)
+	err = writeEvent(txn, expected)
 	if err != nil {
 		t.Fatal("write event: ", err)
 	}
 
-	expected.State = deq.EventState_DEQUEUED_OK
+	expected.State = EventStateDequeuedOK
 
-	e, err := getEvent(txn, expected.Topic, expected.Id, "channel")
+	actual, err := getEvent(txn, expected.Topic, expected.ID, "channel")
 	if err != nil {
 		t.Fatalf("get event on channel: %v", err)
 	}
-	if !proto.Equal(e, &expected) {
-		t.Errorf("expected %v, got %v", expected, e)
+	if !cmp.Equal(actual, expected) {
+		t.Errorf("\n%s", cmp.Diff(expected, actual))
 	}
-	e, err = getEvent(txn, expected.Topic, expected.Id, "channel2")
+	actual, err = getEvent(txn, expected.Topic, expected.ID, "channel2")
 	if err != nil {
 		t.Fatalf("get event on channel2: %v", err)
 	}
-	if !proto.Equal(e, &expected) {
-		t.Errorf("expected %v, got %v", expected, e)
+	if !cmp.Equal(actual, expected) {
+		t.Errorf("\n%s", cmp.Diff(expected, actual))
 	}
 
-	expected.State = deq.EventState_QUEUED
+	expected.State = EventStateQueued
 
-	e, err = getEvent(txn, expected.Topic, expected.Id, "newchannel")
+	actual, err = getEvent(txn, expected.Topic, expected.ID, "newchannel")
 	if err != nil {
 		t.Fatalf("get event on newchannel: %v", err)
 	}
-	if !proto.Equal(e, &expected) {
-		t.Errorf("expected %v, got %v", expected, e)
+	if !cmp.Equal(actual, expected) {
+		t.Errorf("\n%s", cmp.Diff(expected, actual))
 	}
 
 	err = txn.Commit(nil)
@@ -146,17 +145,17 @@ func BenchmarkWriteEvent(b *testing.B) {
 	txn := db.NewTransaction(true)
 	defer txn.Discard()
 
-	expected := &deq.Event{
+	expected := Event{
 		Topic:        "topic",
-		Id:           "event1",
-		CreateTime:   time.Now().UnixNano(),
+		ID:           "event1",
+		CreateTime:   time.Now(),
 		Payload:      []byte{1, 2, 3},
-		DefaultState: deq.EventState_DEQUEUED_OK,
+		DefaultState: EventStateDequeuedOK,
 		// Should be ignored.
-		State: deq.EventState_DEQUEUED_ERROR,
+		State: EventStateDequeuedError,
 	}
 
-	err = writeEvent(txn, expected)
+	err = writeEvent(txn, &expected)
 	if err != nil {
 		b.Fatal("write event: ", err)
 	}

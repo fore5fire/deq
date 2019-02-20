@@ -1,7 +1,6 @@
 package deq
 
 import (
-	"bytes"
 	"context"
 	"errors"
 	"fmt"
@@ -45,8 +44,8 @@ type sharedChannel struct {
 	idle           bool
 	doneChans      []chan error
 	stateSubsMutex sync.RWMutex
-	// Pass in a response channel, when the event is dequeued the new state will
-	// be sent back on the response channel
+	// Pass in a response channel, when the event is dequeued the new state will be sent back on the
+	// response channel
 	stateSubs map[string]map[*EventStateSubscription]struct{}
 	db        *badger.DB
 }
@@ -184,104 +183,40 @@ func (c *Channel) Get(eventID string) (Event, error) {
 	return *e, nil
 }
 
-// ListOpts is the available options for
-type ListOpts struct {
-	// MinID and MaxID specify inclusive bounds for the returned results.
-	MinID, MaxID string
-	// Reversed specifies if the listed results are sorted in reverse order.
-	Reversed bool
-	// Destination is the slice where listed events are copied. If nil, a slice of length 20 is used.
-	// No more than len(Destination) events will be copied.
-	Destination []Event
-}
-
-// List copies events in a specified range of IDs into opts.Destination and returns a slice of the
-// copied events.
+// Await gets an event for the requested event id, waiting for the event to be created if it does
+// not already exist.
 //
-// See ListOpts for details on specific options.
-func (c *Channel) List(ctx context.Context, opts ListOpts) ([]Event, error) {
+// Await never returns ErrNotFound. If the context expires, the context error is returned
+// unmodified.
+func (c *Channel) Await(ctx context.Context, eventID string) (Event, error) {
 
-	if opts.Destination == nil {
-		opts.Destination = make([]Event, 20)
+	// start subscription before the read so we won't miss the notification
+	sub := c.NewEventStateSubscription(eventID)
+	defer sub.Close()
+
+	e, err := c.Get(eventID)
+	if err != nil && err != ErrNotFound {
+		return Event{}, err
 	}
-	if opts.MaxID == "" {
-		opts.MaxID = "\xff\xff\xff\xff"
+	if err == nil {
+		// event already exists, no need to wait.
+		return e, nil
 	}
 
-	txn := c.db.NewTransaction(false)
-	defer txn.Discard()
-
-	printKeys(txn)
-
-	iterOpts := badger.DefaultIteratorOptions
-	iterOpts.Reverse = opts.Reversed
-	it := txn.NewIterator(iterOpts)
-	defer it.Close()
-
-	prefix, err := data.EventTopicPrefix(c.topic)
+	_, err = sub.Next(ctx)
 	if err != nil {
-		return nil, err
-	}
-	maxKey := append(prefix, opts.MaxID...)
-	dst := opts.Destination[:0]
-	// TODO: try to consolidate this loop with catchUp function's loop
-	for it.Seek(append(prefix, opts.MinID...)); it.ValidForPrefix(prefix); it.Next() {
-		fmt.Println(len(dst), len(opts.Destination))
-		if len(dst) >= len(opts.Destination) {
-			break
-		}
-		if opts.MaxID != "" && bytes.Compare(maxKey, it.Item().Key()) < 0 {
-			break
-		}
-		item := it.Item()
-
-		var key data.EventKey
-		err = data.UnmarshalTo(item.Key(), &key)
-		if err != nil {
-			log.Printf("parse event key %s: %v", item.Key(), err)
-			continue
-		}
-
-		channel, err := getChannelEvent(txn, data.ChannelKey{
-			Channel: c.name,
-			Topic:   key.Topic,
-			ID:      key.ID,
-		})
-		if err != nil {
-			log.Printf("get channel event: %v", err)
-			return dst, err
-		}
-
-		val, err := item.Value()
-		if err != nil {
-			return dst, fmt.Errorf("get item value: %v", err)
-		}
-
-		var e data.EventPayload
-		err = proto.Unmarshal(val, &e)
-		if err != nil {
-			return dst, fmt.Errorf("unmarshal event: %v", err)
-		}
-
-		dst = append(dst, Event{
-			ID:           key.ID,
-			Topic:        key.Topic,
-			CreateTime:   key.CreateTime,
-			Payload:      e.Payload,
-			RequeueCount: int(channel.RequeueCount),
-			State:        protoToEventState(channel.EventState),
-			DefaultState: protoToEventState(e.DefaultEventState),
-		})
+		return Event{}, err
 	}
 
-	return dst, nil
+	e, err = c.Get(eventID)
+	if err != nil {
+		return Event{}, fmt.Errorf("retry get after await: %v", err)
+	}
+
+	return e, nil
 }
 
-// func (c *Channel) Await(eventID string) (Event, error) {
-
-// }
-
-// SetEventState sets the state of an event for this channel
+// SetEventState sets the state of an event for this channel.
 func (c *Channel) SetEventState(id string, state EventState) error {
 
 	// Retry for up to 10 conflicts
@@ -654,8 +589,6 @@ func (s *sharedChannel) catchUp(cursor []byte) ([]byte, error) {
 			log.Printf("unmarshal event: %v", err)
 			continue
 		}
-
-		// log.Printf("READING FROM DISK %s/%s count: %d", key.Topic, key.ID, channel.RequeueCount)
 
 		s.out <- &Event{
 			ID:           key.ID,

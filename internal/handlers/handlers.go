@@ -273,17 +273,24 @@ func (s *Server) List(ctx context.Context, in *pb.ListRequest) (*pb.ListResponse
 	}
 
 	channel := s.store.Channel(in.Channel, in.Topic)
-	events := make([]deq.Event, in.PageSize)
+	events := make([]deq.Event, 0, in.PageSize)
 
-	events, err := channel.List(ctx, deq.ListOpts{
-		MaxID:       in.MaxId,
-		MinID:       in.MinId,
-		Reversed:    in.Reversed,
-		Destination: events,
-	})
-	if err != nil {
-		log.Printf("Get: %v", err)
-		return nil, status.Error(codes.Internal, "")
+	opts := deq.DefaultIterOpts
+	opts.Reversed = in.Reversed
+	opts.Min = in.MinId
+	opts.Max = in.MaxId
+
+	iter := channel.NewEventIter(opts)
+	defer iter.Close()
+
+	for len(events) < cap(events) && iter.Next() {
+		e, err := iter.Event()
+		if err != nil {
+			log.Printf("List: iterate event: %v", err)
+			continue
+		}
+
+		events = append(events, e)
 	}
 
 	results := make([]*pb.Event, len(events))
@@ -321,12 +328,16 @@ func (s *Server) Del(ctx context.Context, in *pb.DelRequest) (*pb.Empty, error) 
 // Topics implements DEQ.Topics
 func (s *Server) Topics(ctx context.Context, in *pb.TopicsRequest) (*pb.TopicsResponse, error) {
 
-	topics, err := s.store.Topics(ctx)
-	if err != nil && err == ctx.Err() {
-		return nil, status.FromContextError(err).Err()
-	}
-	if err != nil {
+	var topics []string
 
+	opts := deq.DefaultIterOpts
+	// TODO: expose paging and sorting options
+
+	iter := s.store.NewTopicIter(opts)
+	defer iter.Close()
+
+	for ctx.Err() == nil && iter.Next() {
+		topics = append(topics, iter.Topic())
 	}
 
 	return &pb.TopicsResponse{

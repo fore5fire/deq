@@ -253,7 +253,7 @@ func getChannelEvent(txn *badger.Txn, key data.ChannelKey) (data.ChannelPayload,
 	if err != nil {
 		return data.ChannelPayload{}, err
 	}
-	// not found isn't an error - it just means we need to use the default state
+	// Not found isn't an error - it just means we need to use the default state
 	val, err := item.Value()
 	if err != nil {
 		return data.ChannelPayload{}, err

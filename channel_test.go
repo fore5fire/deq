@@ -8,70 +8,8 @@ import (
 	"testing"
 	"time"
 
-	"github.com/gogo/protobuf/proto"
 	"github.com/google/go-cmp/cmp"
-	"gitlab.com/katcheCode/deq/api/v1/deq"
 )
-
-func TestList(t *testing.T) {
-	t.Parallel()
-
-	db, discard := newTestDB()
-	defer discard()
-
-	ctx := context.Background()
-
-	createTime := time.Now().UnixNano()
-
-	created := []deq.Event{
-		{
-			Id:         "event2",
-			Topic:      "topic1",
-			CreateTime: createTime,
-		},
-		{
-			Id:         "event1",
-			Topic:      "topic2",
-			CreateTime: createTime,
-		},
-		{
-			Id:         "event1",
-			Topic:      "topic1",
-			CreateTime: createTime,
-		},
-	}
-
-	for _, e := range created {
-		_, err := db.Pub(e)
-		if err != nil {
-			t.Fatalf("pub: %v", err)
-		}
-	}
-
-	expected := []deq.Event{
-		{
-			Id:         "event1",
-			Topic:      "topic1",
-			CreateTime: createTime,
-			State:      deq.EventState_QUEUED,
-		},
-		{
-			Id:         "event2",
-			Topic:      "topic1",
-			CreateTime: createTime,
-			State:      deq.EventState_QUEUED,
-		},
-	}
-
-	channel := db.Channel("channel1", "topic1")
-	events, err := channel.List(ctx, ListOpts{})
-	if err != nil {
-		t.Fatalf("list topics: %v", err)
-	}
-	if !cmp.Equal(events, expected) {
-		t.Errorf("\n%s", cmp.Diff(expected, events))
-	}
-}
 
 func TestAwaitChannelTimeout(t *testing.T) {
 	t.Parallel()
@@ -82,10 +20,10 @@ func TestAwaitChannelTimeout(t *testing.T) {
 	ctx, cancel := context.WithTimeout(context.Background(), time.Second/4)
 	defer cancel()
 
-	_, err := db.Pub(deq.Event{
-		Id:         "event1",
+	_, err := db.Pub(Event{
+		ID:         "event1",
 		Topic:      "topic",
-		CreateTime: time.Now().UnixNano(),
+		CreateTime: time.Now(),
 	})
 	if err != nil {
 		t.Fatalf("pub: %v", err)
@@ -112,10 +50,10 @@ func TestAwaitChannelClose(t *testing.T) {
 
 	ctx := context.Background()
 
-	_, err := db.Pub(deq.Event{
-		Id:         "event1",
+	_, err := db.Pub(Event{
+		ID:         "event1",
 		Topic:      "topic",
-		CreateTime: time.Now().UnixNano(),
+		CreateTime: time.Now(),
 	})
 	if err != nil {
 		t.Fatalf("pub: %v", err)
@@ -146,10 +84,10 @@ func TestAwaitChannel(t *testing.T) {
 	ctx, cancel := context.WithTimeout(context.Background(), time.Second*3)
 	defer cancel()
 
-	_, err := db.Pub(deq.Event{
-		Id:         "event1",
+	_, err := db.Pub(Event{
+		ID:         "event1",
 		Topic:      "topic",
-		CreateTime: time.Now().UnixNano(),
+		CreateTime: time.Now(),
 	})
 	if err != nil {
 		t.Fatalf("pub: %v", err)
@@ -157,7 +95,7 @@ func TestAwaitChannel(t *testing.T) {
 
 	go func() {
 		time.Sleep(time.Second / 4)
-		err := db.Channel("channel", "topic").SetEventState("event1", deq.EventState_DEQUEUED_OK)
+		err := db.Channel("channel", "topic").SetEventState("event1", EventStateDequeuedOK)
 		if err != nil {
 			log.Printf("set event state: %v", err)
 		}
@@ -171,8 +109,8 @@ func TestAwaitChannel(t *testing.T) {
 	if err != nil {
 		t.Fatalf("await dequeue: %v", err)
 	}
-	if state != deq.EventState_DEQUEUED_OK {
-		t.Fatalf("returned incorrect state: %s", state.String())
+	if state != EventStateDequeuedOK {
+		t.Fatalf("returned incorrect state: %v", state)
 	}
 }
 
@@ -182,11 +120,11 @@ func TestGet(t *testing.T) {
 	db, discard := newTestDB()
 	defer discard()
 
-	expected := deq.Event{
-		Id:         "event1",
+	expected := Event{
+		ID:         "event1",
 		Topic:      "topic",
-		CreateTime: time.Now().UnixNano(),
-		State:      deq.EventState_QUEUED,
+		CreateTime: time.Now(),
+		State:      EventStateQueued,
 	}
 
 	_, err := db.Pub(expected)
@@ -196,27 +134,27 @@ func TestGet(t *testing.T) {
 
 	channel := db.Channel("channel", expected.Topic)
 
-	e, err := channel.Get(expected.Id)
+	actual, err := channel.Get(expected.ID)
 	if err != nil {
 		t.Fatalf("get: %v", err)
 	}
-	if !proto.Equal(&e, &expected) {
-		t.Errorf("expected: %v, got %v", expected, e)
+	if !cmp.Equal(actual, expected) {
+		t.Errorf("\n%s", cmp.Diff(expected, actual))
 	}
 
-	err = channel.SetEventState(expected.Id, deq.EventState_DEQUEUED_OK)
+	err = channel.SetEventState(expected.ID, EventStateDequeuedOK)
 	if err != nil {
 		t.Fatalf("set event state: %v", err)
 	}
 
-	expected.State = deq.EventState_DEQUEUED_OK
+	expected.State = EventStateDequeuedOK
 
-	e, err = channel.Get(expected.Id)
+	actual, err = channel.Get(expected.ID)
 	if err != nil {
 		t.Fatalf("get after set state: %v", err)
 	}
-	if !proto.Equal(&e, &expected) {
-		t.Errorf("get after set state: expected: %v, got %v", expected, e)
+	if !cmp.Equal(actual, expected) {
+		t.Errorf("get after set state:\n%s", cmp.Diff(expected, actual))
 	}
 }
 
@@ -234,21 +172,21 @@ func TestDequeue(t *testing.T) {
 		t.Fatalf("open db: %v", err)
 	}
 
-	expected := &deq.Event{
-		Id:         "event1",
+	expected := Event{
+		ID:         "event1",
 		Topic:      "topic",
-		CreateTime: time.Now().UnixNano(),
-		State:      deq.EventState_QUEUED,
+		CreateTime: time.Now(),
+		State:      EventStateQueued,
 	}
 
-	_, err = db.Pub(*expected)
+	_, err = db.Pub(expected)
 	if err != nil {
 		t.Fatalf("pub: %v", err)
 	}
 
 	channel := db.Channel("channel", expected.Topic)
 
-	err = channel.SetEventState(expected.Id, deq.EventState_DEQUEUED_ERROR)
+	err = channel.SetEventState(expected.ID, EventStateDequeuedError)
 	if err != nil {
 		t.Fatalf("set event state: %v", err)
 	}

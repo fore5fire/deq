@@ -1,8 +1,3 @@
-//go:generate go generate ./api/...
-//go:generate go generate ./deqc/...
-//go:generate go generate ./pkg/...
-//go:generate go generate ./cmd/...
-
 /*
 Package deq provides an embedded key-value event queue.
 
@@ -16,10 +11,8 @@ package deq
 
 import (
 	"bytes"
-	"context"
 	"errors"
 	"fmt"
-	"log"
 	"sync"
 	"time"
 
@@ -28,7 +21,7 @@ import (
 	"gitlab.com/katcheCode/deq/internal/data"
 )
 
-// Store is an EventStore connected to a specific database
+// Store is an event store connected to a specific database
 type Store struct {
 	db               *badger.DB
 	in               chan eventPromise
@@ -48,7 +41,7 @@ type Options struct {
 }
 
 // LoadingMode specifies how to load data into memory. Generally speaking, lower memory is slower
-// and puts more load on the disk, while higher memory is much faster requires fewer reads from
+// and puts more load on the disk, while higher memory is much faster and requires fewer reads from
 // disk. All data is still persisted to disk regardless of the LoadingMode. Always benchmark to see
 // what best meets your needs.
 type LoadingMode int
@@ -181,54 +174,6 @@ func (s *Store) Pub(e Event) (Event, error) {
 	return e, nil
 }
 
-// // Get returns the event for an event ID, or ErrNotFound if none is found
-// func (s *Store) Get(topic, eventID, channel string) (Event, error) {
-// 	txn := s.db.NewTransaction(false)
-// 	defer txn.Discard()
-//
-// 	return getEvent(txn, topic, eventID, channel)
-// }
-
-func (s *Store) Topics(ctx context.Context) ([]string, error) {
-
-	txn := s.db.NewTransaction(false)
-	defer txn.Discard()
-
-	opts := badger.DefaultIteratorOptions
-	it := txn.NewIterator(opts)
-	defer it.Close()
-
-	// Empty string should always be valid, no need to check error
-	cursor, _ := data.EventTopicCursor("")
-
-	var topics []string
-	for it.Seek(cursor); it.ValidForPrefix(data.EventPrefix); it.Seek(cursor) {
-
-		item := it.Item()
-
-		var key data.EventKey
-		err := data.UnmarshalTo(item.Key(), &key)
-		if err != nil {
-			log.Printf("parse event key %s: %v", item.Key(), err)
-			continue
-		}
-
-		cursor, err = data.EventTopicCursor(key.Topic)
-		if err != nil {
-			log.Printf("get next cursor: %v", err)
-			continue
-		}
-		cursor = append(cursor, 255)
-		topics = append(topics, key.Topic)
-
-		if ctx.Err() != nil {
-			return nil, ctx.Err()
-		}
-	}
-
-	return topics, nil
-}
-
 // func (s *Store) SyncTo(ctx context.Context, client *deq.DEQClient) error {
 
 // }
@@ -346,21 +291,8 @@ func (s *Store) garbageCollect(interval time.Duration) {
 	}
 }
 
-// Channel returns a channel with the given name. If no channel exists with that name, a new channel is created
-// func (s *Store) Follow(channelName string) *Channel {
-//
-// }
-
-// fetch is used to get events starting at the iterator's afterKey until the most recent event.
-// It returns a stream that will be sent events, or an error if a precondition is violated.
-// If follow is false, eventc will be closed once all existing events after afterKey have been sent, or if done is closed.
-// If follow is true, eventc will not be closed until done is closed. After all existing events have been sent, any new events will also be sent once they have been persisted to the disk.
-// All data sent into eventc is in the canonical order (The order it was persisted to disk).
-// If an error occurs fetching data, eventc will be closed, and the error can be accessed by calling Err on this Iterator
-// If a fetch has already been called on this iterator, ErrIteratorAlreadyStarted will be returned.
-
 var (
-	// ErrNotFound is returned when a requested event doesn't exist in the store
+	// ErrNotFound is returned when a requested event doesn't exist in the database
 	ErrNotFound = errors.New("event not found")
 	// ErrInternal is returned when an interanl error occurs
 	ErrInternal = errors.New("internal error")
