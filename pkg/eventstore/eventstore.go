@@ -24,9 +24,13 @@ type Store struct {
 	done chan error
 }
 
-// Options are parameters for opening a store
+// Options are parameters for opening a store.
 type Options struct {
+	// Required
 	Dir string
+
+	// Optional
+	DangerousDeleteCorrupt bool
 }
 
 type eventPromise struct {
@@ -34,7 +38,7 @@ type eventPromise struct {
 	done  chan error
 }
 
-// Open opens a store from disk, or creates a new store if it does not already exist
+// Open opens a store from disk, or creates a new store if it does not already exist.
 func Open(opts Options) (*Store, error) {
 
 	if opts.Dir == "" {
@@ -48,6 +52,7 @@ func Open(opts Options) (*Store, error) {
 	badgerOpts.ValueLogLoadingMode = options.FileIO
 	badgerOpts.TableLoadingMode = options.MemoryMap
 	badgerOpts.MaxTableSize = 1 << 24
+	badgerOpts.Truncate = opts.DangerousDeleteCorrupt
 
 	db, err := badger.Open(badgerOpts)
 	if err != nil {
