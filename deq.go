@@ -38,6 +38,9 @@ type Options struct {
 	Dir string
 	// LoadingMode defaults to LoadingModeBalanced
 	LoadingMode LoadingMode
+	// DangerousDeleteCorrupt allows DEQ to delete any corrupt data from an unclean shutdown. If this
+	// option is false, attempting to call Open on a database with corrupt data will fail.
+	DangerousDeleteCorrupt bool
 }
 
 // LoadingMode specifies how to load data into memory. Generally speaking, lower memory is slower
@@ -90,6 +93,7 @@ func Open(opts Options) (*Store, error) {
 	badgerOpts.SyncWrites = true
 	badgerOpts.TableLoadingMode, badgerOpts.ValueLogLoadingMode = opts.LoadingMode.badgerOptions()
 	badgerOpts.MaxTableSize = 1 << 24
+	badgerOpts.Truncate = opts.DangerousDeleteCorrupt
 
 	db, err := badger.Open(badgerOpts)
 	if err != nil {

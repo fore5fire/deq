@@ -9,6 +9,7 @@ import (
 	_ "net/http/pprof"
 	"os"
 	"os/signal"
+	"strings"
 	"syscall"
 	"time"
 
@@ -33,6 +34,9 @@ var (
 
 	// statsAddress is the address that deq publishes stats on
 	statsAddress = os.Getenv("DEQ_STATS_ADDRESS")
+
+	// deleteCorrupt specifies if we should allow the database to delete corrupt data.
+	deleteCorrupt = strings.ToLower(os.Getenv("DEQ_DANGEROUS_DELETE_CORRUPT")) == "true"
 )
 
 func init() {
@@ -93,7 +97,8 @@ func run(dbDir, address, statsAddress string) error {
 	}
 
 	store, err := deq.Open(deq.Options{
-		Dir: dbDir,
+		Dir:                    dbDir,
+		DangerousDeleteCorrupt: deleteCorrupt,
 	})
 	if err != nil {
 		return fmt.Errorf("open database: %v", err)
