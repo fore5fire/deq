@@ -89,14 +89,14 @@ func run(dbDir, address, statsAddress string) error {
 
 	err := os.MkdirAll(dbDir, os.ModePerm)
 	if err != nil {
-		return fmt.Errorf("Error creating data directory: %v", err)
+		return fmt.Errorf("create data directory %s: %v", dbDir, err)
 	}
 
 	store, err := eventstore.Open(eventstore.Options{
 		Dir: dbDir,
 	})
 	if err != nil {
-		return fmt.Errorf("Database directory %s could not be opened", dbDir)
+		return fmt.Errorf("open database: %v", err)
 	}
 	defer store.Close()
 
@@ -113,7 +113,7 @@ func run(dbDir, address, statsAddress string) error {
 
 	lis, err := net.Listen("tcp", address)
 	if err != nil {
-		return fmt.Errorf("Error binding %s", address)
+		return fmt.Errorf("bind %s: %v", address, err)
 	}
 
 	log.Printf("gRPC server listening on %s", address)
