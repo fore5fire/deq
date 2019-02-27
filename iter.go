@@ -3,6 +3,7 @@ package deq
 import (
 	"bytes"
 	"fmt"
+	"time"
 
 	"github.com/dgraph-io/badger"
 	"github.com/gogo/protobuf/proto"
@@ -55,36 +56,33 @@ Example usage:
 	}
 */
 type EventIter struct {
-	txn         *badger.Txn
-	it          *badger.Iterator
-	opts        IterOpts
-	current     Event
-	err         error
-	end         []byte
-	channelName string
-	topic       string
+	txn     *badger.Txn
+	it      *badger.Iterator
+	opts    IterOpts
+	current Event
+	err     error
+	end     []byte
+	channel string
 }
 
-// NewEventIter creates a new EventIter that can be used to iterate events in the database.
+// NewEventIter creates a new EventIter that iterates events on the topic and channel of c. To
+// iterate events on all topics, see Store.NewEventIter.
 //
-// See IterOpts for details on specific options. EventIter only has partial support for
-// opts.PrefetchCount.
+// opts.Min and opts.Max specify the range of event IDs to read from c's topic. EventIter only has
+// partial support for opts.PrefetchCount.
 func (c *Channel) NewEventIter(opts IterOpts) *EventIter {
 
 	// Topic should be valid, no need to check error
-	prefix, _ := data.EventCursorBeforeTopic(c.topic)
-
-	if opts.Max == "" {
-		opts.Max = "\xFF\xFF\xFF\xFF"
-	}
+	prefix, _ := data.EventTimePrefixTopic(c.topic)
+	max := opts.Max + "\xff\xff\xff\xff"
 
 	var start, end []byte
 	if opts.Reversed {
-		start = append(append(start, prefix...), opts.Max...)
+		start = append(prefix, max...)
 		end = append(append(end, prefix...), opts.Min...)
 	} else {
 		start = append(append(start, prefix...), opts.Min...)
-		end = append(append(end, prefix...), opts.Max...)
+		end = append(prefix, max...)
 	}
 
 	txn := c.db.NewTransaction(false)
@@ -98,12 +96,11 @@ func (c *Channel) NewEventIter(opts IterOpts) *EventIter {
 	it.Seek(start)
 
 	return &EventIter{
-		opts:        opts,
-		txn:         txn,
-		it:          it,
-		end:         end,
-		channelName: c.name,
-		topic:       c.topic,
+		opts:    opts,
+		txn:     txn,
+		it:      it,
+		end:     end,
+		channel: c.name,
 	}
 }
 
@@ -128,20 +125,10 @@ func (iter *EventIter) Next() bool {
 
 	item := iter.it.Item()
 
-	var key data.EventKey
+	var key data.EventTimeKey
 	err := data.UnmarshalTo(item.Key(), &key)
 	if err != nil {
 		iter.err = fmt.Errorf("parse event key %s: %v", item.Key(), err)
-		return true
-	}
-
-	channel, err := getChannelEvent(iter.txn, data.ChannelKey{
-		Channel: iter.channelName,
-		Topic:   iter.topic,
-		ID:      key.ID,
-	})
-	if err != nil {
-		iter.err = fmt.Errorf("get channel event: %v", err)
 		return true
 	}
 
@@ -151,17 +138,38 @@ func (iter *EventIter) Next() bool {
 		return true
 	}
 
-	var e data.EventPayload
-	err = proto.Unmarshal(val, &e)
+	var eTime data.EventTimePayload
+	err = proto.Unmarshal(val, &eTime)
 	if err != nil {
-		iter.err = fmt.Errorf("unmarshal event: %v", err)
+		iter.err = fmt.Errorf("unmarshal event time: %v", err)
+		return true
+	}
+
+	createTime := time.Unix(0, eTime.CreateTime)
+
+	e, err := getEventPayload(iter.txn, data.EventKey{
+		Topic:      key.Topic,
+		CreateTime: createTime,
+		ID:         key.ID,
+	})
+	if err != nil {
+		iter.err = fmt.Errorf("get event: %v", err)
+	}
+
+	channel, err := getChannelEvent(iter.txn, data.ChannelKey{
+		Channel: iter.channel,
+		Topic:   key.Topic,
+		ID:      key.ID,
+	})
+	if err != nil {
+		iter.err = fmt.Errorf("get channel event: %v", err)
 		return true
 	}
 
 	iter.current = Event{
 		ID:           key.ID,
 		Topic:        key.Topic,
-		CreateTime:   key.CreateTime,
+		CreateTime:   createTime,
 		Payload:      e.Payload,
 		RequeueCount: int(channel.RequeueCount),
 		State:        protoToEventState(channel.EventState),
@@ -221,14 +229,23 @@ type TopicIter struct {
 // If opts.Min or opts.Max isn't a valid topic name, NewTopicIter panics.
 func (s *Store) NewTopicIter(opts IterOpts) *TopicIter {
 
-	start, err := data.EventCursorBeforeTopic(opts.Min)
+	txn := s.db.NewTransaction(false)
+	return newTopicIter(txn, opts)
+}
+
+func newTopicIter(txn *badger.Txn, opts IterOpts) *TopicIter {
+	// Apply default options
+	max := opts.Max
+	if max == "" {
+		max = data.LastTopic
+	}
+
+	// Setup start and end limits of iteration
+	start, err := data.EventTimeCursorBeforeTopic(opts.Min)
 	if err != nil {
 		panic("opts.Min invalid: " + err.Error())
 	}
-	if opts.Max == "" {
-		opts.Max = "\xff\xff\xff\xff"
-	}
-	end, err := data.EventCursorAfterTopic(opts.Max)
+	end, err := data.EventTimeCursorAfterTopic(max)
 	if err != nil {
 		panic("opts.Max invalid: " + err.Error())
 	}
@@ -239,15 +256,16 @@ func (s *Store) NewTopicIter(opts IterOpts) *TopicIter {
 		end = tmp
 	}
 
-	txn := s.db.NewTransaction(false)
+	// Badger setup
+	it := txn.NewIterator(badger.IteratorOptions{
+		Reverse:        opts.Reversed,
+		PrefetchValues: false,
+	})
 
 	return &TopicIter{
-		opts: opts,
-		txn:  txn,
-		it: txn.NewIterator(badger.IteratorOptions{
-			Reverse:        opts.Reversed,
-			PrefetchValues: false,
-		}),
+		opts:   opts,
+		txn:    txn,
+		it:     it,
 		cursor: start,
 		end:    end,
 	}
@@ -275,7 +293,7 @@ func (iter *TopicIter) Next() bool {
 	}
 
 	// Unmarshal the key
-	var key data.EventKey
+	var key data.EventTimeKey
 	// Keep iterating through events till we find one that works. It's out-of-scope for this function
 	// to deal with errors in individual events, so supress errors and just present topics with at
 	// least one valid event.
@@ -294,12 +312,12 @@ func (iter *TopicIter) Next() bool {
 	iter.current = key.Topic
 
 	// Update the cursor for our next iteration
-	// No error check should be needed here because the topic comes directly from an unmarshalled key.
-	iter.cursor, _ = data.EventCursorBeforeTopic(key.Topic)
-	if !iter.opts.Reversed {
-		// If we're going forward, we need to seek just after this topic, or we'll just get the first
-		// event in this topic over and over.
-		iter.cursor = append(iter.cursor, 1)
+	if iter.opts.Reversed {
+		// No error check should be needed here because the topic comes directly from an unmarshalled key.
+		iter.cursor, _ = data.EventTimeCursorBeforeTopic(key.Topic)
+	} else {
+		// No error check should be needed here because the topic comes directly from an unmarshalled key.
+		iter.cursor, _ = data.EventTimeCursorAfterTopic(key.Topic)
 	}
 
 	return true

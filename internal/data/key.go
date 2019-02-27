@@ -17,6 +17,12 @@ const (
 	EventV0Tag        = 'E'
 	EventTimeTag      = 't'
 	Sep          byte = 0
+
+	FirstTopic = "\x01"
+	LastTopic  = "\xff\xff\xff\xff"
+
+	FirstEventID = "\x01"
+	LastEventID  = "\xff\xff\xff\xff"
 )
 
 var (

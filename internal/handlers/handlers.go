@@ -41,6 +41,7 @@ func (s *Server) Pub(ctx context.Context, in *pb.PubRequest) (*pb.Event, error) 
 	in.Event.CreateTime = time.Now().UnixNano()
 
 	channel := s.store.Channel(in.AwaitChannel, in.Event.Topic)
+	defer channel.Close()
 
 	var sub *deq.EventStateSubscription
 	if in.AwaitChannel != "" {
@@ -92,6 +93,8 @@ func (s *Server) Sub(in *pb.SubRequest, stream pb.DEQ_SubServer) error {
 	channel := s.store.Channel(in.Channel, in.Topic)
 	defer channel.Close()
 
+	channel.BackoffFunc(deq.ExponentialBackoff(baseRequeueDelay))
+
 	nextCtx := stream.Context()
 	cancel := func() {}
 	defer cancel()
@@ -115,13 +118,6 @@ func (s *Server) Sub(in *pb.SubRequest, stream pb.DEQ_SubServer) error {
 		}
 		if err != nil {
 			log.Printf("Sub: get next event from channel: %v", err)
-			return status.Error(codes.Internal, "")
-		}
-
-		cappedRequeue := math.Min(float64(e.RequeueCount), 12)
-		err = channel.RequeueEvent(e, time.Duration(math.Pow(2, cappedRequeue))*baseRequeueDelay)
-		if err != nil {
-			log.Printf("send event: requeue: %v", err)
 			return status.Error(codes.Internal, "")
 		}
 
@@ -164,6 +160,7 @@ func (s *Server) Ack(ctx context.Context, in *pb.AckRequest) (*pb.AckResponse, e
 	}
 
 	channel := s.store.Channel(in.Channel, in.Topic)
+	defer channel.Close()
 
 	e, err := channel.Get(in.EventId)
 	if err == deq.ErrNotFound {
@@ -221,42 +218,26 @@ func (s *Server) Get(ctx context.Context, in *pb.GetRequest) (*pb.Event, error) 
 	}
 
 	channel := s.store.Channel(in.Channel, in.Topic)
+	defer channel.Close()
 
-	// start subscription before the read so we won't miss the notification
-	var sub *deq.EventStateSubscription
+	var e deq.Event
+	var err error
+
 	if in.Await {
-		sub = channel.NewEventStateSubscription(in.EventId)
-		defer sub.Close()
-	}
-
-	await := func() (*pb.Event, error) {
-		_, err := sub.Next(ctx)
-		if err == context.DeadlineExceeded || err == context.Canceled {
-			return nil, status.FromContextError(ctx.Err()).Err()
+		e, err = channel.Await(ctx, in.EventId)
+		if err == context.Canceled || err == context.DeadlineExceeded {
+			return nil, status.FromContextError(err).Err()
 		}
 		if err != nil {
-			log.Printf("Get: await creation: %v", err)
+			log.Printf("Get: await event: %v", err)
 			return nil, status.Error(codes.Internal, "")
 		}
-		e, err := channel.Get(in.EventId)
+	} else {
+		e, err = channel.Get(in.EventId)
 		if err != nil {
-			log.Println("Get: retry after await: %v", err)
+			log.Printf("Get: get event: %v", err)
 			return nil, status.Error(codes.Internal, "")
 		}
-
-		return eventToProto(e), nil
-	}
-
-	e, err := channel.Get(in.EventId)
-	if err == deq.ErrNotFound && sub == nil {
-		return nil, status.Error(codes.NotFound, "")
-	}
-	if err == deq.ErrNotFound {
-		return await()
-	}
-	if err != nil {
-		log.Printf("Get: %v", err)
-		return nil, status.Error(codes.Internal, "")
 	}
 
 	return eventToProto(e), nil
@@ -273,6 +254,8 @@ func (s *Server) List(ctx context.Context, in *pb.ListRequest) (*pb.ListResponse
 	}
 
 	channel := s.store.Channel(in.Channel, in.Topic)
+	defer channel.Close()
+
 	events := make([]deq.Event, 0, in.PageSize)
 
 	opts := deq.DefaultIterOpts

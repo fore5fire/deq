@@ -304,16 +304,18 @@ func TestEventIter(t *testing.T) {
 
 	expected := []Event{
 		{
-			ID:         "event1",
-			Topic:      "topic1",
-			CreateTime: createTime,
-			State:      EventStateQueued,
+			ID:           "event1",
+			Topic:        "topic1",
+			CreateTime:   createTime,
+			DefaultState: EventStateQueued,
+			State:        EventStateQueued,
 		},
 		{
-			ID:         "event2",
-			Topic:      "topic1",
-			CreateTime: createTime,
-			State:      EventStateQueued,
+			ID:           "event2",
+			Topic:        "topic1",
+			CreateTime:   createTime,
+			DefaultState: EventStateQueued,
+			State:        EventStateQueued,
 		},
 	}
 
@@ -321,6 +323,78 @@ func TestEventIter(t *testing.T) {
 
 	channel := db.Channel("channel1", "topic1")
 	iter := channel.NewEventIter(DefaultIterOpts)
+	defer iter.Close()
+
+	for iter.Next() {
+		e, err := iter.Event()
+		if err != nil {
+			t.Fatalf("get event from iter: %v", err)
+		}
+
+		actual = append(actual, e)
+	}
+
+	if !cmp.Equal(actual, expected) {
+		t.Errorf("\n%s", cmp.Diff(expected, actual))
+	}
+}
+
+func TestEventIterReversed(t *testing.T) {
+	t.Parallel()
+
+	db, discard := newTestDB()
+	defer discard()
+
+	createTime := time.Now()
+
+	created := []Event{
+		{
+			ID:         "event2",
+			Topic:      "topic1",
+			CreateTime: createTime,
+		},
+		{
+			ID:         "event1",
+			Topic:      "topic2",
+			CreateTime: createTime,
+		},
+		{
+			ID:         "event1",
+			Topic:      "topic1",
+			CreateTime: createTime,
+		},
+	}
+
+	for _, e := range created {
+		_, err := db.Pub(e)
+		if err != nil {
+			t.Fatalf("pub: %v", err)
+		}
+	}
+
+	expected := []Event{
+		{
+			ID:           "event2",
+			Topic:        "topic1",
+			CreateTime:   createTime,
+			DefaultState: EventStateQueued,
+			State:        EventStateQueued,
+		},
+		{
+			ID:           "event1",
+			Topic:        "topic1",
+			CreateTime:   createTime,
+			DefaultState: EventStateQueued,
+			State:        EventStateQueued,
+		},
+	}
+
+	var actual []Event
+
+	channel := db.Channel("channel1", "topic1")
+	opts := DefaultIterOpts
+	opts.Reversed = true
+	iter := channel.NewEventIter(opts)
 	defer iter.Close()
 
 	for iter.Next() {

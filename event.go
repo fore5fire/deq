@@ -14,7 +14,7 @@ type Event struct {
 	// by its topic.
 	Payload []byte
 	// CreateTime is the time the event was created.
-	// Output only.
+	// Defaults to time.Now()
 	CreateTime time.Time
 	// DefaultState is the initial state of this event for existing channels. If not EventStateQueued,
 	// the event will be created but not sent to subscribers of topic.
@@ -42,3 +42,18 @@ const (
 	// queued on the channel.
 	EventStateDequeuedError
 )
+
+func (s EventState) String() string {
+	switch s {
+	case EventStateUnspecified:
+		return ""
+	case EventStateQueued:
+		return "Queued"
+	case EventStateDequeuedOK:
+		return "DequeuedOK"
+	case EventStateDequeuedError:
+		return "DequeuedError"
+	default:
+		return ""
+	}
+}

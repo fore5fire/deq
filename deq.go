@@ -113,7 +113,13 @@ func Open(opts Options) (*Store, error) {
 	return s, nil
 }
 
-// Close closes the store
+// Close closes the store. Close must be called once the store is no longer in use.
+//
+//   db, err := deq.Open(...)
+//   if err != nil {
+//     // handle error
+//   }
+//   defer db.Close()
 func (s *Store) Close() error {
 
 	close(s.done)
@@ -126,8 +132,15 @@ func (s *Store) Close() error {
 	return nil
 }
 
-// Pub publishes an event
+// Pub publishes an event.
 func (s *Store) Pub(e Event) (Event, error) {
+
+	if e.CreateTime.IsZero() {
+		e.CreateTime = time.Now()
+	}
+	if e.DefaultState == EventStateUnspecified {
+		e.DefaultState = EventStateQueued
+	}
 
 	txn := s.db.NewTransaction(true)
 	defer txn.Discard()
@@ -177,43 +190,6 @@ func (s *Store) Pub(e Event) (Event, error) {
 
 	return e, nil
 }
-
-// func (s *Store) SyncTo(ctx context.Context, client *deq.DEQClient) error {
-
-// }
-
-// func (s *Store) SyncFrom(ctx context.Context, client *deq.DEQClient) error {
-
-// }
-
-// func (s *Store) Sync(ctx context.Context, client *deq.DEQClient) error {
-
-// 	ctx, cancel := context.WithCancel(ctx)
-// 	defer cancel()
-
-// 	errorc := make(chan error, 2)
-
-// 	wg := sync.WaitGroup{}
-// 	wg.Add(2)
-
-// 	go func() {
-// 		defer wg.Done()
-// 		err := s.SyncTo(ctx, client)
-// 		if err != nil {
-// 			errorc <- err
-// 		}
-// 	}()
-// 	go func() {
-// 		defer wg.Done()
-// 		err := s.SyncFrom(ctx, client)
-// 		if err != nil {
-// 			errorc <- err
-// 		}
-// 	}()
-// 	wg.Wait()
-// 	close(errorc)
-// 	return <-errorc
-// }
 
 // Del deletes an event
 func (s *Store) Del(topic, id string) error {

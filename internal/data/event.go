@@ -89,8 +89,8 @@ func UnmarshalEventKey(buf []byte, key *EventKey) error {
 	return nil
 }
 
-// EventTopicPrefix creates a prefix for EventKeys of a given topic.
-func EventTopicPrefix(topic string) ([]byte, error) {
+// EventPrefixTopic creates a prefix for EventKeys of a given topic.
+func EventPrefixTopic(topic string) ([]byte, error) {
 	if strings.ContainsRune(topic, 0) {
 		return nil, errors.New("Topic cannot contain null character")
 	}
@@ -102,22 +102,22 @@ func EventTopicPrefix(topic string) ([]byte, error) {
 	return ret, nil
 }
 
-// EventCursorBeforeTopic returns an event topic cursor before the given topic. Unlike
-// EventTopicPrefix, EventTopicCursor does not include
-//
-// Pass topic as the empty string for a cursor before the first topic.
-func EventCursorBeforeTopic(topic string) ([]byte, error) {
-	if strings.ContainsRune(topic, 0) {
-		return nil, errors.New("Topic cannot contain null character")
-	}
-	ret := make([]byte, 0, len(topic)+2)
-	ret = append(ret, EventTag, Sep)
-	ret = append(ret, topic...)
+// // EventCursorBeforeTopic returns an EventKey cursor before the given topic. Unlike
+// // EventPrefixTopic, EventTopicCursor does not include a trailing Sep.
+// //
+// // Pass topic as the empty string for a cursor before the first topic.
+// func EventCursorBeforeTopic(topic string) ([]byte, error) {
+// 	if strings.ContainsRune(topic, 0) {
+// 		return nil, errors.New("Topic cannot contain null character")
+// 	}
+// 	ret := make([]byte, 0, len(topic)+2)
+// 	ret = append(ret, EventTag, Sep)
+// 	ret = append(ret, topic...)
 
-	return ret, nil
-}
+// 	return ret, nil
+// }
 
-// EventCursorAfterTopic returns an event topic cursor just after all events of the given topic.
+// EventCursorAfterTopic returns an EventKey cursor just after all events of the given topic.
 //
 // Pass topic as "\xff\xff\xff\xff" for a cursor after events in the last topic.
 func EventCursorAfterTopic(topic string) ([]byte, error) {

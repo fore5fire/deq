@@ -10,10 +10,13 @@ import (
 
 	"github.com/dgraph-io/badger"
 	"github.com/gogo/protobuf/proto"
+	"gitlab.com/katcheCode/deq/ack"
 	"gitlab.com/katcheCode/deq/internal/data"
 )
 
-// Channel allows multiple listeners to synchronize processing of events
+// Channel allows multiple listeners to synchronize processing of events.
+//
+// All methods of Channel are safe for concurrent use unless otherwise specified.
 type Channel struct {
 	topic    string
 	name     string
@@ -23,6 +26,9 @@ type Channel struct {
 	errMutex sync.Mutex
 	err      error
 	db       *badger.DB
+	store    *Store
+
+	backoffFunc BackoffFunc
 }
 
 type channelKey struct {
@@ -80,15 +86,33 @@ func (s *Store) Channel(name, topic string) *Channel {
 	shared.doneChans = append(shared.doneChans, done)
 
 	return &Channel{
-		name:   name,
-		topic:  topic,
-		shared: shared,
-		done:   done,
-		db:     s.db,
+		name:        name,
+		topic:       topic,
+		shared:      shared,
+		done:        done,
+		db:          s.db,
+		backoffFunc: ExponentialBackoff(time.Second),
+		store:       s,
 	}
 }
 
-// Next returns the next event in the queue, or nil if there are no events
+// BackoffFunc sets the function that determines the requeue delay for each event removed from c's
+// queue.
+//
+// The BackoffFunc for a channel defaults to an exponential backoff starting at one second,
+// equivelant to calling:
+//   c.BackoffFunc(deq.ExponentialBackoff(time.Second))
+//
+// BackoffFunc is not safe for concurrent use with any of c's methods.
+func (c *Channel) BackoffFunc(backoffFunc BackoffFunc) {
+	c.backoffFunc = backoffFunc
+}
+
+// Next returns the next event in the queue.
+//
+// Events returned by next are after the duration returned by requeueDelayFunc has elapsed. If
+// requeueDelayFunc is nil, events are requeued immediately. To dequeue an event, see
+// store.UpdateEventStatus to dequeue an event.
 func (c *Channel) Next(ctx context.Context) (Event, error) {
 
 	for {
@@ -115,7 +139,100 @@ func (c *Channel) Next(ctx context.Context) (Event, error) {
 				continue
 			}
 
+			delay := c.backoffFunc(*e)
+			err = c.RequeueEvent(*e, delay)
+			if err != nil {
+				return Event{}, err
+			}
+
 			return *e, nil
+		}
+	}
+}
+
+// Sub subscribes to this channel's event queue, calling handler for each event recieved. If c has
+// multiple accessor's of it's event queue, only one will recieve each event per requeue.
+//
+// Sub blocks until an error occurs or the context is done. If Sub returns, it always returns an
+// error.
+//
+// The Event returned by handler is published if non-nil, and ack.Code is processed according to the
+// rules specified in the gitlab.com/katcheCode/deq/ack package. Sub only handles one event at a
+// time. To handle multiple events concurrently subscribe with the same handler on multiple
+// goroutines. For example:
+//
+//   errc := make(chan error, 1)
+//   for i := 0; i < workerCount; i++ {
+//     go run() {
+//       select {
+//       case errc <- channel.Sub(ctx, handler):
+//       default: // Don't block
+//       }
+//     }()
+//   }
+//   err := <-errc
+//   ...
+func (c *Channel) Sub(ctx context.Context, handler func(Event) (*Event, ack.Code)) error {
+
+	errc := make(chan error, 1)
+	responses := make(chan *Event, 1)
+	defer close(responses)
+
+	// worker to publish responses event in parallel with processing ack.Code
+	go func() {
+		for response := range responses {
+			_, err := c.store.Pub(*response)
+			errc <- err
+		}
+	}()
+
+	for {
+		e, err := c.Next(ctx)
+		if err != nil {
+			return err
+		}
+
+		response, code := handler(e)
+
+		if response != nil {
+			responses <- response
+		}
+
+		switch code {
+		case ack.DequeueOK:
+			err := c.SetEventState(e.ID, EventStateDequeuedOK)
+			if err != nil {
+				errc <- fmt.Errorf("set event state: %v", err)
+			}
+		case ack.DequeueError:
+			err := c.SetEventState(e.ID, EventStateDequeuedError)
+			if err != nil {
+				errc <- fmt.Errorf("set event state: %v", err)
+			}
+		case ack.RequeueConstant:
+			err := c.RequeueEvent(e, time.Second)
+			if err != nil {
+				errc <- fmt.Errorf("requeue event: %v", err)
+			}
+		case ack.RequeueLinear:
+			err := c.RequeueEvent(e, LinearBackoff(time.Second)(e))
+			if err != nil {
+				errc <- fmt.Errorf("requeue event: %v", err)
+			}
+		case ack.RequeueExponential:
+			err := c.RequeueEvent(e, ExponentialBackoff(time.Second)(e))
+			if err != nil {
+				errc <- fmt.Errorf("requeue event: %v", err)
+			}
+		default:
+			errc <- fmt.Errorf("handler returned unrecognized ack.Code")
+		}
+
+		if response != nil {
+			err = <-errc
+			if err != nil {
+				return fmt.Errorf("publish result: %v", err)
+			}
 		}
 	}
 }
@@ -545,7 +662,7 @@ func (s *sharedChannel) catchUp(cursor []byte) ([]byte, error) {
 	defer it.Close()
 
 	var lastKey []byte
-	prefix, err := data.EventTopicPrefix(s.topic)
+	prefix, err := data.EventPrefixTopic(s.topic)
 	if err != nil {
 		return nil, err
 	}
@@ -612,7 +729,7 @@ func (s *sharedChannel) getCursor(topic string) ([]byte, error) {
 	// iter := txn.NewIterator(opts)
 	// defer iter.Close()
 
-	prefix, err := data.EventTopicPrefix(s.topic)
+	prefix, err := data.EventPrefixTopic(s.topic)
 	if err != nil {
 		return nil, err
 	}
