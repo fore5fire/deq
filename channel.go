@@ -752,10 +752,11 @@ func (s *sharedChannel) getCursor(topic string) ([]byte, error) {
 
 func (s *sharedChannel) broadcastEventUpdated(id string, state EventState) {
 	s.stateSubsMutex.RLock()
+	defer s.stateSubsMutex.RUnlock()
+
 	for sub := range s.stateSubs[id] {
 		sub.add(state)
 	}
-	s.stateSubsMutex.RUnlock()
 }
 
 func (s *sharedChannel) broadcastErr(err error) {

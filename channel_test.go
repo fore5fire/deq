@@ -221,6 +221,62 @@ func TestSub(t *testing.T) {
 	}
 }
 
+func TestAwait(t *testing.T) {
+	t.Parallel()
+
+	db, discard := newTestDB()
+	defer discard()
+
+	expected := Event{
+		ID:           "event1",
+		Topic:        "test-topic",
+		CreateTime:   time.Now(),
+		DefaultState: EventStateQueued,
+		State:        EventStateQueued,
+	}
+
+	ctx, cancel := context.WithCancel(context.Background())
+	defer cancel()
+
+	channel := db.Channel("test-channel", expected.Topic)
+	defer channel.Close()
+
+	type AwaitResponse struct {
+		Event Event
+		Err   error
+	}
+	recieved := make(chan AwaitResponse)
+
+	go func() {
+		e, err := channel.Await(ctx, expected.ID)
+		recieved <- AwaitResponse{
+			Event: e,
+			Err:   err,
+		}
+	}()
+	time.Sleep(time.Millisecond * 50)
+	_, err := db.Pub(expected)
+	if err != nil {
+		t.Fatalf("pub: %v", err)
+	}
+
+	response := <-recieved
+	if response.Err != nil {
+		t.Fatalf("await before pub: %v", response.Err)
+	}
+	if !cmp.Equal(expected, response.Event) {
+		t.Errorf("await before pub:\n%s", cmp.Diff(expected, response.Event))
+	}
+
+	e, err := channel.Await(ctx, expected.ID)
+	if err != nil {
+		t.Fatalf("await after pub: %v", err)
+	}
+	if !cmp.Equal(expected, e) {
+		t.Errorf("await after pub:\n%s", cmp.Diff(expected, e))
+	}
+}
+
 func TestAwaitChannelTimeout(t *testing.T) {
 	t.Parallel()
 

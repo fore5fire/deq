@@ -185,7 +185,9 @@ func (s *Store) Pub(e Event) (Event, error) {
 	}
 
 	for _, channel := range s.sharedChannels {
-		channel.broadcastEventUpdated(e.ID, e.State)
+		if channel.topic == e.Topic {
+			channel.broadcastEventUpdated(e.ID, e.State)
+		}
 	}
 
 	return e, nil
