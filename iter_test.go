@@ -7,6 +7,20 @@ import (
 	"github.com/google/go-cmp/cmp"
 )
 
+func TestEmptyTopicIter(t *testing.T) {
+	t.Parallel()
+
+	db, discard := newTestDB()
+	defer discard()
+
+	iter := db.NewTopicIter(DefaultIterOpts)
+	defer iter.Close()
+
+	for iter.Next() {
+		t.Errorf("iterate empty db: %v", iter.Topic())
+	}
+}
+
 func TestTopicIter(t *testing.T) {
 	t.Parallel()
 
@@ -266,6 +280,21 @@ func TestTopicIterMax(t *testing.T) {
 
 	if !cmp.Equal(actual, expected) {
 		t.Errorf("test inclusive boundry:\n%s", cmp.Diff(expected, actual))
+	}
+}
+
+func TestEmptyEventIter(t *testing.T) {
+	t.Parallel()
+
+	db, discard := newTestDB()
+	defer discard()
+
+	channel := db.Channel("channel1", "topic1")
+	iter := channel.NewEventIter(DefaultIterOpts)
+	defer iter.Close()
+
+	for iter.Next() {
+		t.Errorf("iterate empty db")
 	}
 }
 

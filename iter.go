@@ -113,7 +113,7 @@ func (iter *EventIter) Next() bool {
 	if iter.opts.Reversed {
 		target = -1
 	}
-	if bytes.Compare(iter.it.Item().Key(), iter.end) == target || !iter.it.Valid() {
+	if !iter.it.Valid() || bytes.Compare(iter.it.Item().Key(), iter.end) == target {
 		return false
 	}
 
