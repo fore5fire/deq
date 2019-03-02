@@ -359,12 +359,10 @@ func TestEventIter(t *testing.T) {
 	defer iter.Close()
 
 	for iter.Next() {
-		e, err := iter.Event()
-		if err != nil {
-			t.Fatalf("get event from iter: %v", err)
-		}
-
-		actual = append(actual, e)
+		actual = append(actual, iter.Event())
+	}
+	if iter.Err() != nil {
+		t.Fatalf("iterate: %v", iter.Err())
 	}
 
 	if !cmp.Equal(actual, expected) {
@@ -433,12 +431,10 @@ func TestEventIterReversed(t *testing.T) {
 	defer iter.Close()
 
 	for iter.Next() {
-		e, err := iter.Event()
-		if err != nil {
-			t.Fatalf("get event from iter: %v", err)
-		}
-
-		actual = append(actual, e)
+		actual = append(actual, iter.Event())
+	}
+	if iter.Err() != nil {
+		t.Fatalf("iterate: %v", iter.Err())
 	}
 
 	if !cmp.Equal(actual, expected) {

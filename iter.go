@@ -47,12 +47,10 @@ Example usage:
 	defer iter.Close()
 
 	for iter.Next() {
-		event, err := iter.Event()
-		if err != nil {
-			// handle error
-			continue
-		}
-		log.Println(event.ID)
+		fmt.Println(iter.Event().ID)
+	}
+	if iter.Err() != nil {
+		// handle error
 	}
 */
 type EventIter struct {
@@ -107,6 +105,9 @@ func (c *Channel) NewEventIter(opts IterOpts) *EventIter {
 //
 // Next should be called before iter.Event() is called for the first time.
 func (iter *EventIter) Next() bool {
+	// Clear any error from the previous iteration.
+	iter.err = nil
+
 	// Check if there are any values left
 	target := 1
 	if iter.opts.Reversed {
@@ -118,9 +119,6 @@ func (iter *EventIter) Next() bool {
 
 	// Advance the iterator after we cache the current value.
 	defer iter.it.Next()
-
-	// Clear any error from the previous iteration.
-	iter.err = nil
 
 	item := iter.it.Item()
 
@@ -184,8 +182,27 @@ func (iter *EventIter) Next() bool {
 // Call iter.Next() to advance the current event. When Event returns an error, it indicates that an
 // error occurred retrieving the current event, but there may still be more events available as long
 // as iter.Next() returns true.
-func (iter *EventIter) Event() (Event, error) {
-	return iter.current, iter.err
+func (iter *EventIter) Event() Event {
+	return iter.current
+}
+
+// Err returns an error that occurred during a call to Next.
+//
+// Err should be checked after a call to Next returns false. If Err returns nil, then iteration
+// completed successfully. Otherwise, after handling the error it is safe to try to continue
+// iteration. For example:
+//
+//   for {
+//     for iter.Next() {
+//       // do something
+//     }
+//     if iter.Err() == nil {
+//       break
+//     }
+//     // handle error
+//   }
+func (iter *EventIter) Err() error {
+	return iter.err
 }
 
 // Close closes iter. Close should always be called when an iter is done being used.
