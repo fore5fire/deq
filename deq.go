@@ -209,7 +209,7 @@ func (s *Store) Del(topic, id string) error {
 	eventTimeKey, err := data.EventTimeKey{
 		ID:    id,
 		Topic: topic,
-	}.Marshal()
+	}.Marshal(nil)
 	if err != nil {
 		return fmt.Errorf("marshal event time key: %v", err)
 	}
@@ -218,7 +218,7 @@ func (s *Store) Del(topic, id string) error {
 		ID:         id,
 		Topic:      topic,
 		CreateTime: e.CreateTime,
-	}.Marshal()
+	}.Marshal(nil)
 	if err != nil {
 		return fmt.Errorf("marshal event key: %v", err)
 	}

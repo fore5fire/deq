@@ -56,6 +56,7 @@ func getEvent(txn *badger.Txn, topic, eventID, channel string) (*Event, error) {
 		RequeueCount: int(channelState.RequeueCount),
 		State:        protoToEventState(channelState.EventState),
 		DefaultState: protoToEventState(event.DefaultEventState),
+		Indexes:      event.Indexes,
 	}, nil
 }
 
@@ -81,7 +82,7 @@ func writeEvent(txn *badger.Txn, e *Event) error {
 	key, err := data.EventTimeKey{
 		Topic: e.Topic,
 		ID:    e.ID,
-	}.Marshal()
+	}.Marshal(nil)
 	if err != nil {
 		return fmt.Errorf("marshal event time key: %v", err)
 	}
@@ -110,7 +111,7 @@ func writeEvent(txn *badger.Txn, e *Event) error {
 		Topic:      e.Topic,
 		CreateTime: e.CreateTime,
 		ID:         e.ID,
-	}.Marshal()
+	}.Marshal(nil)
 	if err != nil {
 		return fmt.Errorf("marshal event time key: %v", err)
 	}
@@ -118,6 +119,7 @@ func writeEvent(txn *badger.Txn, e *Event) error {
 	val, err = proto.Marshal(&data.EventPayload{
 		Payload:           e.Payload,
 		DefaultEventState: e.DefaultState.toProto(),
+		Indexes:           e.Indexes,
 	})
 	if err != nil {
 		return fmt.Errorf("marshal event time payload: %v", err)
@@ -126,6 +128,21 @@ func writeEvent(txn *badger.Txn, e *Event) error {
 	err = txn.Set(key, val)
 	if err != nil {
 		return err
+	}
+
+	for _, index := range e.Indexes {
+		indexKey, err := data.IndexKey{
+			Topic: e.Topic,
+			Value: index,
+			ID:    e.ID,
+		}.Marshal(nil)
+		if err != nil {
+			return fmt.Errorf("marshal index: %v", err)
+		}
+		err = txn.Set(indexKey, nil)
+		if err != nil {
+			return fmt.Errorf("write index: %v", err)
+		}
 	}
 
 	if e.DefaultState != EventStateUnspecified && e.DefaultState != EventStateQueued {
@@ -171,7 +188,7 @@ func writeEvent(txn *badger.Txn, e *Event) error {
 
 func setChannelEvent(txn *badger.Txn, key data.ChannelKey, payload data.ChannelPayload) error {
 
-	rawkey, err := key.Marshal()
+	rawkey, err := key.Marshal(nil)
 	if err != nil {
 		return fmt.Errorf("marshal key: %v", err)
 	}
@@ -189,7 +206,7 @@ func setChannelEvent(txn *badger.Txn, key data.ChannelKey, payload data.ChannelP
 }
 
 func getEventTimePayload(txn *badger.Txn, key data.EventTimeKey) (payload data.EventTimePayload, err error) {
-	rawKey, err := key.Marshal()
+	rawKey, err := key.Marshal(nil)
 	if err != nil {
 		return payload, fmt.Errorf("marshal event time key: %v", err)
 	}
@@ -214,7 +231,7 @@ func getEventTimePayload(txn *badger.Txn, key data.EventTimeKey) (payload data.E
 }
 
 func getEventPayload(txn *badger.Txn, key data.EventKey) (payload data.EventPayload, err error) {
-	rawKey, err := key.Marshal()
+	rawKey, err := key.Marshal(nil)
 	if err != nil {
 		return payload, fmt.Errorf("marshal event key: %v", err)
 	}
@@ -241,7 +258,7 @@ var defaultChannelPayload = data.ChannelPayload{
 
 func getChannelEvent(txn *badger.Txn, key data.ChannelKey) (data.ChannelPayload, error) {
 
-	rawKey, err := key.Marshal()
+	rawKey, err := key.Marshal(nil)
 	if err != nil {
 		return data.ChannelPayload{}, fmt.Errorf("marshal event key: %v", err)
 	}

@@ -15,7 +15,7 @@ func TestMarshalEventKey(t *testing.T) {
 		CreateTime: time.Now(),
 		ID:         "def",
 	}
-	buf, err := expected.Marshal()
+	buf, err := expected.Marshal(nil)
 	if err != nil {
 		t.Fatalf("marshal: %v", err)
 	}
@@ -35,7 +35,7 @@ func TestMarshalEventKey(t *testing.T) {
 	}
 
 	expectedPrefix := buf[:len(expected.Topic)+3]
-	prefix, err := EventTopicPrefix(expected.Topic)
+	prefix, err := EventPrefixTopic(expected.Topic)
 	if err != nil {
 		t.Fatalf("marshal prefix: %v", err)
 	}

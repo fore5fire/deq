@@ -2,11 +2,31 @@ package deq
 
 import (
 	"context"
+	"io/ioutil"
+	"os"
 	"testing"
 	"time"
 
 	"github.com/google/go-cmp/cmp"
 )
+
+func newTestDB() (*Store, func()) {
+	dir, err := ioutil.TempDir("", "test-pub")
+	if err != nil {
+		panic("create temp dir: " + err.Error())
+	}
+
+	db, err := Open(Options{
+		Dir: dir,
+	})
+	if err != nil {
+		panic("open db: " + err.Error())
+	}
+
+	return db, func() {
+		os.RemoveAll(dir)
+	}
+}
 
 func TestDel(t *testing.T) {
 	t.Parallel()
@@ -22,12 +42,9 @@ func TestDel(t *testing.T) {
 		State:        EventStateQueued,
 	}
 
-	e, err := db.Pub(expected)
+	_, err := db.Pub(expected)
 	if err != nil {
 		t.Fatalf("pub: %v", err)
-	}
-	if !cmp.Equal(e, expected) {
-		t.Errorf("pub:\n%s", cmp.Diff(e, expected))
 	}
 
 	err = db.Del(expected.Topic, expected.ID)

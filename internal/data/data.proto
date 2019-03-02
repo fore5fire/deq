@@ -12,6 +12,7 @@ message EventTimePayload {
 message EventPayload {
   bytes payload = 1;
   EventState default_event_state = 2;
+  repeated string indexes = 3;
 }
 
 enum EventState {

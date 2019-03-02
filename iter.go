@@ -35,8 +35,8 @@ var DefaultIterOpts = IterOpts{
 }
 
 /*
-EventIter iterates events in the database. It is created with Channel.NewEventIter, and should
-always be closed after it is done being used.
+EventIter iterates events in the database lexicographically by ID. It is created with
+Channel.NewEventIter, and should always be closed after it is done being used.
 
 Example usage:
 
@@ -65,8 +65,7 @@ type EventIter struct {
 	channel string
 }
 
-// NewEventIter creates a new EventIter that iterates events on the topic and channel of c. To
-// iterate events on all topics, see Store.NewEventIter.
+// NewEventIter creates a new EventIter that iterates events on the topic and channel of c.
 //
 // opts.Min and opts.Max specify the range of event IDs to read from c's topic. EventIter only has
 // partial support for opts.PrefetchCount.
@@ -174,6 +173,7 @@ func (iter *EventIter) Next() bool {
 		RequeueCount: int(channel.RequeueCount),
 		State:        protoToEventState(channel.EventState),
 		DefaultState: protoToEventState(e.DefaultEventState),
+		Indexes:      e.Indexes,
 	}
 
 	return true
@@ -334,6 +334,144 @@ func (iter *TopicIter) Topic() string {
 
 // Close closes iter. Close should always be called when an iter is done being used.
 func (iter *TopicIter) Close() {
+	iter.it.Close()
+	iter.txn.Discard()
+}
+
+/*
+IndexIter iterates events in the database lexicographically by indexes. It is created with
+Channel.NewIndexIter, and should always be closed after it is done being used.
+
+Example usage:
+
+	opts := deq.DefaultIterOpts
+	// customize options as needed
+
+	iter := channel.NewIndexIter(opts)
+	defer iter.Close()
+
+	for iter.Next() {
+		fmt.Println(iter.Event())
+	}
+	if iter.Err() != nil {
+		// handle error
+	}
+*/
+type IndexIter struct {
+	txn     *badger.Txn
+	it      *badger.Iterator
+	opts    IterOpts
+	current Event
+	err     error
+	end     []byte
+	channel string
+}
+
+// NewIndexIter creates a new IndexIter that iterates events on the topic and channel of c.
+//
+// opts.Min and opts.Max specify the range of event IDs to read from c's topic. EventIter only has
+// partial support for opts.PrefetchCount.
+func (c *Channel) NewIndexIter(opts IterOpts) *IndexIter {
+
+	// Topic should be valid, no need to check error
+	prefix, _ := data.IndexPrefixTopic(c.topic)
+	max := opts.Max + "\xff\xff\xff\xff"
+
+	var start, end []byte
+	if opts.Reversed {
+		start = append(prefix, max...)
+		end = append(append(end, prefix...), opts.Min...)
+	} else {
+		start = append(append(start, prefix...), opts.Min...)
+		end = append(prefix, max...)
+	}
+
+	txn := c.db.NewTransaction(false)
+	it := txn.NewIterator(badger.IteratorOptions{
+		Reverse:        opts.Reversed,
+		PrefetchValues: opts.PrefetchCount > 0,
+		// TODO: prefetch other event data too
+		PrefetchSize: opts.PrefetchCount,
+	})
+
+	it.Seek(start)
+
+	return &IndexIter{
+		opts:    opts,
+		txn:     txn,
+		it:      it,
+		end:     end,
+		channel: c.name,
+	}
+}
+
+// Next advances the current event of iter and returns whether the iter has terminated.
+//
+// Next should be called before iter.Event() is called for the first time.
+func (iter *IndexIter) Next() bool {
+	// Clear any error from the previous iteration.
+	iter.err = nil
+
+	// Check if there are any values left
+	target := 1
+	if iter.opts.Reversed {
+		target = -1
+	}
+	if !iter.it.Valid() || bytes.Compare(iter.it.Item().Key(), iter.end) == target {
+		return false
+	}
+
+	// Advance the iterator after we cache the current value.
+	defer iter.it.Next()
+
+	item := iter.it.Item()
+
+	var key data.IndexKey
+	err := data.UnmarshalTo(item.Key(), &key)
+	if err != nil {
+		iter.err = fmt.Errorf("parse event key %s: %v", item.Key(), err)
+		return false
+	}
+
+	e, err := getEvent(iter.txn, key.Topic, key.ID, iter.channel)
+	if err != nil {
+		iter.err = err
+		return false
+	}
+
+	iter.current = *e
+
+	return true
+}
+
+// Event returns the current topic of iter.
+//
+// Call Next to advance the current event. Next should be called at least once before Event.
+func (iter *IndexIter) Event() Event {
+	return iter.current
+}
+
+// Err returns an error that occurred during a call to Next.
+//
+// Err should be checked after a call to Next returns false. If Err returns nil, then iteration
+// completed successfully. Otherwise, after handling the error it is safe to try to continue
+// iteration. For example:
+//
+//   for {
+//     for iter.Next() {
+//       // do something
+//     }
+//     if iter.Err() == nil {
+//       break
+//     }
+//     // handle error
+//   }
+func (iter *IndexIter) Err() error {
+	return iter.err
+}
+
+// Close closes iter. Close should always be called when an iter is done being used.
+func (iter *IndexIter) Close() {
 	iter.it.Close()
 	iter.txn.Discard()
 }

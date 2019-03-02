@@ -5,6 +5,7 @@ import "time"
 // Event is the fundamental data storage unit for DEQ.
 type Event struct {
 	// ID is the unique identifier for the event. Use a deterministic ID for request idempotency.
+	// Events can be iterated lexicographically by ID using an EventIter
 	// Required.
 	ID string
 	// Topic is the topic to which the event will be sent. Cannot contain the null character.
@@ -13,6 +14,10 @@ type Event struct {
 	// Payload is the arbitrary data this event holds. The structure of payload is generally specified
 	// by its topic.
 	Payload []byte
+	// Indexes specify additional indexes for this event. Indexes are scoped by the topic of the
+	// event. Events can be iterated lexicographically by index using an IndexIter. Identical indexes
+	// are sorted by event ID. Indexes cannot contain the null character.
+	Indexes []string
 	// CreateTime is the time the event was created.
 	// Defaults to time.Now()
 	CreateTime time.Time

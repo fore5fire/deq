@@ -13,6 +13,9 @@ import (
 //
 // The marshalled format of an EventKey is:
 // EventTag + Sep + Topic as string data + Sep + CreateTime as 8 byte unix nano integer + Sep + ID
+//
+// TODO: Decide if we even need to keep an index over CreateTime, and if so then migrate to use
+// IndexKey and store event body in what is not EventTimeIndex
 type EventKey struct {
 	// Topic must not contain the null character
 	Topic string
@@ -29,46 +32,40 @@ func (key EventKey) Size() int {
 	return len(key.Topic) + len(key.ID) + 11
 }
 
-// Marshal allocates a byte slice and marshals the key into it.
-func (key EventKey) Marshal() ([]byte, error) {
-	buf := make([]byte, key.Size())
-	err := key.MarshalTo(buf)
-	if err != nil {
-		return nil, err
-	}
-	return buf, nil
-}
-
-// MarshalTo marshals a key into a byte slice, prefixed according
-// to the key's type. buf must have length of at least key.Size().
-func (key EventKey) MarshalTo(buf []byte) error {
+// Marshal marshals a key into a byte slice, prefixed according to the key's type.
+//
+// If buf is nil or has insufficient capacity, a new buffer is allocated. Marshal returns the
+// slice that index was marshalled to.
+func (key EventKey) Marshal(buf []byte) ([]byte, error) {
 
 	if key.CreateTime.Before(time.Unix(0, 1)) {
-		return errors.New("CreateTime must be after before unix epoch")
+		return nil, errors.New("CreateTime must be after the unix epoch")
 	}
 	if strings.ContainsRune(key.Topic, 0) {
-		return errors.New("Topic cannot contain null character")
+		return nil, errors.New("Topic cannot contain null character")
 	}
 	if key.Topic == "" {
-		return errors.New("Topic is required")
+		return nil, errors.New("Topic is required")
 	}
 	if key.ID == "" {
-		return errors.New("ID is required")
-	}
-	if len(buf) < key.Size() {
-		return errors.New("buf must be at least of length key.Size()")
+		return nil, errors.New("ID is required")
 	}
 
-	buf[0], buf[1] = EventTag, Sep
-	buf = buf[2:]
-	copy(buf, key.Topic)
-	buf = buf[len(key.Topic):]
-	buf[0] = Sep
-	buf = buf[1:]
-	binary.BigEndian.PutUint64(buf, uint64(key.CreateTime.UnixNano()))
-	buf = buf[8:]
-	copy(buf, key.ID)
-	return nil
+	size := key.Size()
+	if cap(buf) < size {
+		buf = make([]byte, 0, size)
+	} else {
+		buf = buf[:0]
+	}
+
+	buf = append(buf, EventTag, Sep)
+	buf = append(buf, key.Topic...)
+	buf = append(buf, Sep)
+	buf = buf[:len(buf)+8]
+	binary.BigEndian.PutUint64(buf[len(buf)-8:], uint64(key.CreateTime.UnixNano()))
+	buf = append(buf, key.ID...)
+
+	return buf, nil
 }
 
 // UnmarshalEventKey unmarshals a key marshaled by key.Marshal()

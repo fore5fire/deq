@@ -1,5 +1,6 @@
 //go:generate protoc -I=. -I=../../../ -I=$GOPATH/src/github.com/gogo/protobuf/protobuf --gogofaster_out=plugins=grpc,Mgoogle/protobuf/any.proto=github.com/gogo/protobuf/types,Mapi/v1/deq/deq.proto=gitlab.com/katcheCode/deq/api/v1/deq,Mgoogle/protobuf/empty.proto=github.com/gogo/protobuf/types:. data.proto
 
+// Package data provides keys and payloads for data stored in DEQ's internal key-value store.
 package data
 
 import (
@@ -16,6 +17,7 @@ const (
 	EventTag          = 'e'
 	EventV0Tag        = 'E'
 	EventTimeTag      = 't'
+	IndexTag          = 'i'
 	Sep          byte = 0
 
 	FirstTopic = "\x01"
@@ -30,22 +32,24 @@ var (
 	EventPrefix = []byte{EventTag, Sep}
 )
 
-// Key is an object which can be marshalled and unmarshalled by this library
+// Key is an object which can be marshalled and unmarshalled by this package
 type Key interface {
-	Marshal() ([]byte, error)
+	Marshal([]byte) ([]byte, error)
 	isKey()
 }
 
 // UnmarshalTo unmarshals a key marshaled by Marshal(key Key) into a provided object
-func UnmarshalTo(data []byte, dest Key) error {
+func UnmarshalTo(src []byte, dest Key) error {
 	switch dest := dest.(type) {
 	case *EventKey:
-		return UnmarshalEventKey(data, dest)
+		return UnmarshalEventKey(src, dest)
 	case *EventTimeKey:
-		return UnmarshalEventTimeKey(data, dest)
+		return UnmarshalEventTimeKey(src, dest)
 	case *ChannelKey:
-		return UnmarshalChannelKey(data, dest)
-	case EventKey, ChannelKey, EventTimeKey:
+		return UnmarshalChannelKey(src, dest)
+	case *IndexKey:
+		return UnmarshalIndexKey(src, dest)
+	case EventKey, ChannelKey, EventTimeKey, IndexKey:
 		return errors.New("dest must be pointer to a key")
 	default:
 		return errors.New("unrecognized type")
@@ -53,24 +57,24 @@ func UnmarshalTo(data []byte, dest Key) error {
 }
 
 // Unmarshal unmarshals a key marshaled by Marshal(key Key), by infering the type
-func Unmarshal(data []byte) (Key, error) {
-	i := bytes.IndexByte(data, Sep)
+func Unmarshal(src []byte) (Key, error) {
+	i := bytes.IndexByte(src, Sep)
 	if i == -1 {
 		return nil, io.ErrUnexpectedEOF
 	}
 
-	switch data[0] {
+	switch src[0] {
 	case EventTag:
 		var key EventKey
-		err := UnmarshalEventKey(data, &key)
+		err := UnmarshalEventKey(src, &key)
 		return key, err
 	case EventTimeTag:
 		var key EventTimeKey
-		err := UnmarshalEventTimeKey(data, &key)
+		err := UnmarshalEventTimeKey(src, &key)
 		return key, err
 	case ChannelTag:
 		var key ChannelKey
-		err := UnmarshalChannelKey(data, &key)
+		err := UnmarshalChannelKey(src, &key)
 		return key, err
 	default:
 		return nil, errors.New("unrecognized type")

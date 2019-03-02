@@ -12,7 +12,7 @@ func TestMarshalChannelKey(t *testing.T) {
 		Topic:   "abc",
 		ID:      "def",
 	}
-	buf, err := expected.Marshal()
+	buf, err := expected.Marshal(nil)
 	if err != nil {
 		t.Fatalf("marshal: %v", err)
 	}

@@ -126,6 +126,7 @@ func (c *Channel) Next(ctx context.Context) (Event, error) {
 			txn := c.db.NewTransaction(false)
 			defer txn.Discard()
 
+			// TODO: don't allow deleted events to get sent out.
 			channel, err := getChannelEvent(txn, data.ChannelKey{
 				Channel: c.name,
 				Topic:   c.topic,
@@ -641,7 +642,7 @@ func (s *sharedChannel) start() {
 					Topic:      e.Topic,
 					CreateTime: e.CreateTime,
 					ID:         e.ID,
-				}.Marshal()
+				}.Marshal(nil)
 			}
 		}
 
@@ -715,6 +716,7 @@ func (s *sharedChannel) catchUp(cursor []byte) ([]byte, error) {
 			RequeueCount: int(channel.RequeueCount),
 			State:        protoToEventState(channel.EventState),
 			DefaultState: protoToEventState(e.DefaultEventState),
+			Indexes:      e.Indexes,
 		}
 	}
 

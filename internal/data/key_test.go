@@ -68,7 +68,7 @@ func TestKeyOrder(t *testing.T) {
 	slices := make([][]byte, len(keys))
 	var err error
 	for i, key := range keys {
-		slices[i], err = key.Marshal()
+		slices[i], err = key.Marshal(nil)
 		if err != nil {
 			t.Fatalf("marshal keys[%d] %v: %v", i, key, err)
 		}

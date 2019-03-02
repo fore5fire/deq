@@ -24,39 +24,34 @@ func (key ChannelKey) Size() int {
 	return len(key.Channel) + len(key.Topic) + len(key.ID) + 4
 }
 
-// Marshal allocates a byte slice and marshals the key into it.
-func (key ChannelKey) Marshal() ([]byte, error) {
-	buf := make([]byte, key.Size())
-	err := key.MarshalTo(buf)
-	if err != nil {
-		return nil, err
-	}
-	return buf, nil
-}
-
-// MarshalTo marshals a key into a byte slice, prefixed according
-// to the key's type. buf must have length of at least key.Size().
-func (key ChannelKey) MarshalTo(buf []byte) error {
+// Marshal marshals a key into a byte slice, prefixed according to the key's type.
+//
+// If buf is nil or has insufficient capacity, a new buffer is allocated. Marshal returns the
+// slice that index was marshalled to.
+func (key ChannelKey) Marshal(buf []byte) ([]byte, error) {
 
 	if strings.ContainsRune(key.Topic, 0) {
-		return errors.New("Topic cannot contain null character")
+		return nil, errors.New("Topic cannot contain null character")
 	}
 	if strings.ContainsRune(key.Channel, 0) {
-		return errors.New("Channel cannot contain null character")
+		return nil, errors.New("Channel cannot contain null character")
 	}
 
-	buf[0], buf[1] = ChannelTag, Sep
-	buf = buf[2:]
-	copy(buf, key.Channel)
-	buf = buf[len(key.Channel):]
-	buf[0] = Sep
-	buf = buf[1:]
-	copy(buf, key.Topic)
-	buf = buf[len(key.Topic):]
-	buf[0] = Sep
-	buf = buf[1:]
-	copy(buf, key.ID)
-	return nil
+	size := key.Size()
+	if cap(buf) < size {
+		buf = make([]byte, 0, size)
+	} else {
+		buf = buf[:0]
+	}
+
+	buf = append(buf, ChannelTag, Sep)
+	buf = append(buf, key.Channel...)
+	buf = append(buf, Sep)
+	buf = append(buf, key.Topic...)
+	buf = append(buf, Sep)
+	buf = append(buf, key.ID...)
+
+	return buf, nil
 }
 
 // UnmarshalChannelKey updates the this key's values by decoding the provided buf

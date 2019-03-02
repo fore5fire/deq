@@ -25,32 +25,29 @@ func (key EventTimeKey) Size() int {
 	return len(key.Topic) + len(key.ID) + 3
 }
 
-// Marshal allocates a byte slice and marshals the key into it.
-func (key EventTimeKey) Marshal() ([]byte, error) {
-	buf := make([]byte, key.Size())
-	err := key.MarshalTo(buf)
-	if err != nil {
-		return nil, err
-	}
-	return buf, nil
-}
-
-// MarshalTo marshals a key into a byte slice, prefixed according
-// to the key's type. buf must have length of at least key.Size().
-func (key EventTimeKey) MarshalTo(buf []byte) error {
+// Marshal marshals a key into a byte slice, prefixed according to the key's type.
+//
+// If buf is nil or has insufficient capacity, a new buffer is allocated. Marshal returns the
+// slice that index was marshalled to.
+func (key EventTimeKey) Marshal(buf []byte) ([]byte, error) {
 
 	if strings.ContainsRune(key.Topic, 0) {
-		return errors.New("Topic cannot contain null character")
+		return nil, errors.New("Topic cannot contain null character")
 	}
 
-	buf[0], buf[1] = EventTimeTag, Sep
-	buf = buf[2:]
-	copy(buf, key.Topic)
-	buf = buf[len(key.Topic):]
-	buf[0] = Sep
-	buf = buf[1:]
-	copy(buf[:], key.ID)
-	return nil
+	size := key.Size()
+	if cap(buf) < size {
+		buf = make([]byte, 0, size)
+	} else {
+		buf = buf[:0]
+	}
+
+	buf = append(buf, EventTimeTag, Sep)
+	buf = append(buf, key.Topic...)
+	buf = append(buf, Sep)
+	buf = append(buf, key.ID...)
+
+	return buf, nil
 }
 
 // UnmarshalEventTimeKey updates the this key's values by decoding the provided buf

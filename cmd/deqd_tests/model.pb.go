@@ -3,11 +3,12 @@
 
 package main
 
-import proto "github.com/gogo/protobuf/proto"
-import fmt "fmt"
-import math "math"
-
-import io "io"
+import (
+	fmt "fmt"
+	proto "github.com/gogo/protobuf/proto"
+	io "io"
+	math "math"
+)
 
 // Reference imports to suppress errors if they are not otherwise used.
 var _ = proto.Marshal
@@ -21,16 +22,14 @@ var _ = math.Inf
 const _ = proto.GoGoProtoPackageIsVersion2 // please upgrade the proto package
 
 type TestModel struct {
-	Msg                  string   `protobuf:"bytes,1,opt,name=msg,proto3" json:"msg,omitempty"`
-	XXX_NoUnkeyedLiteral struct{} `json:"-"`
-	XXX_sizecache        int32    `json:"-"`
+	Msg string `protobuf:"bytes,1,opt,name=msg,proto3" json:"msg,omitempty"`
 }
 
 func (m *TestModel) Reset()         { *m = TestModel{} }
 func (m *TestModel) String() string { return proto.CompactTextString(m) }
 func (*TestModel) ProtoMessage()    {}
 func (*TestModel) Descriptor() ([]byte, []int) {
-	return fileDescriptor_model_911fe61b003d95dc, []int{0}
+	return fileDescriptor_4c16552f9fdb66d8, []int{0}
 }
 func (m *TestModel) XXX_Unmarshal(b []byte) error {
 	return m.Unmarshal(b)
@@ -47,8 +46,8 @@ func (m *TestModel) XXX_Marshal(b []byte, deterministic bool) ([]byte, error) {
 		return b[:n], nil
 	}
 }
-func (dst *TestModel) XXX_Merge(src proto.Message) {
-	xxx_messageInfo_TestModel.Merge(dst, src)
+func (m *TestModel) XXX_Merge(src proto.Message) {
+	xxx_messageInfo_TestModel.Merge(m, src)
 }
 func (m *TestModel) XXX_Size() int {
 	return m.Size()
@@ -67,16 +66,14 @@ func (m *TestModel) GetMsg() string {
 }
 
 type TestRequeueModel struct {
-	Msg                  string   `protobuf:"bytes,1,opt,name=msg,proto3" json:"msg,omitempty"`
-	XXX_NoUnkeyedLiteral struct{} `json:"-"`
-	XXX_sizecache        int32    `json:"-"`
+	Msg string `protobuf:"bytes,1,opt,name=msg,proto3" json:"msg,omitempty"`
 }
 
 func (m *TestRequeueModel) Reset()         { *m = TestRequeueModel{} }
 func (m *TestRequeueModel) String() string { return proto.CompactTextString(m) }
 func (*TestRequeueModel) ProtoMessage()    {}
 func (*TestRequeueModel) Descriptor() ([]byte, []int) {
-	return fileDescriptor_model_911fe61b003d95dc, []int{1}
+	return fileDescriptor_4c16552f9fdb66d8, []int{1}
 }
 func (m *TestRequeueModel) XXX_Unmarshal(b []byte) error {
 	return m.Unmarshal(b)
@@ -93,8 +90,8 @@ func (m *TestRequeueModel) XXX_Marshal(b []byte, deterministic bool) ([]byte, er
 		return b[:n], nil
 	}
 }
-func (dst *TestRequeueModel) XXX_Merge(src proto.Message) {
-	xxx_messageInfo_TestRequeueModel.Merge(dst, src)
+func (m *TestRequeueModel) XXX_Merge(src proto.Message) {
+	xxx_messageInfo_TestRequeueModel.Merge(m, src)
 }
 func (m *TestRequeueModel) XXX_Size() int {
 	return m.Size()
@@ -113,16 +110,14 @@ func (m *TestRequeueModel) GetMsg() string {
 }
 
 type TestNoTimeoutModel struct {
-	Msg                  string   `protobuf:"bytes,1,opt,name=msg,proto3" json:"msg,omitempty"`
-	XXX_NoUnkeyedLiteral struct{} `json:"-"`
-	XXX_sizecache        int32    `json:"-"`
+	Msg string `protobuf:"bytes,1,opt,name=msg,proto3" json:"msg,omitempty"`
 }
 
 func (m *TestNoTimeoutModel) Reset()         { *m = TestNoTimeoutModel{} }
 func (m *TestNoTimeoutModel) String() string { return proto.CompactTextString(m) }
 func (*TestNoTimeoutModel) ProtoMessage()    {}
 func (*TestNoTimeoutModel) Descriptor() ([]byte, []int) {
-	return fileDescriptor_model_911fe61b003d95dc, []int{2}
+	return fileDescriptor_4c16552f9fdb66d8, []int{2}
 }
 func (m *TestNoTimeoutModel) XXX_Unmarshal(b []byte) error {
 	return m.Unmarshal(b)
@@ -139,8 +134,8 @@ func (m *TestNoTimeoutModel) XXX_Marshal(b []byte, deterministic bool) ([]byte, 
 		return b[:n], nil
 	}
 }
-func (dst *TestNoTimeoutModel) XXX_Merge(src proto.Message) {
-	xxx_messageInfo_TestNoTimeoutModel.Merge(dst, src)
+func (m *TestNoTimeoutModel) XXX_Merge(src proto.Message) {
+	xxx_messageInfo_TestNoTimeoutModel.Merge(m, src)
 }
 func (m *TestNoTimeoutModel) XXX_Size() int {
 	return m.Size()
@@ -159,16 +154,14 @@ func (m *TestNoTimeoutModel) GetMsg() string {
 }
 
 type TestAwaitModel struct {
-	Msg                  string   `protobuf:"bytes,1,opt,name=msg,proto3" json:"msg,omitempty"`
-	XXX_NoUnkeyedLiteral struct{} `json:"-"`
-	XXX_sizecache        int32    `json:"-"`
+	Msg string `protobuf:"bytes,1,opt,name=msg,proto3" json:"msg,omitempty"`
 }
 
 func (m *TestAwaitModel) Reset()         { *m = TestAwaitModel{} }
 func (m *TestAwaitModel) String() string { return proto.CompactTextString(m) }
 func (*TestAwaitModel) ProtoMessage()    {}
 func (*TestAwaitModel) Descriptor() ([]byte, []int) {
-	return fileDescriptor_model_911fe61b003d95dc, []int{3}
+	return fileDescriptor_4c16552f9fdb66d8, []int{3}
 }
 func (m *TestAwaitModel) XXX_Unmarshal(b []byte) error {
 	return m.Unmarshal(b)
@@ -185,8 +178,8 @@ func (m *TestAwaitModel) XXX_Marshal(b []byte, deterministic bool) ([]byte, erro
 		return b[:n], nil
 	}
 }
-func (dst *TestAwaitModel) XXX_Merge(src proto.Message) {
-	xxx_messageInfo_TestAwaitModel.Merge(dst, src)
+func (m *TestAwaitModel) XXX_Merge(src proto.Message) {
+	xxx_messageInfo_TestAwaitModel.Merge(m, src)
 }
 func (m *TestAwaitModel) XXX_Size() int {
 	return m.Size()
@@ -210,6 +203,22 @@ func init() {
 	proto.RegisterType((*TestNoTimeoutModel)(nil), "main.TestNoTimeoutModel")
 	proto.RegisterType((*TestAwaitModel)(nil), "main.TestAwaitModel")
 }
+
+func init() { proto.RegisterFile("model.proto", fileDescriptor_4c16552f9fdb66d8) }
+
+var fileDescriptor_4c16552f9fdb66d8 = []byte{
+	// 144 bytes of a gzipped FileDescriptorProto
+	0x1f, 0x8b, 0x08, 0x00, 0x00, 0x00, 0x00, 0x00, 0x02, 0xff, 0xe2, 0xe2, 0xce, 0xcd, 0x4f, 0x49,
+	0xcd, 0xd1, 0x2b, 0x28, 0xca, 0x2f, 0xc9, 0x17, 0x62, 0xc9, 0x4d, 0xcc, 0xcc, 0x53, 0x92, 0xe5,
+	0xe2, 0x0c, 0x49, 0x2d, 0x2e, 0xf1, 0x05, 0x49, 0x08, 0x09, 0x70, 0x31, 0xe7, 0x16, 0xa7, 0x4b,
+	0x30, 0x2a, 0x30, 0x6a, 0x70, 0x06, 0x81, 0x98, 0x4a, 0x2a, 0x5c, 0x02, 0x20, 0xe9, 0xa0, 0xd4,
+	0xc2, 0xd2, 0xd4, 0xd2, 0x54, 0x5c, 0xaa, 0xd4, 0xb8, 0x84, 0x40, 0xaa, 0xfc, 0xf2, 0x43, 0x32,
+	0x73, 0x53, 0xf3, 0x4b, 0x71, 0x9a, 0xa6, 0xc4, 0xc5, 0x07, 0x52, 0xe7, 0x58, 0x9e, 0x98, 0x89,
+	0x4b, 0x8d, 0x93, 0xc4, 0x89, 0x47, 0x72, 0x8c, 0x17, 0x1e, 0xc9, 0x31, 0x3e, 0x78, 0x24, 0xc7,
+	0x38, 0xe1, 0xb1, 0x1c, 0xc3, 0x85, 0xc7, 0x72, 0x0c, 0x37, 0x1e, 0xcb, 0x31, 0x24, 0xb1, 0x81,
+	0xdd, 0x6d, 0x0c, 0x08, 0x00, 0x00, 0xff, 0xff, 0xb3, 0xb4, 0x8f, 0x12, 0xc6, 0x00, 0x00, 0x00,
+}
+
 func (m *TestModel) Marshal() (dAtA []byte, err error) {
 	size := m.Size()
 	dAtA = make([]byte, size)
@@ -316,6 +325,9 @@ func encodeVarintModel(dAtA []byte, offset int, v uint64) int {
 	return offset + 1
 }
 func (m *TestModel) Size() (n int) {
+	if m == nil {
+		return 0
+	}
 	var l int
 	_ = l
 	l = len(m.Msg)
@@ -326,6 +338,9 @@ func (m *TestModel) Size() (n int) {
 }
 
 func (m *TestRequeueModel) Size() (n int) {
+	if m == nil {
+		return 0
+	}
 	var l int
 	_ = l
 	l = len(m.Msg)
@@ -336,6 +351,9 @@ func (m *TestRequeueModel) Size() (n int) {
 }
 
 func (m *TestNoTimeoutModel) Size() (n int) {
+	if m == nil {
+		return 0
+	}
 	var l int
 	_ = l
 	l = len(m.Msg)
@@ -346,6 +364,9 @@ func (m *TestNoTimeoutModel) Size() (n int) {
 }
 
 func (m *TestAwaitModel) Size() (n int) {
+	if m == nil {
+		return 0
+	}
 	var l int
 	_ = l
 	l = len(m.Msg)
@@ -383,7 +404,7 @@ func (m *TestModel) Unmarshal(dAtA []byte) error {
 			}
 			b := dAtA[iNdEx]
 			iNdEx++
-			wire |= (uint64(b) & 0x7F) << shift
+			wire |= uint64(b&0x7F) << shift
 			if b < 0x80 {
 				break
 			}
@@ -411,7 +432,7 @@ func (m *TestModel) Unmarshal(dAtA []byte) error {
 				}
 				b := dAtA[iNdEx]
 				iNdEx++
-				stringLen |= (uint64(b) & 0x7F) << shift
+				stringLen |= uint64(b&0x7F) << shift
 				if b < 0x80 {
 					break
 				}
@@ -421,6 +442,9 @@ func (m *TestModel) Unmarshal(dAtA []byte) error {
 				return ErrInvalidLengthModel
 			}
 			postIndex := iNdEx + intStringLen
+			if postIndex < 0 {
+				return ErrInvalidLengthModel
+			}
 			if postIndex > l {
 				return io.ErrUnexpectedEOF
 			}
@@ -433,6 +457,9 @@ func (m *TestModel) Unmarshal(dAtA []byte) error {
 				return err
 			}
 			if skippy < 0 {
+				return ErrInvalidLengthModel
+			}
+			if (iNdEx + skippy) < 0 {
 				return ErrInvalidLengthModel
 			}
 			if (iNdEx + skippy) > l {
@@ -462,7 +489,7 @@ func (m *TestRequeueModel) Unmarshal(dAtA []byte) error {
 			}
 			b := dAtA[iNdEx]
 			iNdEx++
-			wire |= (uint64(b) & 0x7F) << shift
+			wire |= uint64(b&0x7F) << shift
 			if b < 0x80 {
 				break
 			}
@@ -490,7 +517,7 @@ func (m *TestRequeueModel) Unmarshal(dAtA []byte) error {
 				}
 				b := dAtA[iNdEx]
 				iNdEx++
-				stringLen |= (uint64(b) & 0x7F) << shift
+				stringLen |= uint64(b&0x7F) << shift
 				if b < 0x80 {
 					break
 				}
@@ -500,6 +527,9 @@ func (m *TestRequeueModel) Unmarshal(dAtA []byte) error {
 				return ErrInvalidLengthModel
 			}
 			postIndex := iNdEx + intStringLen
+			if postIndex < 0 {
+				return ErrInvalidLengthModel
+			}
 			if postIndex > l {
 				return io.ErrUnexpectedEOF
 			}
@@ -512,6 +542,9 @@ func (m *TestRequeueModel) Unmarshal(dAtA []byte) error {
 				return err
 			}
 			if skippy < 0 {
+				return ErrInvalidLengthModel
+			}
+			if (iNdEx + skippy) < 0 {
 				return ErrInvalidLengthModel
 			}
 			if (iNdEx + skippy) > l {
@@ -541,7 +574,7 @@ func (m *TestNoTimeoutModel) Unmarshal(dAtA []byte) error {
 			}
 			b := dAtA[iNdEx]
 			iNdEx++
-			wire |= (uint64(b) & 0x7F) << shift
+			wire |= uint64(b&0x7F) << shift
 			if b < 0x80 {
 				break
 			}
@@ -569,7 +602,7 @@ func (m *TestNoTimeoutModel) Unmarshal(dAtA []byte) error {
 				}
 				b := dAtA[iNdEx]
 				iNdEx++
-				stringLen |= (uint64(b) & 0x7F) << shift
+				stringLen |= uint64(b&0x7F) << shift
 				if b < 0x80 {
 					break
 				}
@@ -579,6 +612,9 @@ func (m *TestNoTimeoutModel) Unmarshal(dAtA []byte) error {
 				return ErrInvalidLengthModel
 			}
 			postIndex := iNdEx + intStringLen
+			if postIndex < 0 {
+				return ErrInvalidLengthModel
+			}
 			if postIndex > l {
 				return io.ErrUnexpectedEOF
 			}
@@ -591,6 +627,9 @@ func (m *TestNoTimeoutModel) Unmarshal(dAtA []byte) error {
 				return err
 			}
 			if skippy < 0 {
+				return ErrInvalidLengthModel
+			}
+			if (iNdEx + skippy) < 0 {
 				return ErrInvalidLengthModel
 			}
 			if (iNdEx + skippy) > l {
@@ -620,7 +659,7 @@ func (m *TestAwaitModel) Unmarshal(dAtA []byte) error {
 			}
 			b := dAtA[iNdEx]
 			iNdEx++
-			wire |= (uint64(b) & 0x7F) << shift
+			wire |= uint64(b&0x7F) << shift
 			if b < 0x80 {
 				break
 			}
@@ -648,7 +687,7 @@ func (m *TestAwaitModel) Unmarshal(dAtA []byte) error {
 				}
 				b := dAtA[iNdEx]
 				iNdEx++
-				stringLen |= (uint64(b) & 0x7F) << shift
+				stringLen |= uint64(b&0x7F) << shift
 				if b < 0x80 {
 					break
 				}
@@ -658,6 +697,9 @@ func (m *TestAwaitModel) Unmarshal(dAtA []byte) error {
 				return ErrInvalidLengthModel
 			}
 			postIndex := iNdEx + intStringLen
+			if postIndex < 0 {
+				return ErrInvalidLengthModel
+			}
 			if postIndex > l {
 				return io.ErrUnexpectedEOF
 			}
@@ -670,6 +712,9 @@ func (m *TestAwaitModel) Unmarshal(dAtA []byte) error {
 				return err
 			}
 			if skippy < 0 {
+				return ErrInvalidLengthModel
+			}
+			if (iNdEx + skippy) < 0 {
 				return ErrInvalidLengthModel
 			}
 			if (iNdEx + skippy) > l {
@@ -738,8 +783,11 @@ func skipModel(dAtA []byte) (n int, err error) {
 					break
 				}
 			}
-			iNdEx += length
 			if length < 0 {
+				return 0, ErrInvalidLengthModel
+			}
+			iNdEx += length
+			if iNdEx < 0 {
 				return 0, ErrInvalidLengthModel
 			}
 			return iNdEx, nil
@@ -770,6 +818,9 @@ func skipModel(dAtA []byte) (n int, err error) {
 					return 0, err
 				}
 				iNdEx = start + next
+				if iNdEx < 0 {
+					return 0, ErrInvalidLengthModel
+				}
 			}
 			return iNdEx, nil
 		case 4:
@@ -788,18 +839,3 @@ var (
 	ErrInvalidLengthModel = fmt.Errorf("proto: negative length found during unmarshaling")
 	ErrIntOverflowModel   = fmt.Errorf("proto: integer overflow")
 )
-
-func init() { proto.RegisterFile("model.proto", fileDescriptor_model_911fe61b003d95dc) }
-
-var fileDescriptor_model_911fe61b003d95dc = []byte{
-	// 136 bytes of a gzipped FileDescriptorProto
-	0x1f, 0x8b, 0x08, 0x00, 0x00, 0x00, 0x00, 0x00, 0x02, 0xff, 0xe2, 0xe2, 0xce, 0xcd, 0x4f, 0x49,
-	0xcd, 0xd1, 0x2b, 0x28, 0xca, 0x2f, 0xc9, 0x17, 0x62, 0xc9, 0x4d, 0xcc, 0xcc, 0x53, 0x92, 0xe5,
-	0xe2, 0x0c, 0x49, 0x2d, 0x2e, 0xf1, 0x05, 0x49, 0x08, 0x09, 0x70, 0x31, 0xe7, 0x16, 0xa7, 0x4b,
-	0x30, 0x2a, 0x30, 0x6a, 0x70, 0x06, 0x81, 0x98, 0x4a, 0x2a, 0x5c, 0x02, 0x20, 0xe9, 0xa0, 0xd4,
-	0xc2, 0xd2, 0xd4, 0xd2, 0x54, 0x5c, 0xaa, 0xd4, 0xb8, 0x84, 0x40, 0xaa, 0xfc, 0xf2, 0x43, 0x32,
-	0x73, 0x53, 0xf3, 0x4b, 0x71, 0x9a, 0xa6, 0xc4, 0xc5, 0x07, 0x52, 0xe7, 0x58, 0x9e, 0x98, 0x89,
-	0x4b, 0x8d, 0x93, 0xc0, 0x89, 0x47, 0x72, 0x8c, 0x17, 0x1e, 0xc9, 0x31, 0x3e, 0x78, 0x24, 0xc7,
-	0x38, 0xe1, 0xb1, 0x1c, 0x43, 0x12, 0x1b, 0xd8, 0xbd, 0xc6, 0x80, 0x00, 0x00, 0x00, 0xff, 0xff,
-	0x4a, 0xbb, 0x30, 0x4e, 0xbe, 0x00, 0x00, 0x00,
-}

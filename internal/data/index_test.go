@@ -6,20 +6,21 @@ import (
 	"github.com/google/go-cmp/cmp"
 )
 
-func TestMarshalEventTimeKey(t *testing.T) {
-	expected := EventTimeKey{
+func TestMarshalIndexKey(t *testing.T) {
+	expected := IndexKey{
 		Topic: "abc",
-		ID:    "def",
+		Type:  "abc",
+		Value: "def",
 	}
 	buf, err := expected.Marshal(nil)
 	if err != nil {
 		t.Fatalf("marshal: %v", err)
 	}
-	if buf[0] != EventTimeTag {
-		t.Errorf("expected serialized prefix %d, got %d", EventTimeTag, buf[0])
+	if buf[0] != IndexTag {
+		t.Errorf("expected serialized prefix %d, got %d", IndexTag, buf[0])
 	}
 
-	var unmarshaled EventTimeKey
+	var unmarshaled IndexKey
 	err = UnmarshalTo(buf, &unmarshaled)
 	if err != nil {
 		t.Fatalf("unmarshal: %v", err)
