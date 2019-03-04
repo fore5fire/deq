@@ -13,6 +13,7 @@ import (
 	"bytes"
 	"errors"
 	"fmt"
+	"log"
 	"sync"
 	"time"
 
@@ -121,6 +122,13 @@ func Open(opts Options) (*Store, error) {
 //   }
 //   defer db.Close()
 func (s *Store) Close() error {
+
+	s.sharedChannelsMu.Lock()
+	defer s.sharedChannelsMu.Unlock()
+
+	if len(s.sharedChannels) > 0 {
+		log.Printf("[WARN] Store.Close called before closing all channels")
+	}
 
 	close(s.done)
 

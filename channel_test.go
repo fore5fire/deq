@@ -18,8 +18,20 @@ func TestSub(t *testing.T) {
 	db, discard := newTestDB()
 	defer discard()
 
+	errc := make(chan error)
 	ctx, cancel := context.WithCancel(context.Background())
-	defer cancel()
+	defer func() {
+		cancel()
+		// Check Sub error
+		err := <-errc
+		if err != ctx.Err() {
+			t.Errorf("subscribe: %v", err)
+		}
+		err = <-errc
+		if err != ctx.Err() {
+			t.Errorf("subscribe: %v", err)
+		}
+	}()
 
 	// Round(0) gets rid of leap-second info, which will be lost in serialization
 	createTime := time.Now().Round(0)
@@ -133,16 +145,13 @@ func TestSub(t *testing.T) {
 		}
 	}
 
-	errc := make(chan error)
 	recieved := make(chan Event)
 	responses := make(chan Event)
 
-	// Subscribe to events
+	// // Subscribe to events
 	go func() {
 		channel := db.Channel("test-channel", "TopicA")
-		defer channel.Close()
-
-		errc <- channel.Sub(ctx, func(e Event) (*Event, ack.Code) {
+		err := channel.Sub(ctx, func(e Event) (*Event, ack.Code) {
 
 			recieved <- e
 
@@ -152,28 +161,21 @@ func TestSub(t *testing.T) {
 				CreateTime: createTime,
 			}, ack.DequeueOK
 		})
+		channel.Close()
+		errc <- err
 	}()
 
 	// Subscribe to response events
 	go func() {
 		channel := db.Channel("test-channel", "Response-TopicA")
-		defer channel.Close()
-
-		errc <- channel.Sub(ctx, func(e Event) (*Event, ack.Code) {
+		err := channel.Sub(ctx, func(e Event) (*Event, ack.Code) {
 
 			responses <- e
 
 			return nil, ack.DequeueOK
 		})
-	}()
-
-	// Check Sub error just before we cancel the context
-	defer func() {
-		select {
-		case err := <-errc:
-			t.Errorf("subscribe: %v", err)
-		default:
-		}
+		channel.Close()
+		errc <- err
 	}()
 
 	// Verify that events were recieved by handler
@@ -296,6 +298,8 @@ func TestAwaitChannelTimeout(t *testing.T) {
 	}
 
 	channel := db.Channel("channel", "topic")
+	defer channel.Close()
+
 	sub := channel.NewEventStateSubscription("event1")
 	defer sub.Close()
 
@@ -326,6 +330,8 @@ func TestAwaitChannelClose(t *testing.T) {
 	}
 
 	channel := db.Channel("channel", "topic")
+	defer channel.Close()
+
 	sub := channel.NewEventStateSubscription("event1")
 	go func() {
 		time.Sleep(time.Second / 4)
@@ -361,13 +367,18 @@ func TestAwaitChannel(t *testing.T) {
 
 	go func() {
 		time.Sleep(time.Second / 4)
-		err := db.Channel("channel", "topic").SetEventState("event1", EventStateDequeuedOK)
+		channel := db.Channel("channel", "topic")
+		defer channel.Close()
+
+		err := channel.SetEventState("event1", EventStateDequeuedOK)
 		if err != nil {
 			log.Printf("set event state: %v", err)
 		}
 	}()
 
 	channel := db.Channel("channel", "topic")
+	defer channel.Close()
+
 	sub := channel.NewEventStateSubscription("event1")
 	defer sub.Close()
 
@@ -401,6 +412,7 @@ func TestGet(t *testing.T) {
 	expected.State = EventStateQueued
 
 	channel := db.Channel("channel", expected.Topic)
+	defer channel.Close()
 
 	actual, err := channel.Get(expected.ID)
 	if err != nil {
@@ -435,11 +447,6 @@ func TestDequeue(t *testing.T) {
 	}
 	defer os.RemoveAll(dir)
 
-	db, err := Open(Options{Dir: dir})
-	if err != nil {
-		t.Fatalf("open db: %v", err)
-	}
-
 	expected := Event{
 		ID:         "event1",
 		Topic:      "topic",
@@ -447,29 +454,40 @@ func TestDequeue(t *testing.T) {
 		State:      EventStateQueued,
 	}
 
-	_, err = db.Pub(expected)
-	if err != nil {
-		t.Fatalf("pub: %v", err)
-	}
+	func() {
+		db, err := Open(Options{Dir: dir})
+		if err != nil {
+			t.Fatalf("open db: %v", err)
+		}
+		defer db.Close()
 
-	channel := db.Channel("channel", expected.Topic)
+		_, err = db.Pub(expected)
+		if err != nil {
+			t.Fatalf("pub: %v", err)
+		}
 
-	err = channel.SetEventState(expected.ID, EventStateDequeuedError)
-	if err != nil {
-		t.Fatalf("set event state: %v", err)
-	}
+		channel := db.Channel("channel", expected.Topic)
+		defer channel.Close()
 
-	db.Close()
+		err = channel.SetEventState(expected.ID, EventStateDequeuedError)
+		if err != nil {
+			t.Fatalf("set event state: %v", err)
+		}
+	}()
 
-	db, err = Open(Options{Dir: dir})
+	db, err := Open(Options{Dir: dir})
 	if err != nil {
 		t.Fatalf("open db second time: %v", err)
 	}
+	defer db.Close()
 
 	ctx, cancel := context.WithTimeout(context.Background(), time.Second)
 	defer cancel()
 
-	e, err := db.Channel("channel", expected.Topic).Next(ctx)
+	channel := db.Channel("channel", expected.Topic)
+	defer channel.Close()
+
+	e, err := channel.Next(ctx)
 	if err == nil {
 		t.Fatalf("recieved dequeued event: %v", e)
 	}

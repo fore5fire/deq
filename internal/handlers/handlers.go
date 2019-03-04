@@ -266,14 +266,14 @@ func (s *Server) List(ctx context.Context, in *pb.ListRequest) (*pb.ListResponse
 	iter := channel.NewEventIter(opts)
 	defer iter.Close()
 
-	for len(events) < cap(events) && iter.Next() {
-		e, err := iter.Event()
-		if err != nil {
-			log.Printf("List: iterate event: %v", err)
-			continue
+	for {
+		for len(events) < cap(events) && iter.Next() {
+			events = append(events, iter.Event())
 		}
-
-		events = append(events, e)
+		if iter.Err() == nil {
+			break
+		}
+		log.Printf("List: iterate event: %v", iter.Err())
 	}
 
 	results := make([]*pb.Event, len(events))

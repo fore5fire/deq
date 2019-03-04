@@ -24,6 +24,7 @@ func newTestDB() (*Store, func()) {
 	}
 
 	return db, func() {
+		db.Close()
 		os.RemoveAll(dir)
 	}
 }
@@ -52,7 +53,10 @@ func TestDel(t *testing.T) {
 		t.Fatalf("del: %v", err)
 	}
 
-	_, err = db.Channel("channel", expected.Topic).Get(expected.ID)
+	channel := db.Channel("channel", expected.Topic)
+	defer channel.Close()
+
+	_, err = channel.Get(expected.ID)
 	if err == nil {
 		t.Fatalf("returned deleted event")
 	}
