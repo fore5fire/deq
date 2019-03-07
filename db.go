@@ -8,13 +8,14 @@ import (
 	"github.com/dgraph-io/badger"
 	"github.com/gogo/protobuf/proto"
 	"gitlab.com/katcheCode/deq/internal/data"
+	"gitlab.com/katcheCode/deq/internal/storage"
 )
 
 var defaultChannelState = data.ChannelPayload{
 	EventState: data.EventState_QUEUED,
 }
 
-func getEvent(txn *badger.Txn, topic, eventID, channel string) (*Event, error) {
+func getEvent(txn storage.Txn, topic, eventID, channel string) (*Event, error) {
 	eventTime, err := getEventTimePayload(txn, data.EventTimeKey{
 		ID:    eventID,
 		Topic: topic,
@@ -60,14 +61,11 @@ func getEvent(txn *badger.Txn, topic, eventID, channel string) (*Event, error) {
 	}, nil
 }
 
-func printKeys(txn *badger.Txn) {
+func printKeys(txn storage.Txn) {
 	it := txn.NewIterator(badger.DefaultIteratorOptions)
 	defer it.Close()
 	for it.Rewind(); it.Valid(); it.Next() {
 		item := it.Item()
-		if item.IsDeletedOrExpired() {
-			continue
-		}
 
 		key, err := data.Unmarshal(item.Key())
 		if err != nil {
@@ -78,7 +76,7 @@ func printKeys(txn *badger.Txn) {
 	}
 }
 
-func writeEvent(txn *badger.Txn, e *Event) error {
+func writeEvent(txn storage.Txn, e *Event) error {
 	key, err := data.EventTimeKey{
 		Topic: e.Topic,
 		ID:    e.ID,
@@ -186,7 +184,7 @@ func writeEvent(txn *badger.Txn, e *Event) error {
 	return nil
 }
 
-func setChannelEvent(txn *badger.Txn, key data.ChannelKey, payload data.ChannelPayload) error {
+func setChannelEvent(txn storage.Txn, key data.ChannelKey, payload data.ChannelPayload) error {
 
 	rawkey, err := key.Marshal(nil)
 	if err != nil {
@@ -205,7 +203,7 @@ func setChannelEvent(txn *badger.Txn, key data.ChannelKey, payload data.ChannelP
 	return nil
 }
 
-func getEventTimePayload(txn *badger.Txn, key data.EventTimeKey) (payload data.EventTimePayload, err error) {
+func getEventTimePayload(txn storage.Txn, key data.EventTimeKey) (payload data.EventTimePayload, err error) {
 	rawKey, err := key.Marshal(nil)
 	if err != nil {
 		return payload, fmt.Errorf("marshal event time key: %v", err)
@@ -230,7 +228,7 @@ func getEventTimePayload(txn *badger.Txn, key data.EventTimeKey) (payload data.E
 	return payload, nil
 }
 
-func getEventPayload(txn *badger.Txn, key data.EventKey) (payload data.EventPayload, err error) {
+func getEventPayload(txn storage.Txn, key data.EventKey) (payload data.EventPayload, err error) {
 	rawKey, err := key.Marshal(nil)
 	if err != nil {
 		return payload, fmt.Errorf("marshal event key: %v", err)
@@ -256,7 +254,7 @@ var defaultChannelPayload = data.ChannelPayload{
 	EventState: EventStateQueued.toProto(),
 }
 
-func getChannelEvent(txn *badger.Txn, key data.ChannelKey) (data.ChannelPayload, error) {
+func getChannelEvent(txn storage.Txn, key data.ChannelKey) (data.ChannelPayload, error) {
 
 	rawKey, err := key.Marshal(nil)
 	if err != nil {

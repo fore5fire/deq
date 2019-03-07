@@ -6,38 +6,27 @@ import (
 	"testing"
 	"time"
 
-	"github.com/dgraph-io/badger"
 	"github.com/google/go-cmp/cmp"
 	"gitlab.com/katcheCode/deq/internal/data"
+	"gitlab.com/katcheCode/deq/internal/storage"
 )
 
 func TestWriteEvent(t *testing.T) {
 
-	dir, err := ioutil.TempDir("", "test-write-event")
-	if err != nil {
-		t.Fatalf("create temp dir: %v", err)
-	}
-	defer os.RemoveAll(dir)
-
-	opts := badger.DefaultOptions
-	opts.Dir = dir
-	opts.ValueDir = dir
-	db, err := badger.Open(opts)
+	db := storage.NewInMemoryDB(nil)
 	defer db.Close()
-	if err != nil {
-		t.Fatal("open db: ", err)
-	}
 
 	txn := db.NewTransaction(true)
 	defer txn.Discard()
 
 	// Setup existing channels - currently we have to ack an existing event on the
 	// channels we want
-	err = writeEvent(txn, &Event{
+	err := writeEvent(txn, &Event{
 		Topic:      "topic",
 		ID:         "event0",
 		CreateTime: time.Now(),
 		Payload:    []byte{1},
+		Indexes:    []string{"event0"},
 	})
 	if err != nil {
 		t.Fatal("write event: ", err)
@@ -47,6 +36,7 @@ func TestWriteEvent(t *testing.T) {
 		ID:         "event00",
 		CreateTime: time.Now(),
 		Payload:    []byte{1},
+		Indexes:    []string{"aevent00"},
 	})
 	if err != nil {
 		t.Fatal("write event: ", err)
@@ -83,6 +73,7 @@ func TestWriteEvent(t *testing.T) {
 		CreateTime:   time.Now(),
 		Payload:      []byte{1, 2, 3},
 		DefaultState: EventStateDequeuedOK,
+		Indexes:      []string{"event1"},
 		// Should be ignored.
 		State: EventStateDequeuedError,
 	}
@@ -119,7 +110,7 @@ func TestWriteEvent(t *testing.T) {
 		t.Errorf("\n%s", cmp.Diff(expected, actual))
 	}
 
-	err = txn.Commit(nil)
+	err = txn.Commit()
 	if err != nil {
 		t.Error("commit: ", err)
 	}
@@ -133,14 +124,8 @@ func BenchmarkWriteEvent(b *testing.B) {
 	}
 	defer os.RemoveAll(dir)
 
-	opts := badger.DefaultOptions
-	opts.Dir = dir
-	opts.ValueDir = dir
-	db, err := badger.Open(opts)
+	db := storage.NewInMemoryDB(nil)
 	defer db.Close()
-	if err != nil {
-		b.Fatal("open db: ", err)
-	}
 
 	txn := db.NewTransaction(true)
 	defer txn.Discard()
@@ -160,7 +145,7 @@ func BenchmarkWriteEvent(b *testing.B) {
 		b.Fatal("write event: ", err)
 	}
 
-	err = txn.Commit(nil)
+	err = txn.Commit()
 	if err != nil {
 		b.Error("commit: ", err)
 	}

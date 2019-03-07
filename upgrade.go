@@ -4,6 +4,7 @@ import (
 	"log"
 
 	"github.com/dgraph-io/badger"
+	"gitlab.com/katcheCode/deq/internal/storage"
 )
 
 // UpgradeDB upgrades the store's db to the current version.
@@ -45,7 +46,7 @@ func (s *Store) UpgradeDB() error {
 	return nil
 }
 
-func (s *Store) getDBVersion(txn *badger.Txn) (string, error) {
+func (s *Store) getDBVersion(txn storage.Txn) (string, error) {
 	item, err := txn.Get([]byte(dbVersionKey))
 	if err == badger.ErrKeyNotFound {
 		return "1.0.0", nil
@@ -63,7 +64,7 @@ func (s *Store) getDBVersion(txn *badger.Txn) (string, error) {
 }
 
 // upgradeV0EventsToV1 upgrades all events from v0 to v1 without commiting the txn.
-// func upgradeV0EventsToV1(db *badger.DB) error {
+// func upgradeV0EventsToV1(db storage.DB) error {
 // 	chunkSize := 500
 // 	updated := 0
 // 	skipped := 0
@@ -72,7 +73,7 @@ func (s *Store) getDBVersion(txn *badger.Txn) (string, error) {
 // 	for {
 // 		i := 0
 
-// 		err := db.Update(func(txn *badger.Txn) error {
+// 		err := db.Update(func(txn storage.Txn) error {
 // 			it := txn.NewIterator(badger.DefaultIteratorOptions)
 // 			defer it.Close()
 

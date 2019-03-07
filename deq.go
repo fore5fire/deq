@@ -20,11 +20,12 @@ import (
 	"github.com/dgraph-io/badger"
 	"github.com/dgraph-io/badger/options"
 	"gitlab.com/katcheCode/deq/internal/data"
+	"gitlab.com/katcheCode/deq/internal/storage"
 )
 
 // Store is an event store connected to a specific database
 type Store struct {
-	db               *badger.DB
+	db               storage.DB
 	in               chan eventPromise
 	out              chan *Event
 	sharedChannelsMu sync.Mutex
@@ -32,6 +33,8 @@ type Store struct {
 	// done is used for signaling to our store's go routine
 	done chan error
 }
+
+type kvStore interface
 
 // Options are parameters for opening a store
 type Options struct {
@@ -101,7 +104,7 @@ func Open(opts Options) (*Store, error) {
 		return nil, err
 	}
 	s := &Store{
-		db:             db,
+		db:             storage.WrapBadger(db),
 		in:             make(chan eventPromise, 20),
 		out:            make(chan *Event, 20),
 		sharedChannels: make(map[channelKey]*sharedChannel),
@@ -112,6 +115,20 @@ func Open(opts Options) (*Store, error) {
 	go s.listenOut()
 
 	return s, nil
+}
+
+func OpenInMemory() *Store {
+	s := &Store{
+		db:             storage.NewInMemoryDB(nil),
+		in:             make(chan eventPromise, 20),
+		out:            make(chan *Event, 20),
+		sharedChannels: make(map[channelKey]*sharedChannel),
+		done:           make(chan error),
+	}
+
+	go s.listenOut()
+
+	return s
 }
 
 // Close closes the store. Close must be called once the store is no longer in use.
@@ -169,7 +186,7 @@ func (s *Store) Pub(e Event) (Event, error) {
 		return Event{}, err
 	}
 
-	err = txn.Commit(nil)
+	err = txn.Commit()
 	if err == badger.ErrConflict {
 		txn := s.db.NewTransaction(false)
 		defer txn.Discard()
@@ -242,7 +259,7 @@ func (s *Store) Del(topic, id string) error {
 		return fmt.Errorf("delete event key: %v", err)
 	}
 
-	err = txn.Commit(nil)
+	err = txn.Commit()
 	if err != nil {
 		return err
 	}

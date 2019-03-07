@@ -25,9 +25,9 @@ build-server:
 #     CGO_ENABLED: "0"
 #     GOOS: linux
 #   services:
-#     - docker:dind
+#   - docker:dind
 #   script:
-#     - go test gitlab.com/charterpay/deqd/cmd/deqd_tests
+#   - go test gitlab.com/charterpay/deqd/cmd/deqd_tests
 
 deploy-server:
   stage: deploy
@@ -35,7 +35,7 @@ deploy-server:
   variables:
     DOCKER_DRIVER: overlay2
   services:
-    - docker:dind
+  - docker:dind
   script:
   - echo "$CI_JOB_TOKEN" | docker login -u gitlab-ci-token --password-stdin $CI_REGISTRY
   - docker build -t $CI_REGISTRY_IMAGE:$CI_COMMIT_REF_NAME build/

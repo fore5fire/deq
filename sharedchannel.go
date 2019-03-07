@@ -9,6 +9,7 @@ import (
 	"github.com/dgraph-io/badger"
 	"github.com/gogo/protobuf/proto"
 	"gitlab.com/katcheCode/deq/internal/data"
+	"gitlab.com/katcheCode/deq/internal/storage"
 )
 
 type channelKey struct {
@@ -19,7 +20,7 @@ type channelKey struct {
 type sharedChannel struct {
 	name  string
 	topic string
-	db    *badger.DB
+	db    storage.DB
 
 	subscriptions int
 
@@ -113,7 +114,7 @@ func (s *sharedChannel) incrementSavedRequeueCount(e *Event) (int, error) {
 			return -1, err
 		}
 
-		err = txn.Commit(nil)
+		err = txn.Commit()
 		if err == badger.ErrConflict {
 			time.Sleep(time.Second / 10)
 			continue
@@ -132,6 +133,12 @@ func (s *sharedChannel) Idle() bool {
 	s.idleMutex.RLock()
 	defer s.idleMutex.RUnlock()
 	return s.idle
+}
+
+func (s *sharedChannel) setIdle(idle bool) {
+	s.idleMutex.Lock()
+	defer s.idleMutex.Unlock()
+	s.idle = idle
 }
 
 func (s *sharedChannel) getMissed() bool {
@@ -201,11 +208,9 @@ func (s *sharedChannel) start() {
 
 		// Let's drain our events so have room for some that might come in while we catch up.
 		// We'll read these off the disk, so it's ok to discard them
-		// s.Lock()
 		for i := len(s.in); i > 0; i-- {
 			<-s.in
 		}
-		// s.Unlock()
 
 		cursor, err = s.catchUp(cursor)
 		if err != nil {
@@ -226,19 +231,17 @@ func (s *sharedChannel) start() {
 				// 	<-timer.C
 				// }
 				// timer.Reset(time.Second / 32)
-				s.idleMutex.Lock()
-				s.idle = true
-				s.idleMutex.Unlock()
+				s.setIdle(true)
 			}
 
 			select {
+			case <-s.done:
+				return
 			// The timer expired, we're idle
 			// case <-timer.C:
 			// We've got a new event, lets publish it
 			case e := <-s.in:
-				s.idleMutex.Lock()
-				s.idle = false
-				s.idleMutex.Unlock()
+				s.setIdle(false)
 				// log.Printf("READING FROM MEMORY %s/%s count: %d", e.Topic, e.ID, e.RequeueCount)
 				s.out <- e
 				cursor, _ = data.EventKey{
@@ -320,6 +323,13 @@ func (s *sharedChannel) catchUp(cursor []byte) ([]byte, error) {
 			State:        protoToEventState(channel.EventState),
 			DefaultState: protoToEventState(e.DefaultEventState),
 			Indexes:      e.Indexes,
+		}
+
+		// Check to see if we're done before continuing
+		select {
+		case <-s.done:
+			return lastKey, nil
+		default:
 		}
 	}
 

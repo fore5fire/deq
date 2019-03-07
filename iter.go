@@ -8,6 +8,7 @@ import (
 	"github.com/dgraph-io/badger"
 	"github.com/gogo/protobuf/proto"
 	"gitlab.com/katcheCode/deq/internal/data"
+	"gitlab.com/katcheCode/deq/internal/storage"
 )
 
 // IterOpts is the available options for
@@ -54,8 +55,8 @@ Example usage:
 	}
 */
 type EventIter struct {
-	txn     *badger.Txn
-	it      *badger.Iterator
+	txn     storage.Txn
+	it      storage.Iter
 	opts    IterOpts
 	current Event
 	err     error
@@ -232,8 +233,8 @@ Example usage:
 
 */
 type TopicIter struct {
-	txn     *badger.Txn
-	it      *badger.Iterator
+	txn     storage.Txn
+	it      storage.Iter
 	cursor  []byte
 	current string
 	opts    IterOpts
@@ -250,7 +251,7 @@ func (s *Store) NewTopicIter(opts IterOpts) *TopicIter {
 	return newTopicIter(txn, opts)
 }
 
-func newTopicIter(txn *badger.Txn, opts IterOpts) *TopicIter {
+func newTopicIter(txn storage.Txn, opts IterOpts) *TopicIter {
 	// Apply default options
 	max := opts.Max
 	if max == "" {
@@ -375,8 +376,8 @@ Example usage:
 	}
 */
 type IndexIter struct {
-	txn     *badger.Txn
-	it      *badger.Iterator
+	txn     storage.Txn
+	it      storage.Iter
 	opts    IterOpts
 	current Event
 	err     error

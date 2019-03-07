@@ -9,6 +9,7 @@ import (
 	"github.com/dgraph-io/badger"
 	"gitlab.com/katcheCode/deq/ack"
 	"gitlab.com/katcheCode/deq/internal/data"
+	"gitlab.com/katcheCode/deq/internal/storage"
 )
 
 // Channel allows multiple listeners to synchronize processing of events.
@@ -18,11 +19,10 @@ type Channel struct {
 	topic      string
 	name       string
 	shared     *sharedChannel
-	idle       bool
 	done       chan struct{}
 	errMutex   sync.Mutex
 	err        error
-	db         *badger.DB
+	db         storage.DB
 	store      *Store
 	sharedDone func()
 
@@ -312,7 +312,7 @@ func (c *Channel) SetEventState(id string, state EventState) error {
 			return err
 		}
 
-		err = txn.Commit(nil)
+		err = txn.Commit()
 		if err == badger.ErrConflict {
 			time.Sleep(time.Second / 10)
 			continue

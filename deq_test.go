@@ -2,38 +2,17 @@ package deq
 
 import (
 	"context"
-	"io/ioutil"
-	"os"
 	"testing"
 	"time"
 
 	"github.com/google/go-cmp/cmp"
 )
 
-func newTestDB() (*Store, func()) {
-	dir, err := ioutil.TempDir("", "test-pub")
-	if err != nil {
-		panic("create temp dir: " + err.Error())
-	}
-
-	db, err := Open(Options{
-		Dir: dir,
-	})
-	if err != nil {
-		panic("open db: " + err.Error())
-	}
-
-	return db, func() {
-		db.Close()
-		os.RemoveAll(dir)
-	}
-}
-
 func TestDel(t *testing.T) {
 	t.Parallel()
 
-	db, discard := newTestDB()
-	defer discard()
+	db := OpenInMemory()
+	defer db.Close()
 
 	expected := Event{
 		ID:           "event1",
@@ -66,8 +45,8 @@ func TestDel(t *testing.T) {
 }
 
 func TestPub(t *testing.T) {
-	db, discard := newTestDB()
-	defer discard()
+	db := OpenInMemory()
+	defer db.Close()
 
 	expected := Event{
 		ID:           "event1",
@@ -105,8 +84,8 @@ func TestPub(t *testing.T) {
 }
 
 func TestPubDuplicate(t *testing.T) {
-	db, discard := newTestDB()
-	defer discard()
+	db := OpenInMemory()
+	defer db.Close()
 
 	expected := Event{
 		ID:           "event1",

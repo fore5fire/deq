@@ -10,8 +10,8 @@ import (
 func TestEmptyTopicIter(t *testing.T) {
 	t.Parallel()
 
-	db, discard := newTestDB()
-	defer discard()
+	db := OpenInMemory()
+	defer db.Close()
 
 	iter := db.NewTopicIter(DefaultIterOpts)
 	defer iter.Close()
@@ -24,8 +24,8 @@ func TestEmptyTopicIter(t *testing.T) {
 func TestTopicIter(t *testing.T) {
 	t.Parallel()
 
-	db, discard := newTestDB()
-	defer discard()
+	db := OpenInMemory()
+	defer db.Close()
 
 	events := []Event{
 		{
@@ -80,8 +80,8 @@ func TestTopicIter(t *testing.T) {
 func TestTopicIterReversed(t *testing.T) {
 	t.Parallel()
 
-	db, discard := newTestDB()
-	defer discard()
+	db := OpenInMemory()
+	defer db.Close()
 
 	events := []Event{
 		{
@@ -138,8 +138,8 @@ func TestTopicIterReversed(t *testing.T) {
 func TestTopicIterMin(t *testing.T) {
 	t.Parallel()
 
-	db, discard := newTestDB()
-	defer discard()
+	db := OpenInMemory()
+	defer db.Close()
 
 	events := []Event{
 		{
@@ -212,8 +212,8 @@ func TestTopicIterMin(t *testing.T) {
 func TestTopicIterMax(t *testing.T) {
 	t.Parallel()
 
-	db, discard := newTestDB()
-	defer discard()
+	db := OpenInMemory()
+	defer db.Close()
 
 	events := []Event{
 		{
@@ -286,8 +286,8 @@ func TestTopicIterMax(t *testing.T) {
 func TestEmptyEventIter(t *testing.T) {
 	t.Parallel()
 
-	db, discard := newTestDB()
-	defer discard()
+	db := OpenInMemory()
+	defer db.Close()
 
 	channel := db.Channel("channel1", "topic1")
 	defer channel.Close()
@@ -303,8 +303,8 @@ func TestEmptyEventIter(t *testing.T) {
 func TestEventIter(t *testing.T) {
 	t.Parallel()
 
-	db, discard := newTestDB()
-	defer discard()
+	db := OpenInMemory()
+	defer db.Close()
 
 	createTime := time.Now()
 
@@ -373,8 +373,8 @@ func TestEventIter(t *testing.T) {
 func TestEventIterReversed(t *testing.T) {
 	t.Parallel()
 
-	db, discard := newTestDB()
-	defer discard()
+	db := OpenInMemory()
+	defer db.Close()
 
 	createTime := time.Now()
 
@@ -445,8 +445,8 @@ func TestEventIterReversed(t *testing.T) {
 func TestEmptyIndexIter(t *testing.T) {
 	t.Parallel()
 
-	db, discard := newTestDB()
-	defer discard()
+	db := OpenInMemory()
+	defer db.Close()
 
 	channel := db.Channel("channel1", "topic1")
 	defer channel.Close()
@@ -462,8 +462,8 @@ func TestEmptyIndexIter(t *testing.T) {
 func TestIndexIter(t *testing.T) {
 	t.Parallel()
 
-	db, discard := newTestDB()
-	defer discard()
+	db := OpenInMemory()
+	defer db.Close()
 
 	createTime := time.Now()
 
@@ -564,8 +564,8 @@ func TestIndexIter(t *testing.T) {
 func TestIndexIterReversed(t *testing.T) {
 	t.Parallel()
 
-	db, discard := newTestDB()
-	defer discard()
+	db := OpenInMemory()
+	defer db.Close()
 
 	createTime := time.Now()
 
@@ -660,8 +660,8 @@ func TestIndexIterReversed(t *testing.T) {
 func TestIndexIterLimits(t *testing.T) {
 	t.Parallel()
 
-	db, discard := newTestDB()
-	defer discard()
+	db := OpenInMemory()
+	defer db.Close()
 
 	createTime := time.Now()
 
