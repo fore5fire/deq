@@ -342,8 +342,5 @@ func (c *Channel) SetEventState(id string, state EventState) error {
 
 // RequeueEvent adds the event back into the event queue for this channel
 func (c *Channel) RequeueEvent(e Event, delay time.Duration) error {
-
-	c.shared.RequeueEvent(e, delay)
-
-	return nil
+	return c.shared.RequeueEvent(e, delay)
 }

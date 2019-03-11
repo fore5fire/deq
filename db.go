@@ -313,3 +313,30 @@ func protoToEventState(e data.EventState) EventState {
 		panic("unrecognized EventState")
 	}
 }
+
+func incrementSavedRequeueCount(txn *badger.Txn, channel, topic string, e *Event) (*data.ChannelPayload, error) {
+
+	key := data.ChannelKey{
+		Channel: channel,
+		Topic:   topic,
+		ID:      e.ID,
+	}
+
+	channelEvent, err := getChannelEvent(txn, key)
+	if err != nil {
+		return nil, err
+	}
+
+	if channelEvent.RequeueCount < 20 {
+		channelEvent.RequeueCount++
+	} else {
+		channelEvent.EventState = data.EventState_DEQUEUED_ERROR
+	}
+
+	err = setChannelEvent(txn, key, channelEvent)
+	if err != nil {
+		return nil, err
+	}
+
+	return &channelEvent, nil
+}

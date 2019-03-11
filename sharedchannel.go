@@ -87,47 +87,6 @@ func (s *Store) listenSharedChannel(name, topic string) (*sharedChannel, func())
 	return shared, done
 }
 
-func (s *sharedChannel) incrementSavedRequeueCount(e *Event) (int, error) {
-
-	// retry for up to 10 conflicts.
-	for i := 0; i < 10; i++ {
-
-		txn := s.db.NewTransaction(true)
-		defer txn.Discard()
-
-		key := data.ChannelKey{
-			Channel: s.name,
-			Topic:   s.topic,
-			ID:      e.ID,
-		}
-
-		channelEvent, err := getChannelEvent(txn, key)
-		if err != nil {
-			return -1, err
-		}
-
-		channelEvent.RequeueCount++
-
-		err = setChannelEvent(txn, key, channelEvent)
-		if err != nil {
-			return -1, err
-		}
-
-		err = txn.Commit(nil)
-		if err == badger.ErrConflict {
-			time.Sleep(time.Second / 10)
-			continue
-		}
-		if err != nil {
-			return -1, fmt.Errorf("commit channel event: %v", err)
-		}
-
-		return int(channelEvent.RequeueCount), nil
-	}
-
-	return -1, badger.ErrConflict
-}
-
 func (s *sharedChannel) Idle() bool {
 	s.idleMutex.RLock()
 	defer s.idleMutex.RUnlock()
@@ -146,25 +105,45 @@ func (s *sharedChannel) setMissed(m bool) {
 	s.missedMutex.Unlock()
 }
 
-func (s *sharedChannel) RequeueEvent(e Event, delay time.Duration) {
+func (s *sharedChannel) RequeueEvent(e Event, delay time.Duration) error {
 	requeue := func() error {
-		// log.Printf("REQUEUING %s/%s count: %d", e.Topic, e.ID, e.RequeueCount)
-		requeueCount, err := s.incrementSavedRequeueCount(&e)
-		if err != nil {
-			return err
-		}
-		e.RequeueCount = requeueCount
-		s.out <- &e
+		// retry for up to 10 conflicts.
+		for i := 0; i < 10; i++ {
+			// log.Printf("REQUEUING %s/%s count: %d", e.Topic, e.ID, e.RequeueCount)
 
-		return nil
+			txn := s.db.NewTransaction(true)
+			defer txn.Discard()
+
+			channelPayload, err := incrementSavedRequeueCount(txn, s.name, s.topic, &e)
+			if err != nil {
+				return err
+			}
+
+			err = txn.Commit(nil)
+			if err == badger.ErrConflict {
+				log.Printf("[WARN] Requeue Event %s %s: %v: retrying", s.topic, e.ID, err)
+				continue
+			}
+			if err != nil {
+				return fmt.Errorf("commit channel event: %v", err)
+			}
+
+			if channelPayload.EventState != data.EventState_QUEUED {
+				log.Printf("channel %s: requeue limit exceeded for topic: %s id: %s - dequeing", s.name, s.topic, e.ID)
+				return nil
+			}
+
+			e.RequeueCount = int(channelPayload.RequeueCount)
+			s.out <- &e
+
+			return nil
+		}
+
+		return badger.ErrConflict
 	}
 
 	if delay == 0 {
-		err := requeue()
-		if err != nil {
-			panic("requeue event: " + err.Error())
-		}
-		return
+		return requeue()
 	}
 
 	go func() {
@@ -180,6 +159,8 @@ func (s *sharedChannel) RequeueEvent(e Event, delay time.Duration) {
 		case <-s.done:
 		}
 	}()
+
+	return nil
 }
 
 func (s *sharedChannel) start() {
