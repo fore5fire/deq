@@ -8,8 +8,7 @@ import (
 
 	"github.com/dgraph-io/badger"
 	"gitlab.com/katcheCode/deq/ack"
-	"gitlab.com/katcheCode/deq/internal/data"
-	"gitlab.com/katcheCode/deq/internal/storage"
+	"gitlab.com/katcheCode/deq/internal/eventdb"
 )
 
 // Channel allows multiple listeners to synchronize processing of events.
@@ -22,7 +21,7 @@ type Channel struct {
 	done       chan struct{}
 	errMutex   sync.Mutex
 	err        error
-	db         storage.DB
+	db         _DB
 	store      *Store
 	sharedDone func()
 
@@ -78,7 +77,7 @@ func (c *Channel) Next(ctx context.Context) (Event, error) {
 			defer txn.Discard()
 
 			// TODO: don't allow deleted events to get sent out.
-			channel, err := getChannelEvent(txn, data.ChannelKey{
+			channel, err := txn.GetChannelEvent(eventdb.ChannelKey{
 				Channel: c.name,
 				Topic:   c.topic,
 				ID:      e.ID,
@@ -87,7 +86,7 @@ func (c *Channel) Next(ctx context.Context) (Event, error) {
 				return Event{}, err
 			}
 
-			if channel.EventState != data.EventState_QUEUED {
+			if channel.EventState != eventdb.EventState_QUEUED {
 				continue
 			}
 
@@ -291,7 +290,7 @@ func (c *Channel) SetEventState(id string, state EventState) error {
 
 	// Retry for up to 10 conflicts
 	for i := 0; i < 10; i++ {
-		key := data.ChannelKey{
+		key := eventdb.ChannelKey{
 			Topic:   c.topic,
 			Channel: c.name,
 			ID:      id,
@@ -300,14 +299,14 @@ func (c *Channel) SetEventState(id string, state EventState) error {
 		txn := c.db.NewTransaction(true)
 		defer txn.Discard()
 
-		channelEvent, err := getChannelEvent(txn, key)
+		channelEvent, err := txn.GetChannelEvent(key)
 		if err != nil {
 			return err
 		}
 
 		channelEvent.EventState = state.toProto()
 
-		err = setChannelEvent(txn, key, channelEvent)
+		err = txn.SetChannelEvent(key, channelEvent)
 		if err != nil {
 			return err
 		}

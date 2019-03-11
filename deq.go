@@ -19,22 +19,19 @@ import (
 
 	"github.com/dgraph-io/badger"
 	"github.com/dgraph-io/badger/options"
-	"gitlab.com/katcheCode/deq/internal/data"
-	"gitlab.com/katcheCode/deq/internal/storage"
+	"gitlab.com/katcheCode/deq/internal/eventdb"
 )
 
 // Store is an event store connected to a specific database
 type Store struct {
-	db               storage.DB
+	db               _DB
 	in               chan eventPromise
 	out              chan *Event
 	sharedChannelsMu sync.Mutex
 	sharedChannels   map[channelKey]*sharedChannel
-	// done is used for signaling to our store's go routine
+	// done is used for signaling to our store's goroutine
 	done chan error
 }
-
-type kvStore interface
 
 // Options are parameters for opening a store
 type Options struct {
@@ -99,12 +96,12 @@ func Open(opts Options) (*Store, error) {
 	badgerOpts.MaxTableSize = 1 << 24
 	badgerOpts.Truncate = opts.DangerousDeleteCorrupt
 
-	db, err := badger.Open(badgerOpts)
+	store, err := badger.Open(badgerOpts)
 	if err != nil {
 		return nil, err
 	}
 	s := &Store{
-		db:             storage.WrapBadger(db),
+		db:             eventDB{eventdb.New(store)},
 		in:             make(chan eventPromise, 20),
 		out:            make(chan *Event, 20),
 		sharedChannels: make(map[channelKey]*sharedChannel),
@@ -119,7 +116,7 @@ func Open(opts Options) (*Store, error) {
 
 func OpenInMemory() *Store {
 	s := &Store{
-		db:             storage.NewInMemoryDB(nil),
+		db:             eventdb.NewInMemoryDB(nil),
 		in:             make(chan eventPromise, 20),
 		out:            make(chan *Event, 20),
 		sharedChannels: make(map[channelKey]*sharedChannel),
@@ -170,10 +167,10 @@ func (s *Store) Pub(e Event) (Event, error) {
 	txn := s.db.NewTransaction(true)
 	defer txn.Discard()
 
-	err := writeEvent(txn, &e)
+	err := writeEvent(s.eventstore, txn, &e)
 	if err == ErrAlreadyExists {
 		// Supress the error if the new and existing events have matching payloads.
-		existing, err := getEvent(txn, e.Topic, e.ID, "")
+		existing, err := getEvent(s.eventstore, txn, e.Topic, e.ID, "")
 		if err != nil {
 			return Event{}, fmt.Errorf("get existing event: %v", err)
 		}
@@ -190,7 +187,7 @@ func (s *Store) Pub(e Event) (Event, error) {
 	if err == badger.ErrConflict {
 		txn := s.db.NewTransaction(false)
 		defer txn.Discard()
-		existing, err := getEvent(txn, e.Topic, e.ID, "")
+		existing, err := getEvent(s.eventstore, txn, e.Topic, e.ID, "")
 		if err != nil {
 			return Event{}, fmt.Errorf("get conflicting event: %v", err)
 		}
@@ -226,20 +223,24 @@ func (s *Store) Del(topic, id string) error {
 
 	// TODO: refactor this, we really don't need the whole event, just
 	// the create time
-	e, err := getEvent(txn, topic, id, "")
+	e, err := getEvent(s.eventstore, txn, topic, id, "")
 	if err != nil {
 		return err
 	}
 
-	eventTimeKey, err := data.EventTimeKey{
+	eventTimeKey, err := eventdb.EventTimeKey{
 		ID:    id,
 		Topic: topic,
 	}.Marshal(nil)
 	if err != nil {
 		return fmt.Errorf("marshal event time key: %v", err)
 	}
+	err = txn.Delete(eventTimeKey)
+	if err != nil {
+		return fmt.Errorf("delete event time: %v", err)
+	}
 
-	eventKey, err := data.EventKey{
+	eventKey, err := eventdb.EventKey{
 		ID:         id,
 		Topic:      topic,
 		CreateTime: e.CreateTime,
@@ -247,17 +248,12 @@ func (s *Store) Del(topic, id string) error {
 	if err != nil {
 		return fmt.Errorf("marshal event key: %v", err)
 	}
-
-	// TODO: cleanup channel keys
-
-	err = txn.Delete(eventTimeKey)
-	if err != nil {
-		return fmt.Errorf("delete event time: %v", err)
-	}
 	err = txn.Delete(eventKey)
 	if err != nil {
 		return fmt.Errorf("delete event key: %v", err)
 	}
+
+	// TODO: cleanup channel keys
 
 	err = txn.Commit()
 	if err != nil {

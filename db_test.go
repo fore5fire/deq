@@ -7,13 +7,12 @@ import (
 	"time"
 
 	"github.com/google/go-cmp/cmp"
-	"gitlab.com/katcheCode/deq/internal/data"
-	"gitlab.com/katcheCode/deq/internal/storage"
+	"gitlab.com/katcheCode/deq/internal/eventdb/kvstore"
 )
 
 func TestWriteEvent(t *testing.T) {
 
-	db := storage.NewInMemoryDB(nil)
+	db := kvstore.NewInMemoryDB(nil)
 	defer db.Close()
 
 	txn := db.NewTransaction(true)
@@ -42,11 +41,11 @@ func TestWriteEvent(t *testing.T) {
 		t.Fatal("write event: ", err)
 	}
 
-	dequeuePayload := data.ChannelPayload{
-		EventState: data.EventState_DEQUEUED_OK,
+	dequeuePayload := ChannelPayload{
+		EventState: EventState_DEQUEUED_OK,
 	}
 
-	channelKey := data.ChannelKey{
+	channelKey := ChannelKey{
 		ID:      "event0",
 		Topic:   "topic",
 		Channel: "channel",
@@ -124,7 +123,7 @@ func BenchmarkWriteEvent(b *testing.B) {
 	}
 	defer os.RemoveAll(dir)
 
-	db := storage.NewInMemoryDB(nil)
+	db := kvstore.NewInMemoryDB(nil)
 	defer db.Close()
 
 	txn := db.NewTransaction(true)

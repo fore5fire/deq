@@ -1,4 +1,4 @@
-package data
+package eventdb
 
 import (
 	"testing"
@@ -9,8 +9,8 @@ import (
 func TestMarshalIndexKey(t *testing.T) {
 	expected := IndexKey{
 		Topic: "abc",
-		Type:  "abc",
 		Value: "def",
+		ID:    "abc",
 	}
 	buf, err := expected.Marshal(nil)
 	if err != nil {

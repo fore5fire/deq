@@ -6,28 +6,130 @@ import (
 	"time"
 
 	"github.com/dgraph-io/badger"
-	"github.com/gogo/protobuf/proto"
-	"gitlab.com/katcheCode/deq/internal/data"
-	"gitlab.com/katcheCode/deq/internal/storage"
+	"gitlab.com/katcheCode/deq/internal/eventdb"
 )
 
-var defaultChannelState = data.ChannelPayload{
-	EventState: data.EventState_QUEUED,
+type eventDB struct {
+	eventdb.DB
 }
 
-func getEvent(txn storage.Txn, topic, eventID, channel string) (*Event, error) {
-	eventTime, err := getEventTimePayload(txn, data.EventTimeKey{
+type eventTxn struct {
+	eventdb.Txn
+}
+
+func (db *eventDB) NewTransaction(update bool) _Txn {
+	return &eventTxn{db.DB.NewTransaction(update)}
+}
+
+func (t *eventTxn) Commit() error {
+	return t.Txn.Commit()
+}
+
+type eventIter struct {
+	*eventdb.EventIter
+}
+
+func (t *eventTxn) NewEventIter(opts badger.IteratorOptions) _EventIter {
+	return &eventIter{t.Txn.NewEventIter(opts)}
+}
+
+type eventTimeIter struct {
+	*eventdb.EventTimeIter
+}
+
+func (t *eventTxn) NewEventTimeIter(opts badger.IteratorOptions) _EventTimeIter {
+	return &eventTimeIter{t.Txn.NewEventTimeIter(opts)}
+}
+
+type channelIter struct {
+	*eventdb.ChannelIter
+}
+
+func (t *eventTxn) NewChannelIter(opts badger.IteratorOptions) _ChannelIter {
+	return &channelIter{t.Txn.NewChannelIter(opts)}
+}
+
+type indexIter struct {
+	*eventdb.IndexIter
+}
+
+func (t *eventTxn) NewIndexIter(opts badger.IteratorOptions) _IndexIter {
+	return &indexIter{t.Txn.NewIndexIter(opts)}
+}
+
+type _DB interface {
+	NewTransaction(bool) _Txn
+}
+
+type _Txn interface {
+	SetChannelEvent(key eventdb.ChannelKey, payload eventdb.ChannelPayload) error
+	GetEventTimePayload(key eventdb.EventTimeKey) (payload eventdb.EventTimePayload, err error)
+	GetEventPayload(key eventdb.EventKey) (payload eventdb.EventPayload, err error)
+	GetChannelEvent(key eventdb.ChannelKey) (eventdb.ChannelPayload, error)
+	NewEventIter(badger.IteratorOptions) _EventIter
+	NewEventTimeIter(badger.IteratorOptions) _EventTimeIter
+	NewChannelIter(badger.IteratorOptions) _ChannelIter
+	NewIndexIter(badger.IteratorOptions) _IndexIter
+	Discard()
+	Commit() error
+}
+
+type _Iter interface {
+	Rewind()
+	Next()
+	Valid() bool
+	Close()
+}
+
+type _IndexIter interface {
+	_Iter
+	Seek(key eventdb.IndexKey) error
+	ValidForTopic(topic string) bool
+	Key(dst *eventdb.IndexKey) error
+}
+
+type _ChannelIter interface {
+	_Iter
+	Seek(key eventdb.ChannelKey) error
+	SeekChannel(channel string) error
+	ValidForChannel(channel string) bool
+	ChannelPayload(dst *eventdb.ChannelPayload) error
+	Key(dst *eventdb.ChannelKey) error
+}
+
+type _EventTimeIter interface {
+	_Iter
+	Seek(key eventdb.EventTimeKey) error
+	ValidForTopic(topic string) bool
+	EventTimePayload(dst *eventdb.EventTimePayload) error
+	Key(dst *eventdb.EventTimeKey) error
+}
+
+type _EventIter interface {
+	_Iter
+	Seek(key eventdb.EventKey) error
+	ValidForTopic(topic string) bool
+	EventPayload(dst *eventdb.EventPayload) error
+	Key(dst *eventdb.EventKey) error
+}
+
+var defaultChannelState = eventdb.ChannelPayload{
+	EventState: eventdb.EventState_QUEUED,
+}
+
+func getEvent(txn _Txn, topic, eventID, channel string) (*Event, error) {
+	eventTime, err := txn.GetEventTimePayload(eventdb.EventTimeKey{
 		ID:    eventID,
 		Topic: topic,
 	})
-	if err == ErrNotFound {
+	if err == eventdb.ErrNotFound {
 		return nil, ErrNotFound
 	}
 	if err != nil {
 		return nil, fmt.Errorf("get event time: %v", err)
 	}
 
-	event, err := getEventPayload(txn, data.EventKey{
+	event, err := txn.GetEventPayload(eventdb.EventKey{
 		ID:         eventID,
 		Topic:      topic,
 		CreateTime: time.Unix(0, eventTime.CreateTime),
@@ -39,7 +141,7 @@ func getEvent(txn storage.Txn, topic, eventID, channel string) (*Event, error) {
 	channelState := defaultChannelState
 
 	if channel != "" {
-		channelState, err = getChannelEvent(txn, data.ChannelKey{
+		channelState, err = txn.GetChannelEvent(eventdb.ChannelKey{
 			ID:      eventID,
 			Topic:   topic,
 			Channel: channel,
@@ -61,31 +163,13 @@ func getEvent(txn storage.Txn, topic, eventID, channel string) (*Event, error) {
 	}, nil
 }
 
-func printKeys(txn storage.Txn) {
-	it := txn.NewIterator(badger.DefaultIteratorOptions)
-	defer it.Close()
-	for it.Rewind(); it.Valid(); it.Next() {
-		item := it.Item()
-
-		key, err := data.Unmarshal(item.Key())
-		if err != nil {
-			log.Printf("%v %v", item.Key(), err)
-			continue
-		}
-		log.Printf("%+v", key)
-	}
-}
-
-func writeEvent(txn storage.Txn, e *Event) error {
-	key, err := data.EventTimeKey{
+func writeEvent(txn eventdb.Txn, e *Event) error {
+	key := eventdb.EventTimeKey{
 		Topic: e.Topic,
 		ID:    e.ID,
-	}.Marshal(nil)
-	if err != nil {
-		return fmt.Errorf("marshal event time key: %v", err)
 	}
 
-	_, err = txn.Get(key)
+	_, err := txn.GetEventTimePayload(key)
 	if err == nil {
 		return ErrAlreadyExists
 	}
@@ -93,28 +177,18 @@ func writeEvent(txn storage.Txn, e *Event) error {
 		return fmt.Errorf("check event doesn't exist: %v", err)
 	}
 
-	val, err := proto.Marshal(&data.EventTimePayload{
+	err = txn.SetEventTimePayload(key, &eventdb.EventTimePayload{
 		CreateTime: e.CreateTime.UnixNano(),
 	})
 	if err != nil {
-		return fmt.Errorf("marshal event time payload: %v", err)
+		return fmt.Errorf("set event time payload: %v", err)
 	}
 
-	err = txn.Set(key, val)
-	if err != nil {
-		return err
-	}
-
-	key, err = data.EventKey{
+	err = txn.SetEventPayload(eventdb.EventKey{
 		Topic:      e.Topic,
 		CreateTime: e.CreateTime,
 		ID:         e.ID,
-	}.Marshal(nil)
-	if err != nil {
-		return fmt.Errorf("marshal event time key: %v", err)
-	}
-
-	val, err = proto.Marshal(&data.EventPayload{
+	}, &eventdb.EventPayload{
 		Payload:           e.Payload,
 		DefaultEventState: e.DefaultState.toProto(),
 		Indexes:           e.Indexes,
@@ -123,21 +197,12 @@ func writeEvent(txn storage.Txn, e *Event) error {
 		return fmt.Errorf("marshal event time payload: %v", err)
 	}
 
-	err = txn.Set(key, val)
-	if err != nil {
-		return err
-	}
-
 	for _, index := range e.Indexes {
-		indexKey, err := data.IndexKey{
+		err := txn.SetIndex(&eventdb.IndexKey{
 			Topic: e.Topic,
 			Value: index,
 			ID:    e.ID,
-		}.Marshal(nil)
-		if err != nil {
-			return fmt.Errorf("marshal index: %v", err)
-		}
-		err = txn.Set(indexKey, nil)
+		})
 		if err != nil {
 			return fmt.Errorf("write index: %v", err)
 		}
@@ -145,33 +210,31 @@ func writeEvent(txn storage.Txn, e *Event) error {
 
 	if e.DefaultState != EventStateUnspecified && e.DefaultState != EventStateQueued {
 
-		it := txn.NewIterator(badger.DefaultIteratorOptions)
+		it := txn.NewChannelIter(badger.DefaultIteratorOptions)
 		defer it.Close()
 
-		prefix := []byte{data.ChannelTag, data.Sep}
-		cursor := prefix
+		var cursor string
 
-		for it.Seek(cursor); it.ValidForPrefix(prefix); it.Seek(cursor) {
+		for it.Rewind(); it.Valid(); err = it.SeekChannel(cursor) {
+			if err != nil {
+				log.Printf("seek channel: %v", err)
+				continue
+			}
 
-			var key data.ChannelKey
-			err := data.UnmarshalChannelKey(it.Item().Key(), &key)
+			var key eventdb.ChannelKey
+			err := it.Key(&key)
 			if err != nil {
 				return fmt.Errorf("unmarshal channel key: %v", err)
 			}
 
 			// Skip to next channel
-			cursor, err = data.ChannelPrefix(key.Channel + "\u0001")
-			if err != nil {
-				return fmt.Errorf("marshal channel prefix: %v", err)
-			}
+			cursor = key.Channel + "\u0001"
 
-			newKey := data.ChannelKey{
+			err = txn.SetChannelEvent(eventdb.ChannelKey{
 				Topic:   e.Topic,
 				Channel: key.Channel,
 				ID:      e.ID,
-			}
-
-			err = setChannelEvent(txn, newKey, data.ChannelPayload{
+			}, eventdb.ChannelPayload{
 				EventState:   e.DefaultState.toProto(),
 				RequeueCount: int32(e.RequeueCount),
 			})
@@ -184,128 +247,30 @@ func writeEvent(txn storage.Txn, e *Event) error {
 	return nil
 }
 
-func setChannelEvent(txn storage.Txn, key data.ChannelKey, payload data.ChannelPayload) error {
-
-	rawkey, err := key.Marshal(nil)
-	if err != nil {
-		return fmt.Errorf("marshal key: %v", err)
-	}
-	buf, err := proto.Marshal(&payload)
-	if err != nil {
-		return fmt.Errorf("marshal payload: %v", err)
-	}
-
-	err = txn.Set(rawkey, buf)
-	if err != nil {
-		return err
-	}
-
-	return nil
-}
-
-func getEventTimePayload(txn storage.Txn, key data.EventTimeKey) (payload data.EventTimePayload, err error) {
-	rawKey, err := key.Marshal(nil)
-	if err != nil {
-		return payload, fmt.Errorf("marshal event time key: %v", err)
-	}
-	item, err := txn.Get(rawKey)
-	if err == badger.ErrKeyNotFound {
-		return payload, ErrNotFound
-	}
-	if err != nil {
-		return payload, err
-	}
-	val, err := item.Value()
-	if err != nil {
-		return payload, err
-	}
-
-	err = proto.Unmarshal(val, &payload)
-	if err != nil {
-		return data.EventTimePayload{}, fmt.Errorf("unmarshal event time payload: %v", err)
-	}
-
-	return payload, nil
-}
-
-func getEventPayload(txn storage.Txn, key data.EventKey) (payload data.EventPayload, err error) {
-	rawKey, err := key.Marshal(nil)
-	if err != nil {
-		return payload, fmt.Errorf("marshal event key: %v", err)
-	}
-	item, err := txn.Get(rawKey)
-	if err != nil {
-		return payload, err
-	}
-	val, err := item.Value()
-	if err != nil {
-		return payload, err
-	}
-
-	err = proto.Unmarshal(val, &payload)
-	if err != nil {
-		return data.EventPayload{}, fmt.Errorf("unmarshal event payload: %v", err)
-	}
-
-	return payload, nil
-}
-
-var defaultChannelPayload = data.ChannelPayload{
-	EventState: EventStateQueued.toProto(),
-}
-
-func getChannelEvent(txn storage.Txn, key data.ChannelKey) (data.ChannelPayload, error) {
-
-	rawKey, err := key.Marshal(nil)
-	if err != nil {
-		return data.ChannelPayload{}, fmt.Errorf("marshal event key: %v", err)
-	}
-
-	item, err := txn.Get(rawKey)
-	if err == badger.ErrKeyNotFound {
-		return defaultChannelPayload, nil
-	}
-	if err != nil {
-		return data.ChannelPayload{}, err
-	}
-	// Not found isn't an error - it just means we need to use the default state
-	val, err := item.Value()
-	if err != nil {
-		return data.ChannelPayload{}, err
-	}
-	var channelState data.ChannelPayload
-	err = proto.Unmarshal(val, &channelState)
-	if err != nil {
-		return data.ChannelPayload{}, fmt.Errorf("unmarshal channel payload: %v", err)
-	}
-
-	return channelState, nil
-}
-
-func (e EventState) toProto() data.EventState {
+func (e EventState) toProto() eventdb.EventState {
 	switch e {
 	case EventStateUnspecified:
-		return data.EventState_UNSPECIFIED_STATE
+		return eventdb.EventState_UNSPECIFIED_STATE
 	case EventStateQueued:
-		return data.EventState_QUEUED
+		return eventdb.EventState_QUEUED
 	case EventStateDequeuedOK:
-		return data.EventState_DEQUEUED_OK
+		return eventdb.EventState_DEQUEUED_OK
 	case EventStateDequeuedError:
-		return data.EventState_DEQUEUED_ERROR
+		return eventdb.EventState_DEQUEUED_ERROR
 	default:
 		panic("unrecognized EventState")
 	}
 }
 
-func protoToEventState(e data.EventState) EventState {
+func protoToEventState(e eventdb.EventState) EventState {
 	switch e {
-	case data.EventState_UNSPECIFIED_STATE:
+	case eventdb.EventState_UNSPECIFIED_STATE:
 		return EventStateUnspecified
-	case data.EventState_QUEUED:
+	case eventdb.EventState_QUEUED:
 		return EventStateQueued
-	case data.EventState_DEQUEUED_OK:
+	case eventdb.EventState_DEQUEUED_OK:
 		return EventStateDequeuedOK
-	case data.EventState_DEQUEUED_ERROR:
+	case eventdb.EventState_DEQUEUED_ERROR:
 		return EventStateDequeuedError
 	default:
 		panic("unrecognized EventState")

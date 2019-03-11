@@ -8,8 +8,7 @@ import (
 
 	"github.com/dgraph-io/badger"
 	"github.com/gogo/protobuf/proto"
-	"gitlab.com/katcheCode/deq/internal/data"
-	"gitlab.com/katcheCode/deq/internal/storage"
+	"gitlab.com/katcheCode/deq/internal/eventdb"
 )
 
 type channelKey struct {
@@ -18,9 +17,9 @@ type channelKey struct {
 }
 
 type sharedChannel struct {
-	name  string
-	topic string
-	db    storage.DB
+	name       string
+	topic      string
+	db         _DB
 
 	subscriptions int
 
@@ -71,9 +70,10 @@ func (s *Store) listenSharedChannel(name, topic string) (*sharedChannel, func())
 	}
 
 	shared = &sharedChannel{
-		name:  name,
-		topic: topic,
-		db:    s.db,
+		name:       name,
+		topic:      topic,
+		db:         s.db,
+		eventstore: s.eventstore,
 
 		in:  make(chan *Event, 20),
 		out: make(chan *Event, 20),
@@ -102,14 +102,14 @@ func (s *sharedChannel) incrementSavedRequeueCount(e *Event) (int, error) {
 			ID:      e.ID,
 		}
 
-		channelEvent, err := getChannelEvent(txn, key)
+		channelEvent, err := s.eventstore.GetChannelEvent(txn, key)
 		if err != nil {
 			return -1, err
 		}
 
 		channelEvent.RequeueCount++
 
-		err = setChannelEvent(txn, key, channelEvent)
+		err = s.eventstore.SetChannelEvent(txn, key, channelEvent)
 		if err != nil {
 			return -1, err
 		}
@@ -288,7 +288,7 @@ func (s *sharedChannel) catchUp(cursor []byte) ([]byte, error) {
 			continue
 		}
 
-		channel, err := getChannelEvent(txn, data.ChannelKey{
+		channel, err := s.eventstore.GetChannelEvent(txn, data.ChannelKey{
 			Channel: s.name,
 			Topic:   key.Topic,
 			ID:      key.ID,

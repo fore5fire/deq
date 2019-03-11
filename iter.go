@@ -7,8 +7,7 @@ import (
 
 	"github.com/dgraph-io/badger"
 	"github.com/gogo/protobuf/proto"
-	"gitlab.com/katcheCode/deq/internal/data"
-	"gitlab.com/katcheCode/deq/internal/storage"
+	"gitlab.com/katcheCode/deq/internal/eventdb"
 )
 
 // IterOpts is the available options for
@@ -55,8 +54,8 @@ Example usage:
 	}
 */
 type EventIter struct {
-	txn     storage.Txn
-	it      storage.Iter
+	txn     _Txn
+	it      eventdb.EventTimeIter
 	opts    IterOpts
 	current Event
 	err     error
@@ -71,7 +70,7 @@ type EventIter struct {
 func (c *Channel) NewEventIter(opts IterOpts) *EventIter {
 
 	// Topic should be valid, no need to check error
-	prefix, _ := data.EventTimePrefixTopic(c.topic)
+	prefix, _ := eventdb.EventTimePrefixTopic(c.topic)
 	max := opts.Max + "\xff\xff\xff\xff"
 
 	var start, end []byte
@@ -94,11 +93,12 @@ func (c *Channel) NewEventIter(opts IterOpts) *EventIter {
 	it.Seek(start)
 
 	return &EventIter{
-		opts:    opts,
-		txn:     txn,
-		it:      it,
-		end:     end,
-		channel: c.name,
+		opts:       opts,
+		txn:        txn,
+		it:         it,
+		end:        end,
+		channel:    c.name,
+		eventstore: c.eventstore,
 	}
 }
 
@@ -123,8 +123,8 @@ func (iter *EventIter) Next() bool {
 
 	item := iter.it.Item()
 
-	var key data.EventTimeKey
-	err := data.UnmarshalTo(item.Key(), &key)
+	var key eventdb.EventTimeKey
+	err := eventdb.UnmarshalTo(item.Key(), &key)
 	if err != nil {
 		iter.err = fmt.Errorf("parse event key %s: %v", item.Key(), err)
 		return true
@@ -136,7 +136,7 @@ func (iter *EventIter) Next() bool {
 		return true
 	}
 
-	var eTime data.EventTimePayload
+	var eTime eventdb.EventTimePayload
 	err = proto.Unmarshal(val, &eTime)
 	if err != nil {
 		iter.err = fmt.Errorf("unmarshal event time: %v", err)
@@ -145,7 +145,7 @@ func (iter *EventIter) Next() bool {
 
 	createTime := time.Unix(0, eTime.CreateTime)
 
-	e, err := getEventPayload(iter.txn, data.EventKey{
+	e, err := iter.eventstore.GetEventPayload(iter.txn, eventdb.EventKey{
 		Topic:      key.Topic,
 		CreateTime: createTime,
 		ID:         key.ID,
@@ -154,7 +154,7 @@ func (iter *EventIter) Next() bool {
 		iter.err = fmt.Errorf("get event: %v", err)
 	}
 
-	channel, err := getChannelEvent(iter.txn, data.ChannelKey{
+	channel, err := iter.eventstore.GetChannelEvent(iter.txn, eventdb.ChannelKey{
 		Channel: iter.channel,
 		Topic:   key.Topic,
 		ID:      key.ID,
@@ -233,8 +233,8 @@ Example usage:
 
 */
 type TopicIter struct {
-	txn     storage.Txn
-	it      storage.Iter
+	txn     eventdb.Txn
+	it      eventdb.EventTimeIter
 	cursor  []byte
 	current string
 	opts    IterOpts
@@ -251,19 +251,19 @@ func (s *Store) NewTopicIter(opts IterOpts) *TopicIter {
 	return newTopicIter(txn, opts)
 }
 
-func newTopicIter(txn storage.Txn, opts IterOpts) *TopicIter {
+func newTopicIter(txn eventdb.Txn, opts IterOpts) *TopicIter {
 	// Apply default options
 	max := opts.Max
 	if max == "" {
-		max = data.LastTopic
+		max = eventdb.LastTopic
 	}
 
 	// Setup start and end limits of iteration
-	start, err := data.EventTimeCursorBeforeTopic(opts.Min)
+	start, err := eventdb.EventTimeCursorBeforeTopic(opts.Min)
 	if err != nil {
 		panic("opts.Min invalid: " + err.Error())
 	}
-	end, err := data.EventTimeCursorAfterTopic(max)
+	end, err := eventdb.EventTimeCursorAfterTopic(max)
 	if err != nil {
 		panic("opts.Max invalid: " + err.Error())
 	}
@@ -311,12 +311,12 @@ func (iter *TopicIter) Next() bool {
 	}
 
 	// Unmarshal the key
-	var key data.EventTimeKey
+	var key eventdb.EventTimeKey
 	// Keep iterating through events till we find one that works. It's out-of-scope for this function
 	// to deal with errors in individual events, so supress errors and just present topics with at
 	// least one valid event.
 	for {
-		err := data.UnmarshalTo(item.Key(), &key)
+		err := eventdb.UnmarshalTo(item.Key(), &key)
 		if err == nil {
 			break
 		}
@@ -332,10 +332,10 @@ func (iter *TopicIter) Next() bool {
 	// Update the cursor for our next iteration
 	if iter.opts.Reversed {
 		// No error check should be needed here because the topic comes directly from an unmarshalled key.
-		iter.cursor, _ = data.EventTimeCursorBeforeTopic(key.Topic)
+		iter.cursor, _ = eventdb.EventTimeCursorBeforeTopic(key.Topic)
 	} else {
 		// No error check should be needed here because the topic comes directly from an unmarshalled key.
-		iter.cursor, _ = data.EventTimeCursorAfterTopic(key.Topic)
+		iter.cursor, _ = eventdb.EventTimeCursorAfterTopic(key.Topic)
 	}
 
 	return true
@@ -376,8 +376,8 @@ Example usage:
 	}
 */
 type IndexIter struct {
-	txn     storage.Txn
-	it      storage.Iter
+	txn     _Txn
+	it      _Iter
 	opts    IterOpts
 	current Event
 	err     error
@@ -392,7 +392,7 @@ type IndexIter struct {
 func (c *Channel) NewIndexIter(opts IterOpts) *IndexIter {
 
 	// Topic should be valid, no need to check error
-	prefix, _ := data.IndexPrefixTopic(c.topic)
+	prefix, _ := eventdb.IndexPrefixTopic(c.topic)
 	max := opts.Max + "\xff\xff\xff\xff"
 
 	var start, end []byte
@@ -415,11 +415,12 @@ func (c *Channel) NewIndexIter(opts IterOpts) *IndexIter {
 	it.Seek(start)
 
 	return &IndexIter{
-		opts:    opts,
-		txn:     txn,
-		it:      it,
-		end:     end,
-		channel: c.name,
+		opts:       opts,
+		txn:        txn,
+		it:         it,
+		end:        end,
+		channel:    c.name,
+		eventstore: c.eventstore,
 	}
 }
 
@@ -444,14 +445,14 @@ func (iter *IndexIter) Next() bool {
 
 	item := iter.it.Item()
 
-	var key data.IndexKey
-	err := data.UnmarshalTo(item.Key(), &key)
+	var key eventdb.IndexKey
+	err := eventdb.UnmarshalTo(item.Key(), &key)
 	if err != nil {
 		iter.err = fmt.Errorf("parse event key %s: %v", item.Key(), err)
 		return false
 	}
 
-	e, err := getEvent(iter.txn, key.Topic, key.ID, iter.channel)
+	e, err := getEvent(iter.eventstore, iter.txn, key.Topic, key.ID, iter.channel)
 	if err != nil {
 		iter.err = err
 		return false

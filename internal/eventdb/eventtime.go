@@ -1,4 +1,4 @@
-package data
+package eventdb
 
 import (
 	"bytes"
@@ -102,6 +102,36 @@ func EventTimeCursorAfterTopic(topic string) ([]byte, error) {
 	}
 	ret := make([]byte, 0, len(topic)+7)
 	ret = append(ret, EventTimeTag, Sep)
+	ret = append(ret, topic...)
+	ret = append(ret, Sep, 0xff, 0xff, 0xff, 0xff)
+
+	return ret, nil
+}
+
+// // EventCursorBeforeTopic returns an EventKey cursor before the given topic. Unlike
+// // EventPrefixTopic, EventTopicCursor does not include a trailing Sep.
+// //
+// // Pass topic as the empty string for a cursor before the first topic.
+// func EventCursorBeforeTopic(topic string) ([]byte, error) {
+// 	if strings.ContainsRune(topic, 0) {
+// 		return nil, errors.New("Topic cannot contain null character")
+// 	}
+// 	ret := make([]byte, 0, len(topic)+2)
+// 	ret = append(ret, EventTag, Sep)
+// 	ret = append(ret, topic...)
+
+// 	return ret, nil
+// }
+
+// EventCursorAfterTopic returns an EventKey cursor just after all events of the given topic.
+//
+// Pass topic as "\xff\xff\xff\xff" for a cursor after events in the last topic.
+func EventCursorAfterTopic(topic string) ([]byte, error) {
+	if strings.ContainsRune(topic, 0) {
+		return nil, errors.New("Topic cannot contain null character")
+	}
+	ret := make([]byte, 0, len(topic)+7)
+	ret = append(ret, EventTag, Sep)
 	ret = append(ret, topic...)
 	ret = append(ret, Sep, 0xff, 0xff, 0xff, 0xff)
 
