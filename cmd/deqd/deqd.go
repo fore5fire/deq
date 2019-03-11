@@ -9,6 +9,7 @@ import (
 	_ "net/http/pprof"
 	"os"
 	"os/signal"
+	"strconv"
 	"strings"
 	"syscall"
 	"time"
@@ -37,6 +38,9 @@ var (
 
 	// deleteCorrupt specifies if we should allow the database to delete corrupt data.
 	deleteCorrupt = strings.ToLower(os.Getenv("DEQ_DANGEROUS_DELETE_CORRUPT")) == "true"
+
+	// requeueLimit specifies the default maximum requeues of a single event.
+	requeueLimit = 40
 )
 
 func init() {
@@ -46,6 +50,14 @@ func init() {
 
 func main() {
 	log.Println("Starting up")
+
+	if limit, ok := os.LookupEnv("DEQ_DEFAULT_REQUEUE_LIMIT"); ok {
+		var err error
+		requeueLimit, err = strconv.Atoi(limit)
+		if err != nil {
+			log.Fatalf("parse DEQ_REQUEUE_LIMIT from environment: %v", err)
+		}
+	}
 
 	if dataDir == "" {
 		dataDir = "/var/deqd"
@@ -99,6 +111,7 @@ func run(dbDir, address, statsAddress string) error {
 	store, err := deq.Open(deq.Options{
 		Dir:                    dbDir,
 		DangerousDeleteCorrupt: deleteCorrupt,
+		DefaultRequeueLimit:    requeueLimit,
 	})
 	if err != nil {
 		return fmt.Errorf("open database: %v", err)

@@ -314,7 +314,8 @@ func protoToEventState(e data.EventState) EventState {
 	}
 }
 
-func incrementSavedRequeueCount(txn *badger.Txn, channel, topic string, e *Event) (*data.ChannelPayload, error) {
+// TODO: just use requeue limit on event itself once implemented?
+func incrementSavedRequeueCount(txn *badger.Txn, channel, topic string, defaultRequeueLimit int, e *Event) (*data.ChannelPayload, error) {
 
 	key := data.ChannelKey{
 		Channel: channel,
@@ -327,7 +328,7 @@ func incrementSavedRequeueCount(txn *badger.Txn, channel, topic string, e *Event
 		return nil, err
 	}
 
-	if channelEvent.RequeueCount < 40 {
+	if defaultRequeueLimit == -1 || int(channelEvent.RequeueCount) < 40 {
 		channelEvent.RequeueCount++
 	} else {
 		channelEvent.EventState = data.EventState_DEQUEUED_ERROR

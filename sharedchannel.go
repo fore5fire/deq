@@ -37,6 +37,8 @@ type sharedChannel struct {
 	// Pass in a response channel, when the event is dequeued the new state will be sent back on the
 	// response channel
 	stateSubs map[string]map[*EventStateSubscription]struct{}
+
+	defaultRequeueLimit int
 }
 
 // addChannel adds a listener to a sharedChannel and returns the sharedChannel along with a done
@@ -79,6 +81,8 @@ func (s *Store) listenSharedChannel(name, topic string) (*sharedChannel, func())
 
 		stateSubs: make(map[string]map[*EventStateSubscription]struct{}),
 		done:      make(chan struct{}),
+
+		defaultRequeueLimit: s.defaultRequeueLimit,
 	}
 	s.sharedChannels[key] = shared
 
@@ -114,7 +118,7 @@ func (s *sharedChannel) RequeueEvent(e Event, delay time.Duration) error {
 			txn := s.db.NewTransaction(true)
 			defer txn.Discard()
 
-			channelPayload, err := incrementSavedRequeueCount(txn, s.name, s.topic, &e)
+			channelPayload, err := incrementSavedRequeueCount(txn, s.name, s.topic, s.defaultRequeueLimit, &e)
 			if err != nil {
 				return err
 			}

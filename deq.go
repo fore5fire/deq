@@ -31,6 +31,8 @@ type Store struct {
 	sharedChannels   map[channelKey]*sharedChannel
 	// done is used for signaling to our store's go routine
 	done chan error
+
+	defaultRequeueLimit int
 }
 
 // Options are parameters for opening a store
@@ -42,6 +44,9 @@ type Options struct {
 	// DangerousDeleteCorrupt allows DEQ to delete any corrupt data from an unclean shutdown. If this
 	// option is false, attempting to call Open on a database with corrupt data will fail.
 	DangerousDeleteCorrupt bool
+	// DefaultRequeueLimit is the default RequeueLimit for new events. Defaults to 40. Set to -1 for
+	// no default limit.
+	DefaultRequeueLimit int
 }
 
 // LoadingMode specifies how to load data into memory. Generally speaking, lower memory is slower
@@ -88,6 +93,11 @@ func Open(opts Options) (*Store, error) {
 		return nil, errors.New("option Dir is required")
 	}
 
+	requeueLimit := opts.DefaultRequeueLimit
+	if requeueLimit == 0 {
+		requeueLimit = 40
+	}
+
 	badgerOpts := badger.DefaultOptions
 	badgerOpts.Dir = opts.Dir
 	badgerOpts.ValueDir = opts.Dir
@@ -101,11 +111,12 @@ func Open(opts Options) (*Store, error) {
 		return nil, err
 	}
 	s := &Store{
-		db:             db,
-		in:             make(chan eventPromise, 20),
-		out:            make(chan *Event, 20),
-		sharedChannels: make(map[channelKey]*sharedChannel),
-		done:           make(chan error),
+		db:                  db,
+		in:                  make(chan eventPromise, 20),
+		out:                 make(chan *Event, 20),
+		sharedChannels:      make(map[channelKey]*sharedChannel),
+		done:                make(chan error),
+		defaultRequeueLimit: requeueLimit,
 	}
 
 	go s.garbageCollect(time.Minute * 5)
