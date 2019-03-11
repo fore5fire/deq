@@ -327,7 +327,7 @@ func incrementSavedRequeueCount(txn *badger.Txn, channel, topic string, e *Event
 		return nil, err
 	}
 
-	if channelEvent.RequeueCount < 20 {
+	if channelEvent.RequeueCount < 40 {
 		channelEvent.RequeueCount++
 	} else {
 		channelEvent.EventState = data.EventState_DEQUEUED_ERROR
