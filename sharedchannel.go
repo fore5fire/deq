@@ -126,6 +126,7 @@ func (s *sharedChannel) RequeueEvent(e Event, delay time.Duration) error {
 			err = txn.Commit(nil)
 			if err == badger.ErrConflict {
 				log.Printf("[WARN] Requeue Event %s %s: %v: retrying", s.topic, e.ID, err)
+				txn.Discard()
 				continue
 			}
 			if err != nil {
