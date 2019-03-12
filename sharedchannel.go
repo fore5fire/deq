@@ -135,6 +135,7 @@ func (s *sharedChannel) RequeueEvent(e Event, delay time.Duration) error {
 
 			if channelPayload.EventState != data.EventState_QUEUED {
 				log.Printf("channel %s: requeue limit exceeded for topic: %s id: %s - dequeing", s.name, s.topic, e.ID)
+				s.broadcastEventUpdated(e.ID, protoToEventState(channelPayload.EventState))
 				return nil
 			}
 
