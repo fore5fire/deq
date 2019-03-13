@@ -11,6 +11,7 @@ package main
 
 import (
 	"context"
+	"crypto/tls"
 	"flag"
 	"fmt"
 	"io"
@@ -39,7 +40,7 @@ func main() {
 		flag.PrintDefaults()
 	}
 
-	var host, channel, topic string
+	var host, channel, topic, nameOverride string
 	var follow, insecure bool
 	var timeout int
 
@@ -49,6 +50,7 @@ func main() {
 	flag.StringVar(&topic, "t", "", "topic to print. required.")
 	flag.IntVar(&timeout, "timeout", 10000, "timeout of the request in milliseconds.")
 	flag.BoolVar(&insecure, "insecure", false, "disables tls")
+	flag.StringVar(&nameOverride, "tls-name-override", "", "overrides the expected name on the server's TLS certificate.")
 
 	flag.Parse()
 
@@ -58,17 +60,11 @@ func main() {
 	cmd := flag.Arg(0)
 	switch cmd {
 	case "topics":
-		var opts []grpc.DialOption
-		if !insecure {
-			creds := credentials.NewTLS(nil)
-			opts = append(opts, grpc.WithTransportCredentials(creds))
-		}
-		conn, err := grpc.Dial(host, opts...)
+		deqc, err := dial(host, nameOverride, insecure)
 		if err != nil {
-			fmt.Printf("dial host %s: %v\n", host, err)
-			os.Exit(2)
+			fmt.Printf("dial: %v\n", err)
+			os.Exit(1)
 		}
-		deqc := deq.NewDEQClient(conn)
 
 		topics, err := deqc.Topics(ctx, &deq.TopicsRequest{})
 		if err != nil {
@@ -85,12 +81,11 @@ func main() {
 			os.Exit(1)
 		}
 
-		conn, err := grpc.Dial(host, grpc.WithInsecure())
+		deqc, err := dial(host, nameOverride, insecure)
 		if err != nil {
-			fmt.Printf("dial host %s: %v\n", host, err)
-			os.Exit(2)
+			fmt.Printf("dial: %v\n", err)
+			os.Exit(1)
 		}
-		deqc := deq.NewDEQClient(conn)
 
 		stream, err := deqc.Sub(ctx, &deq.SubRequest{
 			Channel: channel,
@@ -121,4 +116,38 @@ func main() {
 		flag.Usage()
 	}
 
+}
+
+func dial(host, nameOverride string, insecure bool) (deq.DEQClient, error) {
+	var opts []grpc.DialOption
+	if insecure {
+		opts = append(opts, grpc.WithInsecure())
+	} else {
+		creds := credentials.NewTLS(&tls.Config{
+			ServerName: nameOverride,
+		})
+		opts = append(opts, grpc.WithTransportCredentials(creds))
+	}
+
+	// opts = append(opts, grpc.WithUnaryInterceptor(func(ctx context.Context, method string, req, reply interface{}, cc *grpc.ClientConn, invoker grpc.UnaryInvoker, opts ...grpc.CallOption) error {
+	// 	log.Println(req)
+
+	// 	err := invoker(ctx, method, req, reply, cc, opts...)
+	// 	if err != nil {
+	// 		status, ok := status.FromError(err)
+	// 		if ok {
+
+	// 		}
+	// 		log.Println(err)
+	// 		return err
+	// 	}
+	// 	log.Println(reply)
+	// 	return nil
+	// }))
+
+	conn, err := grpc.Dial(host, opts...)
+	if err != nil {
+		return nil, fmt.Errorf("dial host %s: %v", host, err)
+	}
+	return deq.NewDEQClient(conn), nil
 }

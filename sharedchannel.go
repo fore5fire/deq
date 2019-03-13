@@ -127,6 +127,7 @@ func (s *sharedChannel) RequeueEvent(e Event, delay time.Duration) error {
 			if err == badger.ErrConflict {
 				log.Printf("[WARN] Requeue Event %s %s: %v: retrying", s.topic, e.ID, err)
 				txn.Discard()
+				time.Sleep(time.Millisecond * 20)
 				continue
 			}
 			if err != nil {
@@ -160,7 +161,8 @@ func (s *sharedChannel) RequeueEvent(e Event, delay time.Duration) error {
 		case <-timer.C:
 			err := requeue()
 			if err != nil {
-				panic("requeue event: " + err.Error())
+				log.Printf("requeue event: %v - forcing read from disk", err)
+				s.setMissed(true)
 			}
 		case <-s.done:
 		}
