@@ -47,10 +47,10 @@ var (
 	insecure = strings.ToLower(os.Getenv("DEQ_LISTEN_INSECURE")) == "true"
 
 	// certFile is the path of the tls certificate file. Required unless insecure is true.
-	certFile = os.Getenv("DEQ_CERT_FILE")
+	certFile = os.Getenv("DEQ_TLS_CERT_FILE")
 
 	// keyFile is the path of the tls private key file. Required unless insecure is true.
-	keyFile = os.Getenv("DEQ_KEY_FILE")
+	keyFile = os.Getenv("DEQ_TLS_KEY_FILE")
 )
 
 func init() {
