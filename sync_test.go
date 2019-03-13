@@ -131,7 +131,7 @@ func TestSyncTo(t *testing.T) {
 	go func() {
 		defer close(errc2)
 
-		channel := db2.Channel("test-channel", "TopicA")
+		channel := db2.Channel("test-channel-remote", "TopicA")
 		defer channel.Close()
 
 		errc2 <- channel.Sub(ctx, func(e Event) (*Event, ack.Code) {

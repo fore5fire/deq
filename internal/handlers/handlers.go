@@ -49,7 +49,7 @@ func (s *Server) Pub(ctx context.Context, in *pb.PubRequest) (*pb.Event, error) 
 		defer sub.Close()
 	}
 
-	e, err := s.store.Pub(protoToEvent(in.Event))
+	e, err := s.store.Pub(ctx, protoToEvent(in.Event))
 	if err == deq.ErrAlreadyExists {
 		return nil, status.Error(codes.AlreadyExists, "a different event with the same id already exists")
 	}

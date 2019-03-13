@@ -19,6 +19,8 @@ import (
 	"strconv"
 	"time"
 
+	"google.golang.org/grpc/credentials"
+
 	"gitlab.com/katcheCode/deq/api/v1/deq"
 	"google.golang.org/grpc"
 )
@@ -30,30 +32,40 @@ func main() {
 		fmt.Println("Usage: deqctl [flags] COMMAND")
 		fmt.Println("")
 		fmt.Println("Available Commands:")
-		fmt.Println("\t")
-		fmt.Println("Available Flags:")
 		fmt.Println("list: print events for a topic.")
 		fmt.Println("topics: print all topics.")
+		fmt.Println("")
+		fmt.Println("Available Flags:")
 		flag.PrintDefaults()
 	}
 
-	host := flag.String("host", "localhost:3000", "specify deq host and port.")
-	channel := flag.String("c", strconv.FormatInt(int64(rand.Int()), 16), "specify channel.")
-	follow := flag.Bool("f", false, "continue streaming when idling.")
-	topic := flag.String("t", "", "topic to print. required.")
-	timeout := flag.Int("timeout", 10000, "timeout of the request in milliseconds.")
+	var host, channel, topic string
+	var follow, insecure bool
+	var timeout int
+
+	flag.StringVar(&host, "host", "localhost:3000", "specify deq host and port.")
+	flag.StringVar(&channel, "c", strconv.FormatInt(int64(rand.Int()), 16), "specify channel.")
+	flag.BoolVar(&follow, "f", false, "continue streaming when idling.")
+	flag.StringVar(&topic, "t", "", "topic to print. required.")
+	flag.IntVar(&timeout, "timeout", 10000, "timeout of the request in milliseconds.")
+	flag.BoolVar(&insecure, "insecure", false, "disables tls")
 
 	flag.Parse()
 
-	ctx, cancel := context.WithTimeout(context.Background(), time.Duration(*timeout)*time.Millisecond)
+	ctx, cancel := context.WithTimeout(context.Background(), time.Duration(timeout)*time.Millisecond)
 	defer cancel()
 
 	cmd := flag.Arg(0)
 	switch cmd {
 	case "topics":
-		conn, err := grpc.Dial(*host, grpc.WithInsecure())
+		var opts []grpc.DialOption
+		if !insecure {
+			creds := credentials.NewTLS(nil)
+			opts = append(opts, grpc.WithTransportCredentials(creds))
+		}
+		conn, err := grpc.Dial(host, opts...)
 		if err != nil {
-			fmt.Printf("dial host %s: %v\n", *host, err)
+			fmt.Printf("dial host %s: %v\n", host, err)
 			os.Exit(2)
 		}
 		deqc := deq.NewDEQClient(conn)
@@ -68,22 +80,22 @@ func main() {
 			fmt.Println(topic)
 		}
 	case "list":
-		if *topic == "" {
+		if topic == "" {
 			flag.Usage()
 			os.Exit(1)
 		}
 
-		conn, err := grpc.Dial(*host, grpc.WithInsecure())
+		conn, err := grpc.Dial(host, grpc.WithInsecure())
 		if err != nil {
-			fmt.Printf("dial host %s: %v\n", *host, err)
+			fmt.Printf("dial host %s: %v\n", host, err)
 			os.Exit(2)
 		}
 		deqc := deq.NewDEQClient(conn)
 
 		stream, err := deqc.Sub(ctx, &deq.SubRequest{
-			Channel: *channel,
-			Topic:   *topic,
-			Follow:  *follow,
+			Channel: channel,
+			Topic:   topic,
+			Follow:  follow,
 		})
 		if err != nil {
 			fmt.Printf("stream: %v\n", err)

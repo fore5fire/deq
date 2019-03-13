@@ -18,6 +18,7 @@ import (
 	pb "gitlab.com/katcheCode/deq/api/v1/deq"
 	eventserver "gitlab.com/katcheCode/deq/internal/handlers"
 	"google.golang.org/grpc"
+	"google.golang.org/grpc/credentials"
 )
 
 var (
@@ -41,6 +42,15 @@ var (
 
 	// requeueLimit specifies the default maximum requeues of a single event.
 	requeueLimit = 40
+
+	// listenInsecure sets the server to listen for HTTP2 requests with TLS disabled.
+	insecure = strings.ToLower(os.Getenv("DEQ_LISTEN_INSECURE")) == "true"
+
+	// certFile is the path of the tls certificate file. Required unless insecure is true.
+	certFile = os.Getenv("DEQ_CERT_FILE")
+
+	// keyFile is the path of the tls private key file. Required unless insecure is true.
+	keyFile = os.Getenv("DEQ_KEY_FILE")
 )
 
 func init() {
@@ -67,7 +77,7 @@ func main() {
 	}
 
 	// run start code in seperate function so we can both defer and os.Exit
-	err := run(dataDir, listenAddress, statsAddress)
+	err := run(dataDir, listenAddress, statsAddress, certFile, keyFile, insecure)
 	if err != nil {
 		log.Fatal(err)
 	}
@@ -75,7 +85,7 @@ func main() {
 	log.Println("graceful shutdown complete")
 }
 
-func run(dbDir, address, statsAddress string) error {
+func run(dbDir, address, statsAddress, certFile, keyFile string, insecure bool) error {
 	ctx, cancel := context.WithCancel(context.Background())
 	defer cancel()
 
@@ -126,15 +136,17 @@ func run(dbDir, address, statsAddress string) error {
 
 	var opts []grpc.ServerOption
 
-	grpcServer := grpc.NewServer(opts...)
-	pb.RegisterDEQServer(grpcServer, server)
-
-	lis, err := net.Listen("tcp", address)
-	if err != nil {
-		return fmt.Errorf("bind %s: %v", address, err)
+	if !insecure {
+		creds, err := credentials.NewServerTLSFromFile(certFile, keyFile)
+		if err != nil {
+			return fmt.Errorf("load tls credentials: %v", err)
+		}
+		opts = append(opts, grpc.Creds(creds))
 	}
 
-	log.Printf("gRPC server listening on %s", address)
+	grpcServer := grpc.NewServer(opts...)
+
+	pb.RegisterDEQServer(grpcServer, server)
 
 	// Allow for graceful shutdown from SIGTERM or SIGINT
 	sig := make(chan os.Signal)
@@ -149,6 +161,13 @@ func run(dbDir, address, statsAddress string) error {
 			grpcServer.Stop()
 		}
 	}()
+
+	lis, err := net.Listen("tcp", address)
+	if err != nil {
+		return fmt.Errorf("bind %s: %v", address, err)
+	}
+
+	log.Printf("gRPC server listening on %s", address)
 
 	err = grpcServer.Serve(lis)
 	if err != nil {
