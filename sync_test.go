@@ -1,203 +1,171 @@
 package deq
 
-// func TestSyncTo(t *testing.T) {
-// 	t.Parallel()
+import (
+	"context"
+	"log"
+	"sort"
+	"testing"
+	"time"
 
-// 	db, discard := newTestDB()
-// 	defer discard()
-// 	db2, discard2 := newTestDB()
-// 	defer discard2()
+	"github.com/google/go-cmp/cmp"
+	"gitlab.com/katcheCode/deq/ack"
+)
 
-// 	ctx, cancel := context.WithCancel(context.Background())
-// 	defer cancel()
+func TestSyncTo(t *testing.T) {
+	t.Parallel()
 
-// 	// Round(0) gets rid of leap-second info, which will be lost in serialization
-// 	createTime := time.Now().Round(0)
+	db, discard := newTestDB()
+	defer discard()
+	db2, discard2 := newTestDB()
+	defer discard2()
 
-// 	// Publish some events
-// 	events := struct {
-// 		Before, After, ExpectedBefore, ExpectedAfter, ExpectedResponses []Event
-// 	}{
-// 		Before: []Event{
-// 			{
-// 				ID:         "before-event1",
-// 				Topic:      "TopicA",
-// 				CreateTime: createTime,
-// 			},
-// 			{
-// 				ID:         "before-event2",
-// 				Topic:      "TopicA",
-// 				CreateTime: createTime,
-// 			},
-// 			{
-// 				ID:         "before-event1",
-// 				Topic:      "TopicB",
-// 				CreateTime: createTime,
-// 			},
-// 		},
-// 		ExpectedBefore: []Event{
-// 			{
-// 				ID:           "before-event1",
-// 				Topic:        "TopicA",
-// 				CreateTime:   createTime,
-// 				DefaultState: EventStateQueued,
-// 				State:        EventStateQueued,
-// 			},
-// 			{
-// 				ID:           "before-event2",
-// 				Topic:        "TopicA",
-// 				CreateTime:   createTime,
-// 				DefaultState: EventStateQueued,
-// 				State:        EventStateQueued,
-// 			},
-// 		},
-// 		After: []Event{
-// 			{
-// 				ID:         "after-event1",
-// 				Topic:      "TopicA",
-// 				CreateTime: createTime,
-// 			},
-// 			{
-// 				ID:         "after-event2",
-// 				Topic:      "TopicA",
-// 				CreateTime: createTime,
-// 			},
-// 			{
-// 				ID:         "after-event1",
-// 				Topic:      "TopicB",
-// 				CreateTime: createTime,
-// 			},
-// 		},
-// 		ExpectedAfter: []Event{
-// 			{
-// 				ID:           "after-event1",
-// 				Topic:        "TopicA",
-// 				CreateTime:   createTime,
-// 				DefaultState: EventStateQueued,
-// 				State:        EventStateQueued,
-// 			},
-// 			{
-// 				ID:           "after-event2",
-// 				Topic:        "TopicA",
-// 				CreateTime:   createTime,
-// 				DefaultState: EventStateQueued,
-// 				State:        EventStateQueued,
-// 			},
-// 		},
-// 		ExpectedResponses: []Event{
-// 			{
-// 				ID:           "before-event1",
-// 				Topic:        "Response-TopicA",
-// 				CreateTime:   createTime,
-// 				DefaultState: EventStateQueued,
-// 				State:        EventStateQueued,
-// 			},
-// 			{
-// 				ID:           "before-event2",
-// 				Topic:        "Response-TopicA",
-// 				CreateTime:   createTime,
-// 				DefaultState: EventStateQueued,
-// 				State:        EventStateQueued,
-// 			},
-// 			{
-// 				ID:           "after-event1",
-// 				Topic:        "Response-TopicA",
-// 				CreateTime:   createTime,
-// 				DefaultState: EventStateQueued,
-// 				State:        EventStateQueued,
-// 			},
-// 			{
-// 				ID:           "after-event2",
-// 				Topic:        "Response-TopicA",
-// 				CreateTime:   createTime,
-// 				DefaultState: EventStateQueued,
-// 				State:        EventStateQueued,
-// 			},
-// 		},
-// 	}
+	// Round(0) gets rid of leap-second info, which will be lost in serialization
+	createTime := time.Now().Round(0)
 
-// 	for _, e := range events.Before {
-// 		_, err := db.Pub(e)
-// 		if err != nil {
-// 			t.Fatalf("pub: %v", err)
-// 		}
-// 	}
+	// Publish some events
+	events := struct {
+		Before, After, Expected []Event
+	}{
+		Before: []Event{
+			{
+				ID:         "before-event1",
+				Topic:      "TopicA",
+				CreateTime: createTime,
+			},
+			{
+				ID:         "before-event2",
+				Topic:      "TopicA",
+				CreateTime: createTime,
+			},
+			{
+				ID:         "before-event1",
+				Topic:      "TopicB",
+				CreateTime: createTime,
+			},
+		},
+		After: []Event{
+			{
+				ID:         "after-event1",
+				Topic:      "TopicA",
+				CreateTime: createTime,
+			},
+			{
+				ID:         "after-event2",
+				Topic:      "TopicA",
+				CreateTime: createTime,
+			},
+			{
+				ID:         "after-event1",
+				Topic:      "TopicB",
+				CreateTime: createTime,
+			},
+		},
+		Expected: []Event{
+			{
+				ID:           "after-event1",
+				Topic:        "TopicA",
+				CreateTime:   createTime,
+				DefaultState: EventStateQueued,
+				State:        EventStateQueued,
+			},
+			{
+				ID:           "after-event2",
+				Topic:        "TopicA",
+				CreateTime:   createTime,
+				DefaultState: EventStateQueued,
+				State:        EventStateQueued,
+			},
+			{
+				ID:           "before-event1",
+				Topic:        "TopicA",
+				CreateTime:   createTime,
+				DefaultState: EventStateQueued,
+				State:        EventStateQueued,
+			},
+			{
+				ID:           "before-event2",
+				Topic:        "TopicA",
+				CreateTime:   createTime,
+				DefaultState: EventStateQueued,
+				State:        EventStateQueued,
+			},
+		},
+	}
 
-// 	errc := make(chan error)
-// 	recieved := make(chan Event)
-// 	responses := make(chan Event)
+	errc := make(chan error)
+	errc2 := make(chan error)
+	recieved := make(chan Event)
 
-// 	// Subscribe to events
-// 	go func() {
-// 		channel := db.Channel("test-channel", "TopicA")
-// 		defer channel.Close()
+	ctx, cancel := context.WithCancel(context.Background())
+	defer func() {
+		cancel()
+		// check err channels
+		err := <-errc
+		if err != ctx.Err() {
+			t.Errorf("sync: %v", err)
+		}
+		err = <-errc2
+		if err != ctx.Err() {
+			t.Errorf("sub: %v", err)
+		}
+	}()
 
-// 		errc <- channel.SyncTo(ctx, client)
-// 	}()
+	// Publish before events
+	for _, e := range events.Before {
+		_, err := db.Pub(ctx, e)
+		if err != nil {
+			t.Fatalf("pub: %v", err)
+		}
+	}
 
-// 	// Subscribe to response events
-// 	go func() {
-// 		channel := db.Channel("test-channel", "Response-TopicA")
-// 		defer channel.Close()
+	// Sync events
+	go func() {
+		defer close(errc)
+		channel := db.Channel("test-channel", "TopicA")
+		defer channel.Close()
 
-// 		errc <- channel.Sub(ctx, func(e Event) (*Event, ack.Code) {
+		errc <- channel.SyncTo(ctx, db2)
+	}()
 
-// 			responses <- e
+	// Subscribe to synced events
+	go func() {
+		defer close(errc2)
 
-// 			return nil, ack.DequeueOK
-// 		})
-// 	}()
+		channel := db2.Channel("test-channel", "TopicA")
+		defer channel.Close()
 
-// 	// Check Sub error just before we cancel the context
-// 	defer func() {
-// 		select {
-// 		case err := <-errc:
-// 			t.Errorf("subscribe: %v", err)
-// 		default:
-// 		}
-// 	}()
+		errc2 <- channel.Sub(ctx, func(e Event) (*Event, ack.Code) {
 
-// 	// Verify that events were recieved by handler
-// 	var actual []Event
-// 	for e := range recieved {
-// 		actual = append(actual, e)
-// 		if len(actual) >= len(events.ExpectedBefore) {
-// 			break
-// 		}
-// 	}
-// 	if !cmp.Equal(events.ExpectedBefore, actual) {
-// 		t.Errorf("pre-sub recieved events:\n%s", cmp.Diff(events.ExpectedBefore, actual))
-// 	}
+			recieved <- e
 
-// 	// Publish some more events now that we're already subscribed
-// 	for _, e := range events.After {
-// 		_, err := db.Pub(e)
-// 		if err != nil {
-// 			t.Fatalf("pub: %v", err)
-// 		}
-// 	}
+			return nil, ack.DequeueOK
+		})
+	}()
 
-// 	// Verify that events were recieved by handler
-// 	actual = nil
-// 	for e := range recieved {
-// 		actual = append(actual, e)
-// 		if len(actual) >= len(events.ExpectedAfter) {
-// 			break
-// 		}
-// 	}
-// 	if !cmp.Equal(events.ExpectedAfter, actual) {
-// 		t.Errorf("post-sub recieved events:\n%s", cmp.Diff(events.ExpectedAfter, actual))
-// 	}
+	// Publish some more events now that we're syncing
+	for _, e := range events.After {
+		_, err := db.Pub(ctx, e)
+		if err != nil {
+			t.Fatalf("pub: %v", err)
+		}
+	}
 
-// 	// Verify that response events were published
-// 	actual = nil
-// 	for e := range responses {
-// 		actual = append(actual, e)
-// 		if len(actual) >= len(events.ExpectedResponses) {
-// 			break
-// 		}
-// 	}
-// 	if !cmp.Equal(events.ExpectedResponses, actual) {
-// 		t.Errorf("response events:\n%s", cmp.Diff(events.ExpectedResponses, actual))
-// 	}
-// }
+	// Verify that events were recieved by synced database
+	var actual []Event
+	for e := range recieved {
+		actual = append(actual, e)
+		if len(actual) >= len(events.Expected) {
+			break
+		}
+	}
+
+	sort.Slice(actual, func(i, j int) bool {
+		return actual[i].ID < actual[j].ID
+	})
+
+	log.Println(actual)
+
+	if !cmp.Equal(events.Expected, actual) {
+		t.Errorf("recieved events:\n%s", cmp.Diff(events.Expected, actual))
+	}
+}

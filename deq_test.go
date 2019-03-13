@@ -32,6 +32,8 @@ func newTestDB() (*Store, func()) {
 func TestDel(t *testing.T) {
 	t.Parallel()
 
+	ctx := context.Background()
+
 	db, discard := newTestDB()
 	defer discard()
 
@@ -43,7 +45,7 @@ func TestDel(t *testing.T) {
 		State:        EventStateQueued,
 	}
 
-	_, err := db.Pub(expected)
+	_, err := db.Pub(ctx, expected)
 	if err != nil {
 		t.Fatalf("pub: %v", err)
 	}
@@ -66,6 +68,10 @@ func TestDel(t *testing.T) {
 }
 
 func TestPub(t *testing.T) {
+	t.Parallel()
+
+	ctx := context.Background()
+
 	db, discard := newTestDB()
 	defer discard()
 
@@ -80,7 +86,7 @@ func TestPub(t *testing.T) {
 	channel := db.Channel("channel", expected.Topic)
 	defer channel.Close()
 
-	_, err := db.Pub(expected)
+	_, err := db.Pub(ctx, expected)
 	if err != nil {
 		t.Fatalf("pub: %v", err)
 	}
@@ -105,6 +111,10 @@ func TestPub(t *testing.T) {
 }
 
 func TestPubDuplicate(t *testing.T) {
+	t.Parallel()
+
+	ctx := context.Background()
+
 	db, discard := newTestDB()
 	defer discard()
 
@@ -120,20 +130,20 @@ func TestPubDuplicate(t *testing.T) {
 	defer channel.Close()
 
 	// Publish the event
-	_, err := db.Pub(expected)
+	_, err := db.Pub(ctx, expected)
 	if err != nil {
 		t.Fatalf("pub: %v", err)
 	}
 
 	// Publish and verify event with same id and payload
-	_, err = db.Pub(expected)
+	_, err = db.Pub(ctx, expected)
 	if err != nil {
 		t.Fatalf("identifical duplicate pub: %v", err)
 	}
 
 	// Publish and verify event with same id and different payload
 	expected.Payload = []byte{1}
-	_, err = db.Pub(expected)
+	_, err = db.Pub(ctx, expected)
 	if err != ErrAlreadyExists {
 		t.Fatalf("modified duplicate pub: %v", err)
 	}

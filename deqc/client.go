@@ -50,9 +50,14 @@ subscribers can also Get and Await events.
 package deqc
 
 import (
+	"context"
+	"fmt"
 	"time"
 
 	"github.com/gogo/protobuf/proto"
+	"gitlab.com/katcheCode/deq"
+	api "gitlab.com/katcheCode/deq/api/v1/deq"
+	"google.golang.org/grpc"
 )
 
 // Event is a deserialized event that is sent to or recieved from deq.
@@ -95,3 +100,78 @@ func (e Event) Equal(other Event) bool {
 
 // Message is a message payload that is sent by deq
 type Message proto.Message
+
+type Client struct {
+	client api.DEQClient
+	opts   PublisherOpts
+}
+
+// NewClient constructs a new client.
+// conn can be used by multiple Publishers and Subscribers in parallel
+func NewClient(conn *grpc.ClientConn, opts PublisherOpts) *Publisher {
+	return &Publisher{
+		client: api.NewDEQClient(conn),
+		opts:   opts,
+	}
+}
+
+// Pub publishes a new event.
+func (p *Client) Pub(ctx context.Context, e deq.Event) (deq.Event, error) {
+
+	if e.ID == "" {
+		return deq.Event{}, fmt.Errorf("e.ID is required")
+	}
+
+	defaultState := api.EventState_UNSPECIFIED_STATE
+	switch e.DefaultState {
+	case deq.EventStateDequeuedOK:
+		defaultState = api.EventState_DEQUEUED_OK
+	case deq.EventStateDequeuedError:
+		defaultState = api.EventState_DEQUEUED_ERROR
+	case deq.EventStateQueued:
+		defaultState = api.EventState_QUEUED
+	}
+
+	event, err := p.client.Pub(ctx, &api.PubRequest{
+		Event: &api.Event{
+			Id:           e.ID,
+			Topic:        e.Topic,
+			CreateTime:   e.CreateTime.UnixNano(),
+			Payload:      e.Payload,
+			DefaultState: defaultState,
+		},
+		AwaitChannel: p.opts.AwaitChannel,
+	})
+	if err != nil {
+		return deq.Event{}, err
+	}
+
+	state := deq.EventStateUnspecified
+	switch event.State {
+	case api.EventState_DEQUEUED_OK:
+		state = deq.EventStateDequeuedOK
+	case api.EventState_DEQUEUED_ERROR:
+		state = deq.EventStateDequeuedError
+	case api.EventState_QUEUED:
+		state = deq.EventStateQueued
+	}
+
+	dState := deq.EventStateUnspecified
+	switch event.DefaultState {
+	case api.EventState_DEQUEUED_OK:
+		dState = deq.EventStateDequeuedOK
+	case api.EventState_DEQUEUED_ERROR:
+		dState = deq.EventStateDequeuedError
+	case api.EventState_QUEUED:
+		dState = deq.EventStateQueued
+	}
+
+	return deq.Event{
+		ID:           event.Id,
+		Topic:        event.Topic,
+		CreateTime:   time.Unix(0, event.CreateTime),
+		Payload:      event.Payload,
+		DefaultState: dState,
+		State:        state,
+	}, nil
+}

@@ -133,7 +133,7 @@ func (c *Channel) Sub(ctx context.Context, handler func(Event) (*Event, ack.Code
 	// worker to publish responses event in parallel with processing ack.Code
 	go func() {
 		for response := range responses {
-			_, err := c.store.Pub(*response)
+			_, err := c.store.Pub(ctx, *response)
 			errc <- err
 		}
 	}()

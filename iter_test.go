@@ -1,6 +1,7 @@
 package deq
 
 import (
+	"context"
 	"testing"
 	"time"
 
@@ -24,6 +25,8 @@ func TestEmptyTopicIter(t *testing.T) {
 func TestTopicIter(t *testing.T) {
 	t.Parallel()
 
+	ctx := context.Background()
+
 	db, discard := newTestDB()
 	defer discard()
 
@@ -56,7 +59,7 @@ func TestTopicIter(t *testing.T) {
 	}
 
 	for _, e := range events {
-		_, err := db.Pub(e)
+		_, err := db.Pub(ctx, e)
 		if err != nil {
 			t.Fatalf("pub: %v", err)
 		}
@@ -80,6 +83,8 @@ func TestTopicIter(t *testing.T) {
 func TestTopicIterReversed(t *testing.T) {
 	t.Parallel()
 
+	ctx := context.Background()
+
 	db, discard := newTestDB()
 	defer discard()
 
@@ -112,7 +117,7 @@ func TestTopicIterReversed(t *testing.T) {
 	}
 
 	for _, e := range events {
-		_, err := db.Pub(e)
+		_, err := db.Pub(ctx, e)
 		if err != nil {
 			t.Fatalf("pub: %v", err)
 		}
@@ -138,6 +143,8 @@ func TestTopicIterReversed(t *testing.T) {
 func TestTopicIterMin(t *testing.T) {
 	t.Parallel()
 
+	ctx := context.Background()
+
 	db, discard := newTestDB()
 	defer discard()
 
@@ -170,7 +177,7 @@ func TestTopicIterMin(t *testing.T) {
 	}
 
 	for _, e := range events {
-		_, err := db.Pub(e)
+		_, err := db.Pub(ctx, e)
 		if err != nil {
 			t.Fatalf("pub: %v", err)
 		}
@@ -212,6 +219,8 @@ func TestTopicIterMin(t *testing.T) {
 func TestTopicIterMax(t *testing.T) {
 	t.Parallel()
 
+	ctx := context.Background()
+
 	db, discard := newTestDB()
 	defer discard()
 
@@ -244,7 +253,7 @@ func TestTopicIterMax(t *testing.T) {
 	}
 
 	for _, e := range events {
-		_, err := db.Pub(e)
+		_, err := db.Pub(ctx, e)
 		if err != nil {
 			t.Fatalf("pub: %v", err)
 		}
@@ -303,6 +312,8 @@ func TestEmptyEventIter(t *testing.T) {
 func TestEventIter(t *testing.T) {
 	t.Parallel()
 
+	ctx := context.Background()
+
 	db, discard := newTestDB()
 	defer discard()
 
@@ -327,7 +338,7 @@ func TestEventIter(t *testing.T) {
 	}
 
 	for _, e := range created {
-		_, err := db.Pub(e)
+		_, err := db.Pub(ctx, e)
 		if err != nil {
 			t.Fatalf("pub: %v", err)
 		}
@@ -373,6 +384,8 @@ func TestEventIter(t *testing.T) {
 func TestEventIterReversed(t *testing.T) {
 	t.Parallel()
 
+	ctx := context.Background()
+
 	db, discard := newTestDB()
 	defer discard()
 
@@ -397,7 +410,7 @@ func TestEventIterReversed(t *testing.T) {
 	}
 
 	for _, e := range created {
-		_, err := db.Pub(e)
+		_, err := db.Pub(ctx, e)
 		if err != nil {
 			t.Fatalf("pub: %v", err)
 		}
@@ -462,6 +475,8 @@ func TestEmptyIndexIter(t *testing.T) {
 func TestIndexIter(t *testing.T) {
 	t.Parallel()
 
+	ctx := context.Background()
+
 	db, discard := newTestDB()
 	defer discard()
 
@@ -500,7 +515,7 @@ func TestIndexIter(t *testing.T) {
 	}
 
 	for _, e := range created {
-		_, err := db.Pub(e)
+		_, err := db.Pub(ctx, e)
 		if err != nil {
 			t.Fatalf("pub: %v", err)
 		}
@@ -564,6 +579,8 @@ func TestIndexIter(t *testing.T) {
 func TestIndexIterReversed(t *testing.T) {
 	t.Parallel()
 
+	ctx := context.Background()
+
 	db, discard := newTestDB()
 	defer discard()
 
@@ -602,7 +619,7 @@ func TestIndexIterReversed(t *testing.T) {
 	}
 
 	for _, e := range created {
-		_, err := db.Pub(e)
+		_, err := db.Pub(ctx, e)
 		if err != nil {
 			t.Fatalf("pub: %v", err)
 		}
@@ -660,6 +677,8 @@ func TestIndexIterReversed(t *testing.T) {
 func TestIndexIterLimits(t *testing.T) {
 	t.Parallel()
 
+	ctx := context.Background()
+
 	db, discard := newTestDB()
 	defer discard()
 
@@ -699,7 +718,7 @@ func TestIndexIterLimits(t *testing.T) {
 	}
 
 	for _, e := range created {
-		_, err := db.Pub(e)
+		_, err := db.Pub(ctx, e)
 		if err != nil {
 			t.Fatalf("pub: %v", err)
 		}

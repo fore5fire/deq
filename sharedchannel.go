@@ -219,6 +219,8 @@ func (s *sharedChannel) start() {
 			}
 
 			select {
+			case <-s.done:
+				return
 			// The timer expired, we're idle
 			// case <-timer.C:
 			// We've got a new event, lets publish it

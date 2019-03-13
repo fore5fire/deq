@@ -79,19 +79,3 @@ func protoToEvent(event *api.Event, msg Message, sub *Subscriber) Event {
 		RequeueCount: int(event.RequeueCount),
 	}
 }
-
-// ResetTimeout resets the requeue timeout of this event
-func (sub *Subscriber) ResetTimeout(ctx context.Context, event Event) error {
-
-	_, err := sub.client.Ack(ctx, &api.AckRequest{
-		Channel: sub.opts.Channel,
-		Topic:   event.Topic(),
-		EventId: event.ID,
-		Code:    api.AckCode_RESET_TIMEOUT,
-	})
-	if err != nil {
-		return err
-	}
-
-	return nil
-}

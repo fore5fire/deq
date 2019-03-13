@@ -181,3 +181,19 @@ func (sub *Subscriber) Await(ctx context.Context, eventID string, result Message
 
 	return res, nil
 }
+
+// ResetTimeout resets the requeue timeout of this event
+func (sub *Subscriber) ResetTimeout(ctx context.Context, event Event) error {
+
+	_, err := sub.client.Ack(ctx, &api.AckRequest{
+		Channel: sub.opts.Channel,
+		Topic:   event.Topic(),
+		EventId: event.ID,
+		Code:    api.AckCode_RESET_TIMEOUT,
+	})
+	if err != nil {
+		return err
+	}
+
+	return nil
+}

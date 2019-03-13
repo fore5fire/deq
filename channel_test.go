@@ -15,6 +15,8 @@ import (
 func TestSub(t *testing.T) {
 	t.Parallel()
 
+	ctx := context.Background()
+
 	db, discard := newTestDB()
 	defer discard()
 
@@ -139,7 +141,7 @@ func TestSub(t *testing.T) {
 	}
 
 	for _, e := range events.Before {
-		_, err := db.Pub(e)
+		_, err := db.Pub(ctx, e)
 		if err != nil {
 			t.Fatalf("pub: %v", err)
 		}
@@ -192,7 +194,7 @@ func TestSub(t *testing.T) {
 
 	// Publish some more events now that we're already subscribed
 	for _, e := range events.After {
-		_, err := db.Pub(e)
+		_, err := db.Pub(ctx, e)
 		if err != nil {
 			t.Fatalf("pub: %v", err)
 		}
@@ -257,7 +259,7 @@ func TestAwait(t *testing.T) {
 		}
 	}()
 	time.Sleep(time.Millisecond * 50)
-	_, err := db.Pub(expected)
+	_, err := db.Pub(ctx, expected)
 	if err != nil {
 		t.Fatalf("pub: %v", err)
 	}
@@ -288,7 +290,7 @@ func TestAwaitChannelTimeout(t *testing.T) {
 	ctx, cancel := context.WithTimeout(context.Background(), time.Second/4)
 	defer cancel()
 
-	_, err := db.Pub(Event{
+	_, err := db.Pub(ctx, Event{
 		ID:         "event1",
 		Topic:      "topic",
 		CreateTime: time.Now(),
@@ -320,7 +322,7 @@ func TestAwaitChannelClose(t *testing.T) {
 
 	ctx := context.Background()
 
-	_, err := db.Pub(Event{
+	_, err := db.Pub(ctx, Event{
 		ID:         "event1",
 		Topic:      "topic",
 		CreateTime: time.Now(),
@@ -350,13 +352,15 @@ func TestAwaitChannelClose(t *testing.T) {
 func TestAwaitChannel(t *testing.T) {
 	t.Parallel()
 
+	ctx := context.Background()
+
 	db, discard := newTestDB()
 	defer discard()
 
 	ctx, cancel := context.WithTimeout(context.Background(), time.Second*3)
 	defer cancel()
 
-	_, err := db.Pub(Event{
+	_, err := db.Pub(ctx, Event{
 		ID:         "event1",
 		Topic:      "topic",
 		CreateTime: time.Now(),
@@ -394,6 +398,8 @@ func TestAwaitChannel(t *testing.T) {
 func TestGet(t *testing.T) {
 	t.Parallel()
 
+	ctx := context.Background()
+
 	db, discard := newTestDB()
 	defer discard()
 
@@ -403,7 +409,7 @@ func TestGet(t *testing.T) {
 		CreateTime: time.Now(),
 	}
 
-	_, err := db.Pub(expected)
+	_, err := db.Pub(ctx, expected)
 	if err != nil {
 		t.Fatalf("pub: %v", err)
 	}
@@ -441,6 +447,8 @@ func TestGet(t *testing.T) {
 func TestDequeue(t *testing.T) {
 	t.Parallel()
 
+	ctx := context.Background()
+
 	dir, err := ioutil.TempDir("", "")
 	if err != nil {
 		t.Fatalf("create temp dir: %v", err)
@@ -461,7 +469,7 @@ func TestDequeue(t *testing.T) {
 		}
 		defer db.Close()
 
-		_, err = db.Pub(expected)
+		_, err = db.Pub(ctx, expected)
 		if err != nil {
 			t.Fatalf("pub: %v", err)
 		}

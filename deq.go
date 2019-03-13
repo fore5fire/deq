@@ -11,6 +11,7 @@ package deq
 
 import (
 	"bytes"
+	"context"
 	"errors"
 	"fmt"
 	"log"
@@ -152,7 +153,7 @@ func (s *Store) Close() error {
 }
 
 // Pub publishes an event.
-func (s *Store) Pub(e Event) (Event, error) {
+func (s *Store) Pub(ctx context.Context, e Event) (Event, error) {
 
 	if e.CreateTime.IsZero() {
 		e.CreateTime = time.Now()

@@ -7,8 +7,18 @@ import (
 	api "gitlab.com/katcheCode/deq/api/v1/deq"
 )
 
+type Client interface {
+	Pub(context.Context, Event) (Event, error)
+	// Channel(name, topic string) Channel
+}
+
+// type Channel interface {
+// 	Sub(context.Context, func(Event) (Event, ack.Code))
+// 	Get(context.Context, string) (Event, error)
+// }
+
 // SyncTo copies the events in c's queue to the database that client is connected to.
-func (c *Channel) SyncTo(ctx context.Context, client api.DEQClient) error {
+func (c *Channel) SyncTo(ctx context.Context, client Client) error {
 
 	ctx, cancel := context.WithCancel(ctx)
 	defer cancel()
@@ -61,15 +71,13 @@ func (c *Channel) SyncTo(ctx context.Context, client api.DEQClient) error {
 	return <-errorc
 }
 
-func syncWorker(ctx context.Context, client api.DEQClient, queue <-chan Event) error {
+func syncWorker(ctx context.Context, client Client, queue <-chan Event) error {
 	for e := range queue {
-		_, err := client.Pub(ctx, &api.PubRequest{
-			Event: &api.Event{
-				Id:         e.ID,
-				CreateTime: e.CreateTime.UnixNano(),
-				Topic:      e.Topic,
-				Payload:    e.Payload,
-			},
+		_, err := client.Pub(ctx, Event{
+			ID:         e.ID,
+			CreateTime: e.CreateTime,
+			Topic:      e.Topic,
+			Payload:    e.Payload,
 		})
 		if err != nil {
 			return err
