@@ -108,15 +108,14 @@ type Client struct {
 
 // NewClient constructs a new client.
 // conn can be used by multiple Publishers and Subscribers in parallel
-func NewClient(conn *grpc.ClientConn, opts PublisherOpts) *Publisher {
-	return &Publisher{
+func NewClient(conn *grpc.ClientConn) *Client {
+	return &Client{
 		client: api.NewDEQClient(conn),
-		opts:   opts,
 	}
 }
 
 // Pub publishes a new event.
-func (p *Client) Pub(ctx context.Context, e deq.Event) (deq.Event, error) {
+func (c *Client) Pub(ctx context.Context, e deq.Event) (deq.Event, error) {
 
 	if e.ID == "" {
 		return deq.Event{}, fmt.Errorf("e.ID is required")
@@ -132,7 +131,7 @@ func (p *Client) Pub(ctx context.Context, e deq.Event) (deq.Event, error) {
 		defaultState = api.EventState_QUEUED
 	}
 
-	event, err := p.client.Pub(ctx, &api.PubRequest{
+	event, err := c.client.Pub(ctx, &api.PubRequest{
 		Event: &api.Event{
 			Id:           e.ID,
 			Topic:        e.Topic,
@@ -140,7 +139,6 @@ func (p *Client) Pub(ctx context.Context, e deq.Event) (deq.Event, error) {
 			Payload:      e.Payload,
 			DefaultState: defaultState,
 		},
-		AwaitChannel: p.opts.AwaitChannel,
 	})
 	if err != nil {
 		return deq.Event{}, err
