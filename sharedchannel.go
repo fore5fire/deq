@@ -26,9 +26,12 @@ type sharedChannel struct {
 	missedMutex sync.Mutex
 	missed      bool
 
-	in   chan *Event
-	out  chan *Event
+	in  chan *Event
+	out chan *Event
+	// done signals goroutines created by the sharedChannel to terminate.
 	done chan struct{}
+	// wg waits on all goroutines created by the sharedChannel to be done
+	wg sync.WaitGroup
 
 	idleMutex sync.RWMutex
 	idle      bool
@@ -49,13 +52,15 @@ func (s *Store) listenSharedChannel(name, topic string) (*sharedChannel, func())
 	var shared *sharedChannel
 	done := func() {
 		s.sharedChannelsMu.Lock()
-		defer s.sharedChannelsMu.Unlock()
 
 		shared.subscriptions--
 		if shared.subscriptions == 0 {
 			close(shared.done)
 			delete(s.sharedChannels, key)
+			defer shared.wg.Wait()
 		}
+
+		s.sharedChannelsMu.Unlock()
 	}
 	defer func() {
 		s.sharedChannelsMu.Lock()
@@ -86,7 +91,11 @@ func (s *Store) listenSharedChannel(name, topic string) (*sharedChannel, func())
 	}
 	s.sharedChannels[key] = shared
 
-	go shared.start()
+	shared.wg.Add(1)
+	go func() {
+		defer shared.wg.Done()
+		shared.start()
+	}()
 
 	return shared, done
 }
@@ -141,9 +150,12 @@ func (s *sharedChannel) RequeueEvent(e Event, delay time.Duration) error {
 			}
 
 			e.RequeueCount = int(channelPayload.RequeueCount)
-			s.out <- &e
-
-			return nil
+			select {
+			case <-s.done:
+				return nil
+			case s.out <- &e:
+				return nil
+			}
 		}
 
 		return badger.ErrConflict
@@ -153,7 +165,10 @@ func (s *sharedChannel) RequeueEvent(e Event, delay time.Duration) error {
 		return requeue()
 	}
 
+	s.wg.Add(1)
 	go func() {
+		defer s.wg.Done()
+
 		timer := time.NewTimer(delay)
 		defer timer.Stop()
 
@@ -179,11 +194,11 @@ func (s *sharedChannel) start() {
 		return
 	}
 
-	timer := time.NewTimer(time.Hour)
-	if !timer.Stop() {
-		<-timer.C
-	}
-	defer timer.Stop()
+	// timer := time.NewTimer(time.Hour)
+	// if !timer.Stop() {
+	// 	<-timer.C
+	// }
+	// defer timer.Stop()
 
 	for {
 		s.setMissed(false)
@@ -231,12 +246,16 @@ func (s *sharedChannel) start() {
 				s.idle = false
 				s.idleMutex.Unlock()
 				// log.Printf("READING FROM MEMORY %s/%s count: %d", e.Topic, e.ID, e.RequeueCount)
-				s.out <- e
-				cursor, _ = data.EventKey{
-					Topic:      e.Topic,
-					CreateTime: e.CreateTime,
-					ID:         e.ID,
-				}.Marshal(nil)
+				select {
+				case <-s.done:
+					return
+				case s.out <- e:
+					cursor, _ = data.EventKey{
+						Topic:      e.Topic,
+						CreateTime: e.CreateTime,
+						ID:         e.ID,
+					}.Marshal(nil)
+				}
 			}
 		}
 
@@ -302,7 +321,10 @@ func (s *sharedChannel) catchUp(cursor []byte) ([]byte, error) {
 			continue
 		}
 
-		s.out <- &Event{
+		select {
+		case <-s.done:
+			return lastKey, nil
+		case s.out <- &Event{
 			ID:           key.ID,
 			Topic:        key.Topic,
 			CreateTime:   key.CreateTime,
@@ -311,6 +333,7 @@ func (s *sharedChannel) catchUp(cursor []byte) ([]byte, error) {
 			State:        protoToEventState(channel.EventState),
 			DefaultState: protoToEventState(e.DefaultEventState),
 			Indexes:      e.Indexes,
+		}:
 		}
 	}
 

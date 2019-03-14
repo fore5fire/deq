@@ -160,7 +160,7 @@ func TestPubDuplicate(t *testing.T) {
 func TestMassPublish(t *testing.T) {
 	t.Parallel()
 
-	ctx, cancel := context.WithTimeout(context.Background(), time.Second*5)
+	ctx, cancel := context.WithTimeout(context.Background(), time.Second*8)
 	defer cancel()
 
 	p := deqc.NewPublisher(conn, deqc.PublisherOpts{})
@@ -174,7 +174,7 @@ func TestMassPublish(t *testing.T) {
 			},
 		})
 		if err != nil {
-			t.Fatalf("Error Creating Event: %v", err)
+			t.Fatalf("create event %d: %v", i, err)
 		}
 	}
 

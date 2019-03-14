@@ -143,6 +143,7 @@ func (s *Store) Close() error {
 	}
 
 	close(s.done)
+	close(s.out)
 
 	err := s.db.Close()
 	if err != nil {

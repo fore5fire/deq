@@ -2,6 +2,7 @@ package deq
 
 import (
 	"context"
+	"fmt"
 	"io/ioutil"
 	"os"
 	"testing"
@@ -107,6 +108,52 @@ func TestPub(t *testing.T) {
 	}
 	if !cmp.Equal(event, expected) {
 		t.Errorf("get:\n%s", cmp.Diff(expected, event))
+	}
+}
+
+func TestMassPub(t *testing.T) {
+	t.Parallel()
+
+	ctx := context.Background()
+
+	db, discard := newTestDB()
+	defer discard()
+
+	topic := "topic"
+	// Round(0) to discard's leap-second info that's lost in serialization
+	createTime := time.Now().Round(0)
+
+	expected := make([]Event, 500)
+	for i := 0; i < 500; i++ {
+		expected[i] = Event{
+			ID:           fmt.Sprintf("event%03d", i),
+			Topic:        topic,
+			CreateTime:   createTime,
+			DefaultState: EventStateQueued,
+			State:        EventStateQueued,
+		}
+	}
+
+	channel := db.Channel("channel", topic)
+	defer channel.Close()
+
+	for i, e := range expected {
+		_, err := db.Pub(ctx, e)
+		if err != nil {
+			t.Fatalf("pub %d: %v", i, err)
+		}
+	}
+
+	var actual []Event
+	iter := channel.NewEventIter(IterOpts{})
+	for iter.Next() {
+		actual = append(actual, iter.Event())
+	}
+	if iter.Err() != nil {
+		t.Fatalf("iterate: %v", iter.Err())
+	}
+	if !cmp.Equal(expected, actual) {
+		t.Errorf(":\n%s", cmp.Diff(expected, actual))
 	}
 }
 
