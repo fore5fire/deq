@@ -23,7 +23,7 @@ func (c *Channel) SyncTo(ctx context.Context, client Client) error {
 	ctx, cancel := context.WithCancel(ctx)
 	defer cancel()
 
-	workerCount := 10
+	workerCount := 3
 
 	queue := make(chan Event, 300)
 	errorc := make(chan error, 1)
@@ -74,15 +74,20 @@ func (c *Channel) SyncTo(ctx context.Context, client Client) error {
 }
 
 func syncWorker(ctx context.Context, client Client, queue <-chan Event) error {
-	for e := range queue {
-		_, err := client.Pub(ctx, Event{
-			ID:         e.ID,
-			CreateTime: e.CreateTime,
-			Topic:      e.Topic,
-			Payload:    e.Payload,
-		})
-		if err != nil {
-			return err
+	for {
+		select {
+		case ctx.Done():
+			
+		case e := <-queue:
+			_, err := client.Pub(ctx, Event{
+				ID:         e.ID,
+				CreateTime: e.CreateTime,
+				Topic:      e.Topic,
+				Payload:    e.Payload,
+			})
+			if err != nil {
+				return err
+			}
 		}
 	}
 
