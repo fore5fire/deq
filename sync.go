@@ -23,9 +23,9 @@ func (c *Channel) SyncTo(ctx context.Context, client Client) error {
 	ctx, cancel := context.WithCancel(ctx)
 	defer cancel()
 
-	workerCount := 10
+	workerCount := 3
 
-	queue := make(chan Event, 300)
+	queue := make(chan Event, 30)
 	errorc := make(chan error, 1)
 
 	wg := sync.WaitGroup{}

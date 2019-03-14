@@ -205,6 +205,9 @@ func (s *Store) Pub(ctx context.Context, e Event) (Event, error) {
 		s.out <- &e
 	}
 
+	s.sharedChannelsMu.Lock()
+	defer s.sharedChannelsMu.Unlock()
+
 	for _, channel := range s.sharedChannels {
 		if channel.topic == e.Topic {
 			channel.broadcastEventUpdated(e.ID, e.State)
