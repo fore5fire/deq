@@ -2,7 +2,6 @@ package deq
 
 import (
 	"context"
-	"log"
 	"sort"
 	"testing"
 	"time"
@@ -121,6 +120,7 @@ func TestSyncTo(t *testing.T) {
 	// Sync events
 	go func() {
 		defer close(errc)
+
 		channel := db.Channel("test-channel", "TopicA")
 		defer channel.Close()
 
@@ -162,8 +162,6 @@ func TestSyncTo(t *testing.T) {
 	sort.Slice(actual, func(i, j int) bool {
 		return actual[i].ID < actual[j].ID
 	})
-
-	log.Println(actual)
 
 	if !cmp.Equal(events.Expected, actual) {
 		t.Errorf("recieved events:\n%s", cmp.Diff(events.Expected, actual))

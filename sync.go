@@ -34,6 +34,7 @@ func (c *Channel) SyncTo(ctx context.Context, client Client) error {
 	for i := 0; i < workerCount; i++ {
 		go func() {
 			defer wg.Done()
+			defer cancel()
 			err := syncWorker(ctx, client, queue)
 			if err != nil {
 				select {
@@ -50,6 +51,7 @@ func (c *Channel) SyncTo(ctx context.Context, client Client) error {
 
 	go func() {
 		defer wg.Done()
+		defer cancel()
 		for {
 			e, err := c.Next(ctx)
 			if err != nil {
