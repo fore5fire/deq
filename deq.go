@@ -126,14 +126,19 @@ func Open(opts Options) (*Store, error) {
 		defaultRequeueLimit: requeueLimit,
 	}
 
-	txn := db.NewTransaction(opts.UpgradeIfNeeded)
+	txn := db.NewTransaction(true)
 
 	version, err := s.getDBVersion(txn)
 	if err != nil {
 		return nil, fmt.Errorf("read current database version: %v", err)
 	}
 	if version != dbCodeVersion {
-		if !opts.UpgradeIfNeeded {
+		if version == "" {
+			err := txn.Set([]byte(dbVersionKey), []byte(dbCodeVersion))
+			if err != nil {
+				return nil, fmt.Errorf("write version for new db: %v", err)
+			}
+		} else if !opts.UpgradeIfNeeded {
 			return nil, ErrVersionMismatch
 		}
 
