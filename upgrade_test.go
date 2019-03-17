@@ -1,7 +1,6 @@
 package deq
 
 import (
-	"path"
 	"testing"
 )
 
@@ -29,15 +28,20 @@ func TestUpgradeV1_0_0(t *testing.T) {
 	// 		return err
 	// 	}
 	// }
-	db, err := Open(Options{
-		Dir:             path.Join("testdata", "testdb"),
-		UpgradeIfNeeded: true,
-	})
-	if err != nil {
-		t.Fatalf("open: %v", err)
-	}
-	defer db.Close()
+	// db, err := Open(Options{
+	// 	Dir:             path.Join("testdata", "testdb"),
+	// 	UpgradeIfNeeded: true,
+	// })
+	// if err != nil {
+	// 	t.Fatalf("open: %v", err)
+	// }
+	// defer db.Close()
 
+	// txn := db.db.NewTransaction(false)
+	// defer txn.Discard()
+
+	// printKeys(txn)
+	// t.Fatal()
 	// channel := db.Channel("test-upgrade-v1_0_0", "test-topic")
 
 }

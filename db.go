@@ -4,6 +4,7 @@ import (
 	"fmt"
 	"hash/crc32"
 	"log"
+	"reflect"
 	"time"
 
 	"github.com/dgraph-io/badger"
@@ -75,7 +76,7 @@ func printKeys(txn *badger.Txn) {
 			log.Printf("%v %v", item.Key(), err)
 			continue
 		}
-		log.Printf("%+v", key)
+		log.Printf("%v: %+v", reflect.TypeOf(key), key)
 	}
 }
 

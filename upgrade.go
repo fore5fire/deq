@@ -5,16 +5,12 @@ import (
 	"log"
 
 	"github.com/dgraph-io/badger"
-	"github.com/gogo/protobuf/proto"
 	"gitlab.com/katcheCode/deq/internal/data"
 )
 
 // upgradeDB upgrades the store's db to the current version.
 // It is not safe to use the database concurrently with upgradeDB.
 func (s *Store) upgradeDB(currentVersion string) error {
-
-	txn := s.db.NewTransaction(true)
-	defer txn.Discard()
 
 	switch currentVersion {
 	case dbCodeVersion:
@@ -23,15 +19,34 @@ func (s *Store) upgradeDB(currentVersion string) error {
 		log.Printf("[INFO] upgrading db from 1.0.0 to %s", dbCodeVersion)
 		batchSize := 500
 		u := &upgradeV1_0_0{}
-		for txn := s.db.NewTransaction(true); u.NextBatch(txn, batchSize); txn = s.db.NewTransaction(true) {
-			log.Printf("[INFO] %d indexes upgraded, %d indexes failed", u.updated, u.failed)
+		more := true
+		for more {
+			err := func() error {
+				txn := s.db.NewTransaction(true)
+				defer txn.Discard()
+
+				more = u.NextBatch(txn, batchSize)
+
+				err := txn.Commit(nil)
+				if err != nil {
+					return fmt.Errorf("commit batch: %v", err)
+				}
+
+				log.Printf("[INFO] %d indexes upgraded, %d indexes failed", u.updated, u.failed)
+				return nil
+			}()
+			if err != nil {
+				return err
+			}
 		}
-		log.Printf("[INFO] %d indexes upgraded, %d indexes failed", u.updated, u.failed)
 		log.Printf("[INFO] db upgraded to version %s", dbCodeVersion)
 
 	default:
 		return fmt.Errorf("unsupported on-disk version: %s", currentVersion)
 	}
+
+	txn := s.db.NewTransaction(true)
+	defer txn.Discard()
 
 	err := txn.Set([]byte(dbVersionKey), []byte(dbCodeVersion))
 	if err != nil {
@@ -80,7 +95,6 @@ func (u *upgradeV1_0_0) NextBatch(txn *badger.Txn, batchSize int) bool {
 	it := txn.NewIterator(badger.DefaultIteratorOptions)
 	defer it.Close()
 
-	var key []byte
 	var i int
 	for it.Seek(append(u.cursor, 0)); it.ValidForPrefix(prefix); it.Next() {
 		i++
@@ -99,15 +113,6 @@ func (u *upgradeV1_0_0) NextBatch(txn *badger.Txn, batchSize int) bool {
 			continue
 		}
 
-		key, err = data.IndexKey{
-			Topic: oldIndex.Topic,
-			Value: oldIndex.Value,
-		}.Marshal(key)
-		if err != nil {
-			log.Printf("marshal updated index: %v", err)
-			continue
-		}
-
 		eTime, err := getEventTimePayload(txn, data.EventTimeKey{
 			Topic: oldIndex.Topic,
 			ID:    oldIndex.ID,
@@ -117,14 +122,15 @@ func (u *upgradeV1_0_0) NextBatch(txn *badger.Txn, batchSize int) bool {
 			continue
 		}
 
-		buf, err := proto.Marshal(&data.IndexPayload{
+		err = writeIndex(txn, data.IndexKey{
+			Topic: oldIndex.Topic,
+			Value: oldIndex.Value,
+		}, &data.IndexPayload{
 			EventId:    oldIndex.ID,
 			CreateTime: eTime.CreateTime,
 		})
-
-		err = txn.Set(key, buf)
 		if err != nil {
-			log.Printf("write new index: %v", err)
+			log.Printf("set new index: %v", err)
 			continue
 		}
 

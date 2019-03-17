@@ -1,6 +1,7 @@
 package data
 
 import (
+	"bytes"
 	"testing"
 
 	"github.com/google/go-cmp/cmp"
@@ -9,15 +10,16 @@ import (
 func TestMarshalIndexKey(t *testing.T) {
 	expected := IndexKey{
 		Topic: "abc",
-		Type:  "abc",
 		Value: "def",
 	}
+	expectedBuf := []byte{IndexTag, Sep, 'a', 'b', 'c', Sep, 'd', 'e', 'f'}
+
 	buf, err := expected.Marshal(nil)
 	if err != nil {
 		t.Fatalf("marshal: %v", err)
 	}
-	if buf[0] != IndexTag {
-		t.Errorf("expected serialized prefix %d, got %d", IndexTag, buf[0])
+	if !bytes.Equal(buf, expectedBuf) {
+		t.Errorf("serialize:\n%s", cmp.Diff(expectedBuf, buf))
 	}
 
 	var unmarshaled IndexKey

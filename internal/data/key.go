@@ -52,7 +52,9 @@ func UnmarshalTo(src []byte, dest Key) error {
 		return UnmarshalChannelKey(src, dest)
 	case *IndexKey:
 		return UnmarshalIndexKey(src, dest)
-	case EventKey, ChannelKey, EventTimeKey, IndexKey:
+	case *IndexKeyV1_0_0:
+		return UnmarshalIndexKeyV1_0_0(src, dest)
+	case EventKey, ChannelKey, EventTimeKey, IndexKey, IndexKeyV1_0_0:
 		return errors.New("dest must be pointer to a key")
 	default:
 		return errors.New("unrecognized type")
@@ -78,6 +80,14 @@ func Unmarshal(src []byte) (Key, error) {
 	case ChannelTag:
 		var key ChannelKey
 		err := UnmarshalChannelKey(src, &key)
+		return key, err
+	case IndexTag:
+		var key IndexKey
+		err := UnmarshalIndexKey(src, &key)
+		return key, err
+	case IndexTagV1_0_0:
+		var key IndexKeyV1_0_0
+		err := UnmarshalIndexKeyV1_0_0(src, &key)
 		return key, err
 	default:
 		return nil, errors.New("unrecognized type")
