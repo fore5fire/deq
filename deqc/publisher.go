@@ -42,11 +42,16 @@ func (p *Publisher) Pub(ctx context.Context, e Event) (Event, error) {
 		return Event{}, fmt.Errorf("marshal payload: %v", err)
 	}
 
+	var createTime int64
+	if !e.CreateTime.IsZero() {
+		createTime = e.CreateTime.UnixNano()
+	}
+
 	event, err := p.client.Pub(ctx, &api.PubRequest{
 		Event: &api.Event{
 			Id:         e.ID,
 			Topic:      proto.MessageName(e.Msg),
-			CreateTime: e.CreateTime.UnixNano(),
+			CreateTime: createTime,
 			Payload:    payload,
 		},
 		AwaitChannel: p.opts.AwaitChannel,

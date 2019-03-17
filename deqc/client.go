@@ -131,11 +131,16 @@ func (c *Client) Pub(ctx context.Context, e deq.Event) (deq.Event, error) {
 		defaultState = api.EventState_QUEUED
 	}
 
+	var createTime int64
+	if !e.CreateTime.IsZero() {
+		createTime = e.CreateTime.UnixNano()
+	}
+
 	event, err := c.client.Pub(ctx, &api.PubRequest{
 		Event: &api.Event{
 			Id:           e.ID,
 			Topic:        e.Topic,
-			CreateTime:   e.CreateTime.UnixNano(),
+			CreateTime:   createTime,
 			Payload:      e.Payload,
 			DefaultState: defaultState,
 		},

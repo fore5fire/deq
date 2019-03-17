@@ -114,7 +114,7 @@ func writeEvent(txn *badger.Txn, e *Event) error {
 		ID:         e.ID,
 	}.Marshal(nil)
 	if err != nil {
-		return fmt.Errorf("marshal event time key: %v", err)
+		return fmt.Errorf("marshal event key: %v", err)
 	}
 
 	val, err = proto.Marshal(&data.EventPayload{

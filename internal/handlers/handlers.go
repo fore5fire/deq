@@ -37,7 +37,7 @@ func (s *Server) Pub(ctx context.Context, in *pb.PubRequest) (*pb.Event, error) 
 	if in.Event.DefaultState == pb.EventState_UNSPECIFIED_STATE {
 		in.Event.DefaultState = pb.EventState_QUEUED
 	}
-	if in.Event.CreateTime == 0 {
+	if in.Event.CreateTime <= 0 {
 		in.Event.CreateTime = time.Now().UnixNano()
 	}
 
