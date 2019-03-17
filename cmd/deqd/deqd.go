@@ -122,16 +122,13 @@ func run(dbDir, address, statsAddress, certFile, keyFile string, insecure bool) 
 		Dir:                    dbDir,
 		DangerousDeleteCorrupt: deleteCorrupt,
 		DefaultRequeueLimit:    requeueLimit,
+		UpgradeIfNeeded:        true,
 	})
 	if err != nil {
 		return fmt.Errorf("open database: %v", err)
 	}
 	defer store.Close()
 
-	err = store.UpgradeDB()
-	if err != nil {
-		return fmt.Errorf("upgrade db: %v", err)
-	}
 	server := eventserver.NewServer(store)
 
 	var opts []grpc.ServerOption
