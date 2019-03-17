@@ -136,6 +136,7 @@ func Open(opts Options) (*Store, error) {
 		if !opts.UpgradeIfNeeded {
 			return nil, ErrVersionMismatch
 		}
+
 		err = s.upgradeDB(version)
 		if err != nil {
 			return nil, fmt.Errorf("upgrade db: %v", err)

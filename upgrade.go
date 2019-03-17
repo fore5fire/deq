@@ -16,19 +16,18 @@ func (s *Store) upgradeDB(currentVersion string) error {
 	txn := s.db.NewTransaction(true)
 	defer txn.Discard()
 
-	log.Printf("[INFO] current DB version is %s", currentVersion)
-
 	switch currentVersion {
-
+	case dbCodeVersion:
+		return nil
 	case "1.0.0":
-		log.Printf("[INFO] upgrading db...")
+		log.Printf("[INFO] upgrading db from 1.0.0 to %s", dbCodeVersion)
 		batchSize := 500
 		u := &upgradeV1_0_0{}
 		for txn := s.db.NewTransaction(true); u.NextBatch(txn, batchSize); txn = s.db.NewTransaction(true) {
-			log.Printf("%d indexes upgraded, %d indexes failed", u.updated, u.failed)
+			log.Printf("[INFO] %d indexes upgraded, %d indexes failed", u.updated, u.failed)
 		}
-		log.Printf("%d indexes upgraded, %d indexes failed", u.updated, u.failed)
-		log.Printf("db upgraded to version %s", dbCodeVersion)
+		log.Printf("[INFO] %d indexes upgraded, %d indexes failed", u.updated, u.failed)
+		log.Printf("[INFO] db upgraded to version %s", dbCodeVersion)
 
 	default:
 		return fmt.Errorf("unsupported on-disk version: %s", currentVersion)
@@ -50,7 +49,7 @@ func (s *Store) upgradeDB(currentVersion string) error {
 func (s *Store) getDBVersion(txn *badger.Txn) (string, error) {
 	item, err := txn.Get([]byte(dbVersionKey))
 	if err == badger.ErrKeyNotFound {
-		return dbCodeVersion, nil
+		return "1.0.0", nil
 	}
 	if err != nil {
 		return "", err
