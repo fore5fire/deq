@@ -108,7 +108,10 @@ func (u *upgradeV1_0_0) NextBatch(txn *badger.Txn, batchSize int) bool {
 			continue
 		}
 
-		eTime, err := getEventTimePayload(txn, data.EventTimeKey{})
+		eTime, err := getEventTimePayload(txn, data.EventTimeKey{
+			Topic: oldIndex.Topic,
+			ID:    oldIndex.Topic,
+		})
 		if err != nil {
 			log.Printf("get event time payload: %v", err)
 			continue

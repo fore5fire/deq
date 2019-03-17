@@ -463,7 +463,10 @@ func TestDequeue(t *testing.T) {
 	}
 
 	func() {
-		db, err := Open(Options{Dir: dir})
+		db, err := Open(Options{
+			Dir:             dir,
+			UpgradeIfNeeded: true,
+		})
 		if err != nil {
 			t.Fatalf("open db: %v", err)
 		}

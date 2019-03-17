@@ -18,7 +18,8 @@ func newTestDB() (*Store, func()) {
 	}
 
 	db, err := Open(Options{
-		Dir: dir,
+		Dir:             dir,
+		UpgradeIfNeeded: true,
 	})
 	if err != nil {
 		panic("open db: " + err.Error())

@@ -53,7 +53,7 @@ func (key IndexKeyV1_0_0) Marshal(buf []byte) ([]byte, error) {
 		buf = buf[:0]
 	}
 
-	buf = append(buf, IndexTag, Sep)
+	buf = append(buf, IndexTagV1_0_0, Sep)
 	buf = append(buf, key.Topic...)
 	buf = append(buf, Sep)
 	buf = append(buf, key.Value...)
@@ -68,7 +68,7 @@ func UnmarshalIndexKeyV1_0_0(buf []byte, key *IndexKeyV1_0_0) error {
 	if i == -1 {
 		return errors.New("parse tag: null terminator not found")
 	}
-	var comparisonTag = [...]byte{IndexTag}
+	var comparisonTag = [...]byte{IndexTagV1_0_0}
 	if !bytes.Equal(buf[:i], comparisonTag[:]) {
 		return errors.New("buf does not contain an IndexKey")
 	}
