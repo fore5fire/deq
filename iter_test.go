@@ -480,37 +480,38 @@ func TestIndexIter(t *testing.T) {
 	db, discard := newTestDB()
 	defer discard()
 
-	createTime := time.Now()
+	firstTime := time.Now().Round(0)
+	secondTime := firstTime.Add(time.Second).Round(0)
 
 	created := []Event{
 		{
 			ID:         "event2",
 			Topic:      "topic1",
-			CreateTime: createTime,
+			CreateTime: firstTime,
 			Indexes:    []string{"index3"},
 		},
 		{
 			ID:         "event1",
 			Topic:      "topic2",
-			CreateTime: createTime,
+			CreateTime: firstTime,
 			Indexes:    []string{"index2"},
 		},
 		{
 			ID:         "event3",
 			Topic:      "topic1",
-			CreateTime: createTime,
-			Indexes:    []string{"index1", "index4"},
+			CreateTime: firstTime,
+			Indexes:    []string{"index1", "index4", "index0"},
 		},
 		{
 			ID:         "event4",
 			Topic:      "topic1",
-			CreateTime: createTime,
+			CreateTime: secondTime,
 			Indexes:    []string{"index1"},
 		},
 		{
 			ID:         "event1",
 			Topic:      "topic1",
-			CreateTime: createTime,
+			CreateTime: secondTime,
 		},
 	}
 
@@ -525,8 +526,8 @@ func TestIndexIter(t *testing.T) {
 		{
 			ID:           "event3",
 			Topic:        "topic1",
-			Indexes:      []string{"index1", "index4"},
-			CreateTime:   createTime,
+			Indexes:      []string{"index1", "index4", "index0"},
+			CreateTime:   firstTime,
 			DefaultState: EventStateQueued,
 			State:        EventStateQueued,
 		},
@@ -534,7 +535,7 @@ func TestIndexIter(t *testing.T) {
 			ID:           "event4",
 			Topic:        "topic1",
 			Indexes:      []string{"index1"},
-			CreateTime:   createTime,
+			CreateTime:   secondTime,
 			DefaultState: EventStateQueued,
 			State:        EventStateQueued,
 		},
@@ -542,15 +543,15 @@ func TestIndexIter(t *testing.T) {
 			ID:           "event2",
 			Topic:        "topic1",
 			Indexes:      []string{"index3"},
-			CreateTime:   createTime,
+			CreateTime:   firstTime,
 			DefaultState: EventStateQueued,
 			State:        EventStateQueued,
 		},
 		{
 			ID:           "event3",
 			Topic:        "topic1",
-			Indexes:      []string{"index1", "index4"},
-			CreateTime:   createTime,
+			Indexes:      []string{"index1", "index4", "index0"},
+			CreateTime:   firstTime,
 			DefaultState: EventStateQueued,
 			State:        EventStateQueued,
 		},
@@ -636,14 +637,6 @@ func TestIndexIterReversed(t *testing.T) {
 		},
 		{
 			ID:           "event4",
-			Topic:        "topic1",
-			Indexes:      []string{"index1"},
-			CreateTime:   createTime,
-			DefaultState: EventStateQueued,
-			State:        EventStateQueued,
-		},
-		{
-			ID:           "event3",
 			Topic:        "topic1",
 			Indexes:      []string{"index1"},
 			CreateTime:   createTime,

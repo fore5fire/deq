@@ -1,45 +1,47 @@
 package deq
 
 import (
+	"fmt"
 	"log"
 
 	"github.com/dgraph-io/badger"
+	"github.com/gogo/protobuf/proto"
+	"gitlab.com/katcheCode/deq/internal/data"
 )
 
-// UpgradeDB upgrades the store's db to the current version.
-// It is not safe to update the database concurrently with UpgradeDB.
-func (s *Store) UpgradeDB() error {
+// upgradeDB upgrades the store's db to the current version.
+// It is not safe to use the database concurrently with upgradeDB.
+func (s *Store) upgradeDB(currentVersion string) error {
 
 	txn := s.db.NewTransaction(true)
 	defer txn.Discard()
 
-	currentVersion, err := s.getDBVersion(txn)
+	log.Printf("[INFO] current DB version is %s", currentVersion)
+
+	switch currentVersion {
+
+	case "1.0.0":
+		log.Printf("[INFO] upgrading db...")
+		batchSize := 500
+		u := &upgradeV1_0_0{}
+		for txn := s.db.NewTransaction(true); u.NextBatch(txn, batchSize); txn = s.db.NewTransaction(true) {
+			log.Printf("%d indexes upgraded, %d indexes failed", u.updated, u.failed)
+		}
+		log.Printf("%d indexes upgraded, %d indexes failed", u.updated, u.failed)
+		log.Printf("db upgraded to version %s", dbCodeVersion)
+
+	default:
+		return fmt.Errorf("unsupported on-disk version: %s", currentVersion)
+	}
+
+	err := txn.Set([]byte(dbVersionKey), []byte(dbCodeVersion))
 	if err != nil {
 		return err
 	}
 
-	log.Printf("[INFO] current DB version is %s", currentVersion)
-
-	if currentVersion == "0" {
-		panic("DB version 0 is no longer supported.")
-		// log.Printf("[INFO] upgrading db...")
-
-		// // err = upgradeV0EventsToV1(s.db)
-		// if err != nil {
-		// 	return err
-		// }
-
-		// err := txn.Set([]byte(dbVersionKey), []byte(dbCodeVersion))
-		// if err != nil {
-		// 	return err
-		// }
-
-		// err = txn.Commit(nil)
-		// if err != nil {
-		// 	return fmt.Errorf("commit db upgrade: %v", err)
-		// }
-
-		// log.Printf("db upgraded to version %s", dbCodeVersion)
+	err = txn.Commit(nil)
+	if err != nil {
+		return fmt.Errorf("commit db upgrade: %v", err)
 	}
 
 	return nil
@@ -48,7 +50,7 @@ func (s *Store) UpgradeDB() error {
 func (s *Store) getDBVersion(txn *badger.Txn) (string, error) {
 	item, err := txn.Get([]byte(dbVersionKey))
 	if err == badger.ErrKeyNotFound {
-		return "1.0.0", nil
+		return dbCodeVersion, nil
 	}
 	if err != nil {
 		return "", err
@@ -62,78 +64,81 @@ func (s *Store) getDBVersion(txn *badger.Txn) (string, error) {
 	return string(version), nil
 }
 
-// upgradeV0EventsToV1 upgrades all events from v0 to v1 without commiting the txn.
-// func upgradeV0EventsToV1(db *badger.DB) error {
-// 	chunkSize := 500
-// 	updated := 0
-// 	skipped := 0
-// 	prefix := []byte{data.EventV0Tag}
-// 	cursor := prefix
-// 	for {
-// 		i := 0
+type upgradeV1_0_0 struct {
+	updated, failed int
+	cursor          []byte
+}
 
-// 		err := db.Update(func(txn *badger.Txn) error {
-// 			it := txn.NewIterator(badger.DefaultIteratorOptions)
-// 			defer it.Close()
+// NextBatch upgrades the database from v1.0.0 to the current version. It is the caller's
+// responsibility to commit the Txn.
+func (u *upgradeV1_0_0) NextBatch(txn *badger.Txn, batchSize int) bool {
 
-// 			for it.Seek(append(cursor, 0)); it.ValidForPrefix(prefix) && i < chunkSize; it.Next() {
-// 				i++
-// 				item := it.Item()
-// 				buf, err := item.Value()
-// 				if err != nil {
-// 					return fmt.Errorf("get item value: %v", err)
-// 				}
+	prefix := []byte{data.IndexTagV1_0_0, data.Sep}
+	if len(u.cursor) == 0 {
+		u.cursor = prefix
+	}
 
-// 				cursor = item.KeyCopy(cursor)
+	it := txn.NewIterator(badger.DefaultIteratorOptions)
+	defer it.Close()
 
-// 				var event deq.EventV0
-// 				err = proto.Unmarshal(buf, &event)
-// 				if err != nil {
-// 					return fmt.Errorf("unmarshal v0 formatted event: %v", err)
-// 				}
+	var key []byte
+	var i int
+	for it.Seek(append(u.cursor, 0)); it.ValidForPrefix(prefix); it.Next() {
+		i++
+		if i >= batchSize {
+			return true
+		}
 
-// 				e := deq.Event{
-// 					Topic:   strings.TrimPrefix(strings.TrimPrefix(event.Payload.GetTypeUrl(), "types.googleapis.com/"), "type.googleapis.com/"),
-// 					Id:      "v0-" + base64.RawURLEncoding.EncodeToString(event.Id),
-// 					Payload: event.Payload.GetValue(),
-// 					// We didn't keep track of the state before, so let's assume they're all
-// 					// dequeued to prevent a mass send-out
-// 					DefaultState: EventStateQueued,
-// 					CreateTime:   deq.DeprecatedTimeFromID(event.Id).UnixNano(),
-// 				}
+		item := it.Item()
 
-// 				err = writeEvent(txn, &e)
-// 				if err != nil {
-// 					log.Printf("write v1 event %s: %v", e.Id, err)
-// 					skipped++
-// 					continue
-// 				}
+		u.cursor = item.KeyCopy(u.cursor)
 
-// 				err = txn.Delete(item.KeyCopy(nil))
-// 				if err != nil {
-// 					log.Printf("delete v0 event %v: %v", event.Id, err)
-// 					skipped++
-// 					continue
-// 				}
+		var oldIndex data.IndexKeyV1_0_0
+		err := data.UnmarshalIndexKeyV1_0_0(item.Key(), &oldIndex)
+		if err != nil {
+			log.Printf("unmarshal v1.0.0 index key: %v", err)
+			continue
+		}
 
-// 				updated++
-// 			}
-// 			return nil
-// 		})
-// 		if err != nil {
-// 			return err
-// 		}
+		key, err = data.IndexKey{
+			Topic: oldIndex.Topic,
+			Value: oldIndex.Value,
+		}.Marshal(key)
+		if err != nil {
+			log.Printf("marshal updated index: %v", err)
+			continue
+		}
 
-// 		log.Printf("%d upgraded, %d skipped", updated, skipped)
-// 		if i < chunkSize {
-// 			break
-// 		}
-// 	}
+		eTime, err := getEventTimePayload(txn, data.EventTimeKey{})
+		if err != nil {
+			log.Printf("get event time payload: %v", err)
+			continue
+		}
 
-// 	return nil
-// }
+		buf, err := proto.Marshal(&data.IndexPayload{
+			EventId:    oldIndex.ID,
+			CreateTime: eTime.CreateTime,
+		})
+
+		err = txn.Set(key, buf)
+		if err != nil {
+			log.Printf("write new index: %v", err)
+			continue
+		}
+
+		err = txn.Delete(item.Key())
+		if err != nil {
+			log.Printf("delete old index %v: %v", oldIndex, err)
+			continue
+		}
+
+		u.updated++
+	}
+	u.failed = i - u.updated
+	return false
+}
 
 const (
 	dbVersionKey  = "___DEQ_DB_VERSION___"
-	dbCodeVersion = "1.0.0"
+	dbCodeVersion = "1.1.0"
 )

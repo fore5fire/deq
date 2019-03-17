@@ -13,12 +13,15 @@ import (
 
 // Tags are used to group keys by type.
 const (
-	ChannelTag        = 'h'
-	EventTag          = 'e'
-	EventV0Tag        = 'E'
-	EventTimeTag      = 't'
-	IndexTag          = 'i'
-	Sep          byte = 0
+	ChannelTag   = 'h'
+	EventTag     = 'e'
+	EventV0Tag   = 'E'
+	EventTimeTag = 't'
+	IndexTag     = 'I'
+
+	Sep byte = 0
+
+	IndexTagV1_0_0 = 'i'
 
 	FirstTopic = "\x01"
 	LastTopic  = "\xff\xff\xff\xff"

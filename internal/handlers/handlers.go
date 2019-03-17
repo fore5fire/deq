@@ -37,8 +37,9 @@ func (s *Server) Pub(ctx context.Context, in *pb.PubRequest) (*pb.Event, error) 
 	if in.Event.DefaultState == pb.EventState_UNSPECIFIED_STATE {
 		in.Event.DefaultState = pb.EventState_QUEUED
 	}
-
-	in.Event.CreateTime = time.Now().UnixNano()
+	if in.Event.CreateTime == 0 {
+		in.Event.CreateTime = time.Now().UnixNano()
+	}
 
 	channel := s.store.Channel(in.AwaitChannel, in.Event.Topic)
 	defer channel.Close()

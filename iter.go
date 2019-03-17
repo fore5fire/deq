@@ -450,7 +450,21 @@ func (iter *IndexIter) Next() bool {
 		return false
 	}
 
-	e, err := getEvent(iter.txn, key.Topic, key.ID, iter.channel)
+	// TODO: support index-only iteration to only lookup when needed.
+	buf, err := item.Value()
+	if err != nil {
+		iter.err = fmt.Errorf("read index payload: %v", err)
+		return false
+	}
+
+	var payload data.IndexPayload
+	err = proto.Unmarshal(buf, &payload)
+	if err != nil {
+		iter.err = fmt.Errorf("unmarshal index payload: %v", err)
+		return false
+	}
+
+	e, err := getEvent(iter.txn, key.Topic, payload.EventId, iter.channel)
 	if err != nil {
 		iter.err = err
 		return false

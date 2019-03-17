@@ -2,6 +2,7 @@ package deq
 
 import (
 	"fmt"
+	"hash/crc32"
 	"log"
 	"time"
 
@@ -131,17 +132,28 @@ func writeEvent(txn *badger.Txn, e *Event) error {
 	}
 
 	for _, index := range e.Indexes {
-		indexKey, err := data.IndexKey{
+		indexKey := data.IndexKey{
 			Topic: e.Topic,
 			Value: index,
-			ID:    e.ID,
-		}.Marshal(nil)
-		if err != nil {
-			return fmt.Errorf("marshal index: %v", err)
 		}
-		err = txn.Set(indexKey, nil)
+
+		// Check if index is in use. Only overwrite if newer, or if create time is the same if the event
+		// id hash is greater.
+		var existing data.IndexPayload
+		err := getIndexPayload(txn, indexKey, &existing)
+		if err != nil && err != badger.ErrKeyNotFound {
+			return fmt.Errorf("lookup existing index: %v", err)
+		}
+		if err == nil && !shouldUpdateIndex(&existing, e) {
+			continue
+		}
+
+		err = writeIndex(txn, indexKey, &data.IndexPayload{
+			EventId:    e.ID,
+			CreateTime: e.CreateTime.UnixNano(),
+		})
 		if err != nil {
-			return fmt.Errorf("write index: %v", err)
+			return err
 		}
 	}
 
@@ -181,6 +193,62 @@ func writeEvent(txn *badger.Txn, e *Event) error {
 				return fmt.Errorf("set event state on channel %s: %v", key.Channel, err)
 			}
 		}
+	}
+
+	return nil
+}
+
+func shouldUpdateIndex(existing *data.IndexPayload, candidate *Event) bool {
+	createTime := candidate.CreateTime.UnixNano()
+
+	// Use the event with the later create time.
+	if existing.CreateTime != createTime {
+		return existing.CreateTime < createTime
+	}
+
+	// If the create times are equal, use the one with the higher crc32 hash.
+	hashExisting := crc32.ChecksumIEEE([]byte(existing.EventId))
+	hashCandidate := crc32.ChecksumIEEE([]byte(candidate.ID))
+	if hashExisting != hashCandidate {
+		return hashExisting < hashCandidate
+	}
+
+	// If there's a hash collision, just use the event with the highest ID.
+	return existing.EventId < candidate.ID
+}
+
+func getIndexPayload(txn *badger.Txn, key data.IndexKey, dst *data.IndexPayload) error {
+	rawkey, err := key.Marshal(nil)
+	if err != nil {
+		return fmt.Errorf("marshal index: %v", err)
+	}
+	item, err := txn.Get(rawkey)
+	if err != nil {
+		return err
+	}
+	buf, err := item.Value()
+	if err != nil {
+		return err
+	}
+	err = proto.Unmarshal(buf, dst)
+	if err != nil {
+		return fmt.Errorf("unmarshal payload: %v", err)
+	}
+	return nil
+}
+
+func writeIndex(txn *badger.Txn, key data.IndexKey, payload *data.IndexPayload) error {
+	rawkey, err := key.Marshal(nil)
+	if err != nil {
+		return fmt.Errorf("marshal index: %v", err)
+	}
+	buf, err := proto.Marshal(payload)
+	if err != nil {
+		return fmt.Errorf("marshal payload: %v", err)
+	}
+	err = txn.Set(rawkey, buf)
+	if err != nil {
+		return err
 	}
 
 	return nil

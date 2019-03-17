@@ -9,6 +9,11 @@ message EventTimePayload {
   sfixed64 create_time = 1;
 }
 
+message IndexPayload {
+  string event_id = 1;
+  sfixed64 create_time = 2;
+}
+
 message EventPayload {
   bytes payload = 1;
   EventState default_event_state = 2;

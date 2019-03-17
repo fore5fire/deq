@@ -17,6 +17,8 @@ import (
 	"log"
 	"sync"
 	"time"
+	"unicode"
+	"unicode/utf8"
 
 	"github.com/dgraph-io/badger"
 	"github.com/dgraph-io/badger/options"
@@ -48,6 +50,10 @@ type Options struct {
 	// DefaultRequeueLimit is the default RequeueLimit for new events. Defaults to 40. Set to -1 for
 	// no default limit.
 	DefaultRequeueLimit int
+	// UpgradeIfNeeded causes the database to be upgraded if needed when it is opened. If
+	// UpgradeIfNeeded is false and the version of the data on disk doesn't match the version of the
+	// running code, Open returns an ErrVersionMismatch.
+	UpgradeIfNeeded bool
 }
 
 // LoadingMode specifies how to load data into memory. Generally speaking, lower memory is slower
@@ -120,6 +126,22 @@ func Open(opts Options) (*Store, error) {
 		defaultRequeueLimit: requeueLimit,
 	}
 
+	txn := db.NewTransaction(opts.UpgradeIfNeeded)
+
+	version, err := s.getDBVersion(txn)
+	if err != nil {
+		return nil, fmt.Errorf("read current database version: %v", err)
+	}
+	if version != dbCodeVersion {
+		if !opts.UpgradeIfNeeded {
+			return nil, ErrVersionMismatch
+		}
+		err = s.upgradeDB(version)
+		if err != nil {
+			return nil, fmt.Errorf("upgrade db: %v", err)
+		}
+	}
+
 	go s.garbageCollect(time.Minute * 5)
 	go s.listenOut()
 
@@ -153,9 +175,31 @@ func (s *Store) Close() error {
 	return nil
 }
 
+func isValidTopic(topic string) bool {
+	if len(topic) == 0 {
+		return false
+	}
+
+	first, size := utf8.DecodeRuneInString(topic)
+	if (first < 'a' || first > 'z') && (first < 'A' || first > 'Z') || unicode.IsDigit(first) {
+		return false
+	}
+
+	for _, r := range topic[size:] {
+		if !unicode.IsLetter(r) && !unicode.IsNumber(r) && r != '-' && r != '.' && r != '_' {
+			return false
+		}
+	}
+
+	return true
+}
+
 // Pub publishes an event.
 func (s *Store) Pub(ctx context.Context, e Event) (Event, error) {
 
+	if !isValidTopic(e.Topic) {
+		return Event{}, fmt.Errorf("e.Topic is not valid")
+	}
 	if e.CreateTime.IsZero() {
 		e.CreateTime = time.Now()
 	}
@@ -300,8 +344,10 @@ func (s *Store) garbageCollect(interval time.Duration) {
 var (
 	// ErrNotFound is returned when a requested event doesn't exist in the database
 	ErrNotFound = errors.New("event not found")
-	// ErrInternal is returned when an interanl error occurs
-	ErrInternal = errors.New("internal error")
 	// ErrAlreadyExists is returned when creating an event with a key that is in use
 	ErrAlreadyExists = errors.New("already exists")
+	// ErrVersionMismatch is returned when opening a database with an incorrect format.
+	ErrVersionMismatch = errors.New("version mismatch")
+	// ErrInternal is returned when an interanl error occurs
+	ErrInternal = errors.New("internal error")
 )

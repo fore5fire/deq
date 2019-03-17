@@ -36,8 +36,8 @@ message Event {
   // topic.
   bytes payload = 3;
   // Time the event was created, represented as the number of nanoseconds since the unix epoch.
-  // Output only.
-  sfixed64 create_time = 4;
+  // Defaults to the current time.
+  fixed64 create_time = 4;
   // The initial state of this event for existing channels. If not QUEUED, the event will be created
   // but not sent to subscribers of topic.
   EventState default_state = 5;
