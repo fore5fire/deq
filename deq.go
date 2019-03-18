@@ -44,9 +44,9 @@ type Options struct {
 	Dir string
 	// LoadingMode defaults to LoadingModeBalanced
 	LoadingMode LoadingMode
-	// DangerousDeleteCorrupt allows DEQ to delete any corrupt data from an unclean shutdown. If this
-	// option is false, attempting to call Open on a database with corrupt data will fail.
-	DangerousDeleteCorrupt bool
+	// KeepCorrupt prevents DEQ from deleting any corrupt data after an unclean shutdown. If this
+	// option is true, attempting to call Open on a database with corrupt data will fail.
+	KeepCorrupt bool
 	// DefaultRequeueLimit is the default RequeueLimit for new events. Defaults to 40. Set to -1 for
 	// no default limit.
 	DefaultRequeueLimit int
@@ -111,7 +111,7 @@ func Open(opts Options) (*Store, error) {
 	badgerOpts.SyncWrites = true
 	badgerOpts.TableLoadingMode, badgerOpts.ValueLogLoadingMode = opts.LoadingMode.badgerOptions()
 	badgerOpts.MaxTableSize = 1 << 24
-	badgerOpts.Truncate = opts.DangerousDeleteCorrupt
+	badgerOpts.Truncate = !opts.KeepCorrupt
 
 	db, err := badger.Open(badgerOpts)
 	if err != nil {

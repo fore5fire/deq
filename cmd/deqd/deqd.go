@@ -37,8 +37,9 @@ var (
 	// statsAddress is the address that deq publishes stats on
 	statsAddress = os.Getenv("DEQ_STATS_ADDRESS")
 
-	// deleteCorrupt specifies if we should allow the database to delete corrupt data.
-	deleteCorrupt = strings.ToLower(os.Getenv("DEQ_DANGEROUS_DELETE_CORRUPT")) == "true"
+	// KeepCorrupt prevents DEQ from deleting any corrupt data after an unclean shutdown. If true,
+	// deqd will exit during startup of a database with corrupt data.
+	keepCorrupt = strings.ToLower(os.Getenv("DEQ_KEEP_CORRUPT")) == "true"
 
 	// requeueLimit specifies the default maximum requeues of a single event.
 	requeueLimit = 40
@@ -119,10 +120,10 @@ func run(dbDir, address, statsAddress, certFile, keyFile string, insecure bool) 
 	}
 
 	store, err := deq.Open(deq.Options{
-		Dir:                    dbDir,
-		DangerousDeleteCorrupt: deleteCorrupt,
-		DefaultRequeueLimit:    requeueLimit,
-		UpgradeIfNeeded:        true,
+		Dir:                 dbDir,
+		KeepCorrupt:         keepCorrupt,
+		DefaultRequeueLimit: requeueLimit,
+		UpgradeIfNeeded:     true,
 	})
 	if err != nil {
 		return fmt.Errorf("open database: %v", err)
