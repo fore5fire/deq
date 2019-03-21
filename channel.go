@@ -124,19 +124,85 @@ func (c *Channel) Next(ctx context.Context) (Event, error) {
 //   }
 //   err := <-errc
 //   ...
-func (c *Channel) Sub(ctx context.Context, handler func(Event) (*Event, ack.Code)) error {
+func (c *Channel) Sub(ctx context.Context, handler func(context.Context, Event) (*Event, ack.Code)) error {
 
 	errc := make(chan error, 1)
-	responses := make(chan *Event, 1)
-	defer close(responses)
 
-	// worker to publish responses event in parallel with processing ack.Code
-	go func() {
-		for response := range responses {
-			_, err := c.store.Pub(ctx, *response)
-			errc <- err
-		}
-	}()
+	type Result struct {
+		req  Event
+		resp *Event
+		code ack.Code
+	}
+
+	// Wait for background goroutine to cleanup before returning
+	var wg sync.WaitGroup
+	defer wg.Wait()
+
+	results := make(chan Result, 30)
+	defer close(results)
+
+	ctx, cancel := context.WithCancel(ctx)
+
+	// workers handle results without blocking processing of next event
+	const numWorkers = 3
+	wg.Add(numWorkers)
+	for i := 0; i < numWorkers; i++ {
+		go func() {
+			defer wg.Done()
+			defer cancel()
+
+			for result := range results {
+
+				if result.resp != nil {
+					_, err := c.store.Pub(ctx, *result.resp)
+					if err != nil {
+						select {
+						case errc <- err:
+						default:
+						}
+						continue
+					}
+				}
+
+				var err error
+				switch result.code {
+				case ack.DequeueOK:
+					err = c.SetEventState(result.req.ID, EventStateDequeuedOK)
+					if err != nil {
+						err = fmt.Errorf("set event state: %v", err)
+					}
+				case ack.DequeueError:
+					err = c.SetEventState(result.req.ID, EventStateDequeuedError)
+					if err != nil {
+						err = fmt.Errorf("set event state: %v", err)
+					}
+				case ack.RequeueConstant:
+					err = c.RequeueEvent(result.req, time.Second)
+					if err != nil {
+						err = fmt.Errorf("requeue event: %v", err)
+					}
+				case ack.RequeueLinear:
+					err = c.RequeueEvent(result.req, LinearBackoff(time.Second)(result.req))
+					if err != nil {
+						err = fmt.Errorf("requeue event: %v", err)
+					}
+				case ack.RequeueExponential:
+					err = c.RequeueEvent(result.req, ExponentialBackoff(time.Second)(result.req))
+					if err != nil {
+						err = fmt.Errorf("requeue event: %v", err)
+					}
+				default:
+					err = fmt.Errorf("handler returned unrecognized ack.Code")
+				}
+				if err != nil {
+					select {
+					case errc <- err:
+					default:
+					}
+				}
+			}
+		}()
+	}
 
 	for {
 		e, err := c.Next(ctx)
@@ -144,47 +210,11 @@ func (c *Channel) Sub(ctx context.Context, handler func(Event) (*Event, ack.Code
 			return err
 		}
 
-		response, code := handler(e)
-
-		if response != nil {
-			responses <- response
-		}
-
-		switch code {
-		case ack.DequeueOK:
-			err := c.SetEventState(e.ID, EventStateDequeuedOK)
-			if err != nil {
-				errc <- fmt.Errorf("set event state: %v", err)
-			}
-		case ack.DequeueError:
-			err := c.SetEventState(e.ID, EventStateDequeuedError)
-			if err != nil {
-				errc <- fmt.Errorf("set event state: %v", err)
-			}
-		case ack.RequeueConstant:
-			err := c.RequeueEvent(e, time.Second)
-			if err != nil {
-				errc <- fmt.Errorf("requeue event: %v", err)
-			}
-		case ack.RequeueLinear:
-			err := c.RequeueEvent(e, LinearBackoff(time.Second)(e))
-			if err != nil {
-				errc <- fmt.Errorf("requeue event: %v", err)
-			}
-		case ack.RequeueExponential:
-			err := c.RequeueEvent(e, ExponentialBackoff(time.Second)(e))
-			if err != nil {
-				errc <- fmt.Errorf("requeue event: %v", err)
-			}
-		default:
-			errc <- fmt.Errorf("handler returned unrecognized ack.Code")
-		}
-
-		if response != nil {
-			err = <-errc
-			if err != nil {
-				return fmt.Errorf("publish result: %v", err)
-			}
+		response, code := handler(ctx, e)
+		select {
+		case results <- Result{e, response, code}:
+		case err := <-errc:
+			return err
 		}
 	}
 }

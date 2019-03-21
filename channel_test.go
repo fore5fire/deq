@@ -153,7 +153,7 @@ func TestSub(t *testing.T) {
 	// // Subscribe to events
 	go func() {
 		channel := db.Channel("test-channel", "TopicA")
-		err := channel.Sub(ctx, func(e Event) (*Event, ack.Code) {
+		err := channel.Sub(ctx, func(ctx context.Context, e Event) (*Event, ack.Code) {
 
 			recieved <- e
 
@@ -170,7 +170,7 @@ func TestSub(t *testing.T) {
 	// Subscribe to response events
 	go func() {
 		channel := db.Channel("test-channel", "Response-TopicA")
-		err := channel.Sub(ctx, func(e Event) (*Event, ack.Code) {
+		err := channel.Sub(ctx, func(ctx context.Context, e Event) (*Event, ack.Code) {
 
 			responses <- e
 
