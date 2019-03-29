@@ -1,4 +1,4 @@
-package deqc
+package legacyclient
 
 import (
 	"context"
@@ -6,6 +6,7 @@ import (
 	"time"
 
 	"github.com/gogo/protobuf/proto"
+	"gitlab.com/katcheCode/deq"
 	api "gitlab.com/katcheCode/deq/api/v1/deq"
 	"google.golang.org/grpc"
 )
@@ -65,15 +66,15 @@ func (p *Publisher) Pub(ctx context.Context, e Event) (Event, error) {
 
 func protoToEvent(event *api.Event, msg Message, sub *Subscriber) Event {
 
-	var state EventState
+	var state deq.EventState
 	switch event.State {
 	case api.EventState_QUEUED:
-		state = EventStateQueued
+		state = deq.EventStateQueued
 	case api.EventState_DEQUEUED_OK:
-		state = EventStateDequeuedOK
+		state = deq.EventStateDequeuedOK
 	case api.EventState_DEQUEUED_ERROR:
 	default:
-		state = EventStateUnspecified
+		state = deq.EventStateUnspecified
 	}
 
 	return Event{

@@ -1,4 +1,4 @@
-package deq
+package deqdb
 
 import (
 	"fmt"
@@ -8,6 +8,7 @@ import (
 
 	"github.com/dgraph-io/badger"
 	"github.com/gogo/protobuf/proto"
+	"gitlab.com/katcheCode/deq"
 	"gitlab.com/katcheCode/deq/internal/data"
 )
 
@@ -26,8 +27,8 @@ type sharedChannel struct {
 	missedMutex sync.Mutex
 	missed      bool
 
-	in  chan *Event
-	out chan *Event
+	in  chan *deq.Event
+	out chan *deq.Event
 	// done signals goroutines created by the sharedChannel to terminate.
 	done chan struct{}
 	// wg waits on all goroutines created by the sharedChannel to be done
@@ -81,8 +82,8 @@ func (s *Store) listenSharedChannel(name, topic string) (*sharedChannel, func())
 		topic: topic,
 		db:    s.db,
 
-		in:  make(chan *Event, 20),
-		out: make(chan *Event, 20),
+		in:  make(chan *deq.Event, 20),
+		out: make(chan *deq.Event, 20),
 
 		stateSubs: make(map[string]map[*EventStateSubscription]struct{}),
 		done:      make(chan struct{}),
@@ -118,7 +119,7 @@ func (s *sharedChannel) setMissed(m bool) {
 	s.missedMutex.Unlock()
 }
 
-func (s *sharedChannel) RequeueEvent(e Event, delay time.Duration) error {
+func (s *sharedChannel) RequeueEvent(e deq.Event, delay time.Duration) error {
 	requeue := func() error {
 		// retry for up to 10 conflicts.
 		for i := 0; i < 10; i++ {
@@ -324,7 +325,7 @@ func (s *sharedChannel) catchUp(cursor []byte) ([]byte, error) {
 		select {
 		case <-s.done:
 			return lastKey, nil
-		case s.out <- &Event{
+		case s.out <- &deq.Event{
 			ID:           key.ID,
 			Topic:        key.Topic,
 			CreateTime:   key.CreateTime,
@@ -369,7 +370,7 @@ func (s *sharedChannel) getCursor(topic string) ([]byte, error) {
 	return current, nil
 }
 
-func (s *sharedChannel) broadcastEventUpdated(id string, state EventState) {
+func (s *sharedChannel) broadcastEventUpdated(id string, state deq.EventState) {
 	s.stateSubsMutex.RLock()
 	defer s.stateSubsMutex.RUnlock()
 

@@ -1,4 +1,4 @@
-package deq
+package deqdb
 
 import (
 	"fmt"

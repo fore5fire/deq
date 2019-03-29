@@ -38,6 +38,8 @@ message Event {
   // Time the event was created, represented as the number of nanoseconds since the unix epoch.
   // Defaults to the current time.
   sfixed64 create_time = 4;
+  // Indexes of the event.
+  repeated string indexes = 8;
   // The initial state of this event for existing channels. If not QUEUED, the event will be created
   // but not sent to subscribers of topic.
   EventState default_state = 5;
@@ -151,6 +153,9 @@ message ListRequest {
   string min_id = 3;
   // If specified, only events with ids lexigraphically less than max_id will be sent.
   string max_id = 4;
+  // If true, the list will be returned ordered by the event index instead of event IDs. Events can
+  // be returned zero or multiple times based on the number of indexes they have specified.
+  bool use_index = 7;
   // The maximum number of results to retrieve.
   // Defaults to 20.
   int32 page_size = 5;

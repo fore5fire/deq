@@ -8,17 +8,18 @@ import (
 
 	"gitlab.com/katcheCode/deq"
 	pb "gitlab.com/katcheCode/deq/api/v1/deq"
+	"gitlab.com/katcheCode/deq/deqdb"
 	"google.golang.org/grpc/codes"
 	"google.golang.org/grpc/status"
 )
 
 // Server represents the gRPC server
 type Server struct {
-	store *deq.Store
+	store *deqdb.Store
 }
 
 // NewServer creates a new event store server initalized with a backing event store
-func NewServer(eventStore *deq.Store) *Server {
+func NewServer(eventStore *deqdb.Store) *Server {
 	return &Server{eventStore}
 }
 
@@ -44,7 +45,7 @@ func (s *Server) Pub(ctx context.Context, in *pb.PubRequest) (*pb.Event, error) 
 	channel := s.store.Channel(in.AwaitChannel, in.Event.Topic)
 	defer channel.Close()
 
-	var sub *deq.EventStateSubscription
+	var sub *deqdb.EventStateSubscription
 	if in.AwaitChannel != "" {
 		sub = channel.NewEventStateSubscription(in.Event.Id)
 		defer sub.Close()
@@ -94,7 +95,7 @@ func (s *Server) Sub(in *pb.SubRequest, stream pb.DEQ_SubServer) error {
 	channel := s.store.Channel(in.Channel, in.Topic)
 	defer channel.Close()
 
-	channel.BackoffFunc(deq.ExponentialBackoff(baseRequeueDelay))
+	channel.BackoffFunc(deqdb.ExponentialBackoff(baseRequeueDelay))
 
 	nextCtx := stream.Context()
 	cancel := func() {}
@@ -163,7 +164,7 @@ func (s *Server) Ack(ctx context.Context, in *pb.AckRequest) (*pb.AckResponse, e
 	channel := s.store.Channel(in.Channel, in.Topic)
 	defer channel.Close()
 
-	e, err := channel.Get(in.EventId)
+	e, err := channel.Get(ctx, in.EventId)
 	if err == deq.ErrNotFound {
 		return nil, status.Error(codes.NotFound, "")
 	}
@@ -172,7 +173,7 @@ func (s *Server) Ack(ctx context.Context, in *pb.AckRequest) (*pb.AckResponse, e
 		return nil, status.Error(codes.Internal, "")
 	}
 
-	err = channel.SetEventState(in.EventId, eventState)
+	err = channel.SetEventState(ctx, in.EventId, eventState)
 	if err == deq.ErrNotFound {
 		return nil, status.Error(codes.NotFound, "")
 	}
@@ -199,7 +200,7 @@ func (s *Server) Ack(ctx context.Context, in *pb.AckRequest) (*pb.AckResponse, e
 			delay = time.Hour
 		}
 
-		channel.RequeueEvent(e, delay)
+		channel.RequeueEvent(ctx, e, delay)
 	}
 
 	return &pb.AckResponse{}, nil
@@ -234,7 +235,7 @@ func (s *Server) Get(ctx context.Context, in *pb.GetRequest) (*pb.Event, error) 
 			return nil, status.Error(codes.Internal, "")
 		}
 	} else {
-		e, err = channel.Get(in.EventId)
+		e, err = channel.Get(ctx, in.EventId)
 		if err != nil {
 			log.Printf("Get: get event: %v", err)
 			return nil, status.Error(codes.Internal, "")
@@ -264,11 +265,16 @@ func (s *Server) List(ctx context.Context, in *pb.ListRequest) (*pb.ListResponse
 	opts.Min = in.MinId
 	opts.Max = in.MaxId
 
-	iter := channel.NewEventIter(opts)
+	var iter deq.EventIter
+	if in.UseIndex {
+		iter = channel.NewIndexIter(opts)
+	} else {
+		iter = channel.NewEventIter(opts)
+	}
 	defer iter.Close()
 
 	for {
-		for len(events) < cap(events) && iter.Next() {
+		for len(events) < cap(events) && iter.Next(ctx) {
 			events = append(events, iter.Event())
 		}
 		if iter.Err() == nil {
@@ -320,7 +326,7 @@ func (s *Server) Topics(ctx context.Context, in *pb.TopicsRequest) (*pb.TopicsRe
 	iter := s.store.NewTopicIter(opts)
 	defer iter.Close()
 
-	for ctx.Err() == nil && iter.Next() {
+	for ctx.Err() == nil && iter.Next(ctx) {
 		topics = append(topics, iter.Topic())
 	}
 

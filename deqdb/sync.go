@@ -1,31 +1,22 @@
-package deq
+package deqdb
 
 import (
 	"context"
 	"sync"
 
+	"gitlab.com/katcheCode/deq"
 	api "gitlab.com/katcheCode/deq/api/v1/deq"
 )
 
-type Client interface {
-	Pub(context.Context, Event) (Event, error)
-	// Channel(name, topic string) Channel
-}
-
-// type Channel interface {
-// 	Sub(context.Context, func(Event) (Event, ack.Code))
-// 	Get(context.Context, string) (Event, error)
-// }
-
 // SyncTo copies the events in c's queue to the database that client is connected to.
-func (c *Channel) SyncTo(ctx context.Context, client Client) error {
+func (c *Channel) SyncTo(ctx context.Context, client deq.Client) error {
 
 	ctx, cancel := context.WithCancel(ctx)
 	defer cancel()
 
 	workerCount := 3
 
-	queue := make(chan Event, 30)
+	queue := make(chan deq.Event, 30)
 	errorc := make(chan error, 1)
 
 	wg := sync.WaitGroup{}
@@ -73,9 +64,9 @@ func (c *Channel) SyncTo(ctx context.Context, client Client) error {
 	return <-errorc
 }
 
-func syncWorker(ctx context.Context, client Client, queue <-chan Event) error {
+func syncWorker(ctx context.Context, client deq.Client, queue <-chan deq.Event) error {
 	for e := range queue {
-		_, err := client.Pub(ctx, Event{
+		_, err := client.Pub(ctx, deq.Event{
 			ID:         e.ID,
 			CreateTime: e.CreateTime,
 			Topic:      e.Topic,
@@ -89,15 +80,15 @@ func syncWorker(ctx context.Context, client Client, queue <-chan Event) error {
 	return nil
 }
 
-func stateToProto(e EventState) api.EventState {
+func stateToProto(e deq.EventState) api.EventState {
 	switch e {
-	case EventStateUnspecified:
+	case deq.EventStateUnspecified:
 		return api.EventState_UNSPECIFIED_STATE
-	case EventStateQueued:
+	case deq.EventStateQueued:
 		return api.EventState_QUEUED
-	case EventStateDequeuedOK:
+	case deq.EventStateDequeuedOK:
 		return api.EventState_DEQUEUED_OK
-	case EventStateDequeuedError:
+	case deq.EventStateDequeuedError:
 		return api.EventState_DEQUEUED_ERROR
 	default:
 		panic("unrecognized EventState")

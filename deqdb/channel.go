@@ -1,4 +1,4 @@
-package deq
+package deqdb
 
 import (
 	"context"
@@ -7,11 +7,12 @@ import (
 	"time"
 
 	"github.com/dgraph-io/badger"
+	"gitlab.com/katcheCode/deq"
 	"gitlab.com/katcheCode/deq/ack"
 	"gitlab.com/katcheCode/deq/internal/data"
 )
 
-// Channel allows multiple listeners to synchronize processing of events.
+// Channel allows multiple listeners to coordinate processing of events.
 //
 // All methods of Channel are safe for concurrent use unless otherwise specified.
 type Channel struct {
@@ -64,15 +65,15 @@ func (c *Channel) BackoffFunc(backoffFunc BackoffFunc) {
 // Events returned by next are after the duration returned by requeueDelayFunc has elapsed. If
 // requeueDelayFunc is nil, events are requeued immediately. To dequeue an event, see
 // store.UpdateEventStatus to dequeue an event.
-func (c *Channel) Next(ctx context.Context) (Event, error) {
+func (c *Channel) Next(ctx context.Context) (deq.Event, error) {
 
 	for {
 		select {
 		case <-ctx.Done():
-			return Event{}, ctx.Err()
+			return deq.Event{}, ctx.Err()
 		case e := <-c.shared.out:
 			if e == nil {
-				return Event{}, c.Err()
+				return deq.Event{}, c.Err()
 			}
 			txn := c.db.NewTransaction(false)
 			defer txn.Discard()
@@ -84,7 +85,7 @@ func (c *Channel) Next(ctx context.Context) (Event, error) {
 				ID:      e.ID,
 			})
 			if err != nil {
-				return Event{}, err
+				return deq.Event{}, err
 			}
 
 			if channel.EventState != data.EventState_QUEUED {
@@ -92,9 +93,9 @@ func (c *Channel) Next(ctx context.Context) (Event, error) {
 			}
 
 			delay := c.backoffFunc(*e)
-			err = c.RequeueEvent(*e, delay)
+			err = c.RequeueEvent(ctx, *e, delay)
 			if err != nil {
-				return Event{}, err
+				return deq.Event{}, err
 			}
 
 			return *e, nil
@@ -124,13 +125,13 @@ func (c *Channel) Next(ctx context.Context) (Event, error) {
 //   }
 //   err := <-errc
 //   ...
-func (c *Channel) Sub(ctx context.Context, handler func(context.Context, Event) (*Event, ack.Code)) error {
+func (c *Channel) Sub(ctx context.Context, handler deq.SubHandler) error {
 
 	errc := make(chan error, 1)
 
 	type Result struct {
-		req  Event
-		resp *Event
+		req  deq.Event
+		resp *deq.Event
 		code ack.Code
 	}
 
@@ -167,27 +168,27 @@ func (c *Channel) Sub(ctx context.Context, handler func(context.Context, Event) 
 				var err error
 				switch result.code {
 				case ack.DequeueOK:
-					err = c.SetEventState(result.req.ID, EventStateDequeuedOK)
+					err = c.SetEventState(ctx, result.req.ID, deq.EventStateDequeuedOK)
 					if err != nil {
 						err = fmt.Errorf("set event state: %v", err)
 					}
 				case ack.DequeueError:
-					err = c.SetEventState(result.req.ID, EventStateDequeuedError)
+					err = c.SetEventState(ctx, result.req.ID, deq.EventStateDequeuedError)
 					if err != nil {
 						err = fmt.Errorf("set event state: %v", err)
 					}
 				case ack.RequeueConstant:
-					err = c.RequeueEvent(result.req, time.Second)
+					err = c.RequeueEvent(ctx, result.req, time.Second)
 					if err != nil {
 						err = fmt.Errorf("requeue event: %v", err)
 					}
 				case ack.RequeueLinear:
-					err = c.RequeueEvent(result.req, LinearBackoff(time.Second)(result.req))
+					err = c.RequeueEvent(ctx, result.req, LinearBackoff(time.Second)(result.req))
 					if err != nil {
 						err = fmt.Errorf("requeue event: %v", err)
 					}
 				case ack.RequeueExponential:
-					err = c.RequeueEvent(result.req, ExponentialBackoff(time.Second)(result.req))
+					err = c.RequeueEvent(ctx, result.req, ExponentialBackoff(time.Second)(result.req))
 					if err != nil {
 						err = fmt.Errorf("requeue event: %v", err)
 					}
@@ -263,21 +264,14 @@ func (c *Channel) Err() error {
 	return c.err
 }
 
-// setErr sets this channel's error
-func (c *Channel) setErr(err error) {
-	c.errMutex.Lock()
-	defer c.errMutex.Unlock()
-	c.err = err
-}
-
 // Get returns the event for an event ID, or ErrNotFound if none is found
-func (c *Channel) Get(eventID string) (Event, error) {
+func (c *Channel) Get(ctx context.Context, eventID string) (deq.Event, error) {
 	txn := c.db.NewTransaction(false)
 	defer txn.Discard()
 
 	e, err := getEvent(txn, c.topic, eventID, c.name)
 	if err != nil {
-		return Event{}, err
+		return deq.Event{}, err
 	}
 
 	return *e, nil
@@ -288,15 +282,15 @@ func (c *Channel) Get(eventID string) (Event, error) {
 //
 // Await never returns ErrNotFound. If the context expires, the context error is returned
 // unmodified.
-func (c *Channel) Await(ctx context.Context, eventID string) (Event, error) {
+func (c *Channel) Await(ctx context.Context, eventID string) (deq.Event, error) {
 
 	// start subscription before the read so we won't miss the notification
 	sub := c.NewEventStateSubscription(eventID)
 	defer sub.Close()
 
-	e, err := c.Get(eventID)
-	if err != nil && err != ErrNotFound {
-		return Event{}, err
+	e, err := c.Get(ctx, eventID)
+	if err != nil && err != deq.ErrNotFound {
+		return deq.Event{}, err
 	}
 	if err == nil {
 		// event already exists, no need to wait.
@@ -305,19 +299,19 @@ func (c *Channel) Await(ctx context.Context, eventID string) (Event, error) {
 
 	_, err = sub.Next(ctx)
 	if err != nil {
-		return Event{}, err
+		return deq.Event{}, err
 	}
 
-	e, err = c.Get(eventID)
+	e, err = c.Get(ctx, eventID)
 	if err != nil {
-		return Event{}, fmt.Errorf("retry get after await: %v", err)
+		return deq.Event{}, fmt.Errorf("retry get after await: %v", err)
 	}
 
 	return e, nil
 }
 
 // SetEventState sets the state of an event for this channel.
-func (c *Channel) SetEventState(id string, state EventState) error {
+func (c *Channel) SetEventState(ctx context.Context, id string, state deq.EventState) error {
 
 	// Retry for up to 10 conflicts
 	for i := 0; i < 10; i++ {
@@ -335,7 +329,7 @@ func (c *Channel) SetEventState(id string, state EventState) error {
 			return err
 		}
 
-		channelEvent.EventState = state.toProto()
+		channelEvent.EventState = eventStateToProto(state)
 
 		err = setChannelEvent(txn, key, channelEvent)
 		if err != nil {
@@ -371,6 +365,6 @@ func (c *Channel) SetEventState(id string, state EventState) error {
 // )
 
 // RequeueEvent adds the event back into the event queue for this channel
-func (c *Channel) RequeueEvent(e Event, delay time.Duration) error {
+func (c *Channel) RequeueEvent(ctx context.Context, e deq.Event, delay time.Duration) error {
 	return c.shared.RequeueEvent(e, delay)
 }

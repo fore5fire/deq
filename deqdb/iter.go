@@ -1,38 +1,16 @@
-package deq
+package deqdb
 
 import (
 	"bytes"
+	"context"
 	"fmt"
 	"time"
 
 	"github.com/dgraph-io/badger"
 	"github.com/gogo/protobuf/proto"
+	"gitlab.com/katcheCode/deq"
 	"gitlab.com/katcheCode/deq/internal/data"
 )
-
-// IterOpts is the available options for
-type IterOpts struct {
-	// Min and Max specify inclusive bounds for the returned results.
-	Min, Max string
-	// Reversed specifies if the listed results are sorted in reverse order.
-	Reversed bool
-	// PrefetchCount specifies how many values to prefetch.
-	PrefetchCount int
-}
-
-/*
-DefaultIterOpts are default options for iterators, intended to be used as a starting point for
-custom options. For example:
-
-	opts := deq.DefaultIterOpts
-	opts.Reversed = true
-
-	iter := channel.NewEventIter(opts)
-	defer iter.Close()
-*/
-var DefaultIterOpts = IterOpts{
-	PrefetchCount: 20,
-}
 
 /*
 EventIter iterates events in the database lexicographically by ID. It is created with
@@ -53,11 +31,12 @@ Example usage:
 		// handle error
 	}
 */
-type EventIter struct {
+
+type badgerEventIter struct {
 	txn     *badger.Txn
 	it      *badger.Iterator
-	opts    IterOpts
-	current Event
+	opts    deq.IterOpts
+	current deq.Event
 	err     error
 	end     []byte
 	channel string
@@ -67,7 +46,7 @@ type EventIter struct {
 //
 // opts.Min and opts.Max specify the range of event IDs to read from c's topic. EventIter only has
 // partial support for opts.PrefetchCount.
-func (c *Channel) NewEventIter(opts IterOpts) *EventIter {
+func (c *Channel) NewEventIter(opts deq.IterOpts) deq.EventIter {
 
 	// Topic should be valid, no need to check error
 	prefix, _ := data.EventTimePrefixTopic(c.topic)
@@ -92,7 +71,7 @@ func (c *Channel) NewEventIter(opts IterOpts) *EventIter {
 
 	it.Seek(start)
 
-	return &EventIter{
+	return &badgerEventIter{
 		opts:    opts,
 		txn:     txn,
 		it:      it,
@@ -104,7 +83,7 @@ func (c *Channel) NewEventIter(opts IterOpts) *EventIter {
 // Next advances the current event of iter and returns whether the iter has terminated.
 //
 // Next should be called before iter.Event() is called for the first time.
-func (iter *EventIter) Next() bool {
+func (iter *badgerEventIter) Next(ctx context.Context) bool {
 	// Clear any error from the previous iteration.
 	iter.err = nil
 
@@ -163,7 +142,7 @@ func (iter *EventIter) Next() bool {
 		return true
 	}
 
-	iter.current = Event{
+	iter.current = deq.Event{
 		ID:           key.ID,
 		Topic:        key.Topic,
 		CreateTime:   createTime,
@@ -179,10 +158,10 @@ func (iter *EventIter) Next() bool {
 
 // Event returns the current topic of iter.
 //
-// Call iter.Next() to advance the current event. When Event returns an error, it indicates that an
+// Call iter.Next to advance the current event. When Event returns an error, it indicates that an
 // error occurred retrieving the current event, but there may still be more events available as long
-// as iter.Next() returns true.
-func (iter *EventIter) Event() Event {
+// as iter.Next returns true.
+func (iter *badgerEventIter) Event() deq.Event {
 	return iter.current
 }
 
@@ -193,7 +172,7 @@ func (iter *EventIter) Event() Event {
 // iteration. For example:
 //
 //   for {
-//     for iter.Next() {
+//     for iter.Next(ctx) {
 //       // do something
 //     }
 //     if iter.Err() == nil {
@@ -201,12 +180,12 @@ func (iter *EventIter) Event() Event {
 //     }
 //     // handle error
 //   }
-func (iter *EventIter) Err() error {
+func (iter *badgerEventIter) Err() error {
 	return iter.err
 }
 
 // Close closes iter. Close should always be called when an iter is done being used.
-func (iter *EventIter) Close() {
+func (iter *badgerEventIter) Close() {
 	iter.it.Close()
 	iter.txn.Discard()
 }
@@ -225,18 +204,19 @@ Example usage:
   iter := db.NewTopicIter(opts)
 	defer iter.Close()
 
-  for iter.Next() {
+  for iter.Next(ctx) {
     topic := iter.Topic()
 		// do something with topic
 	}
 
 */
-type TopicIter struct {
+
+type badgerTopicIter struct {
 	txn     *badger.Txn
 	it      *badger.Iterator
 	cursor  []byte
 	current string
-	opts    IterOpts
+	opts    deq.IterOpts
 	end     []byte
 }
 
@@ -244,13 +224,13 @@ type TopicIter struct {
 //
 // For details on available options, see IterOpts. TopicIter doesn't support opts.PrefetchCount.
 // If opts.Min or opts.Max isn't a valid topic name, NewTopicIter panics.
-func (s *Store) NewTopicIter(opts IterOpts) *TopicIter {
+func (s *Store) NewTopicIter(opts deq.IterOpts) deq.TopicIter {
 
 	txn := s.db.NewTransaction(false)
 	return newTopicIter(txn, opts)
 }
 
-func newTopicIter(txn *badger.Txn, opts IterOpts) *TopicIter {
+func newTopicIter(txn *badger.Txn, opts deq.IterOpts) *badgerTopicIter {
 	// Apply default options
 	max := opts.Max
 	if max == "" {
@@ -279,7 +259,7 @@ func newTopicIter(txn *badger.Txn, opts IterOpts) *TopicIter {
 		PrefetchValues: false,
 	})
 
-	return &TopicIter{
+	return &badgerTopicIter{
 		opts:   opts,
 		txn:    txn,
 		it:     it,
@@ -291,7 +271,7 @@ func newTopicIter(txn *badger.Txn, opts IterOpts) *TopicIter {
 // Next advances the value of iter and returns whether the iter has terminated.
 //
 // Next should be called before iter.Topic() is called for the first time.
-func (iter *TopicIter) Next() bool {
+func (iter *badgerTopicIter) Next(ctx context.Context) bool {
 
 	// Seek the first event of the next topic and make sure one exists
 	iter.it.Seek(iter.cursor)
@@ -342,15 +322,15 @@ func (iter *TopicIter) Next() bool {
 
 // Topic returns the current topic of iter.
 //
-// Call iter.Next() to advance the current topic. When Topic returns an error, it indicates that an
+// Call iter.Next to advance the current topic. When Topic returns an error, it indicates that an
 // error occurred retrieving the current topic, but there may still be more topics available as long
-// as iter.Next() returns true.
-func (iter *TopicIter) Topic() string {
+// as iter.Next returns true.
+func (iter *badgerTopicIter) Topic() string {
 	return iter.current
 }
 
 // Close closes iter. Close should always be called when an iter is done being used.
-func (iter *TopicIter) Close() {
+func (iter *badgerTopicIter) Close() {
 	iter.it.Close()
 	iter.txn.Discard()
 }
@@ -367,18 +347,19 @@ Example usage:
 	iter := channel.NewIndexIter(opts)
 	defer iter.Close()
 
-	for iter.Next() {
+	for iter.Next(ctx) {
 		fmt.Println(iter.Event())
 	}
 	if iter.Err() != nil {
 		// handle error
 	}
 */
-type IndexIter struct {
+
+type badgerIndexIter struct {
 	txn     *badger.Txn
 	it      *badger.Iterator
-	opts    IterOpts
-	current Event
+	opts    deq.IterOpts
+	current deq.Event
 	err     error
 	end     []byte
 	channel string
@@ -388,7 +369,7 @@ type IndexIter struct {
 //
 // opts.Min and opts.Max specify the range of event IDs to read from c's topic. EventIter only has
 // partial support for opts.PrefetchCount.
-func (c *Channel) NewIndexIter(opts IterOpts) *IndexIter {
+func (c *Channel) NewIndexIter(opts deq.IterOpts) deq.EventIter {
 
 	// Topic should be valid, no need to check error
 	prefix, _ := data.IndexPrefixTopic(c.topic)
@@ -413,7 +394,7 @@ func (c *Channel) NewIndexIter(opts IterOpts) *IndexIter {
 
 	it.Seek(start)
 
-	return &IndexIter{
+	return &badgerIndexIter{
 		opts:    opts,
 		txn:     txn,
 		it:      it,
@@ -425,7 +406,7 @@ func (c *Channel) NewIndexIter(opts IterOpts) *IndexIter {
 // Next advances the current event of iter and returns whether the iter has terminated.
 //
 // Next should be called before iter.Event() is called for the first time.
-func (iter *IndexIter) Next() bool {
+func (iter *badgerIndexIter) Next(ctx context.Context) bool {
 	// Clear any error from the previous iteration.
 	iter.err = nil
 
@@ -478,7 +459,7 @@ func (iter *IndexIter) Next() bool {
 // Event returns the current topic of iter.
 //
 // Call Next to advance the current event. Next should be called at least once before Event.
-func (iter *IndexIter) Event() Event {
+func (iter *badgerIndexIter) Event() deq.Event {
 	return iter.current
 }
 
@@ -489,7 +470,7 @@ func (iter *IndexIter) Event() Event {
 // iteration. For example:
 //
 //   for {
-//     for iter.Next() {
+//     for iter.Next(ctx) {
 //       // do something
 //     }
 //     if iter.Err() == nil {
@@ -497,12 +478,12 @@ func (iter *IndexIter) Event() Event {
 //     }
 //     // handle error
 //   }
-func (iter *IndexIter) Err() error {
+func (iter *badgerIndexIter) Err() error {
 	return iter.err
 }
 
 // Close closes iter. Close should always be called when an iter is done being used.
-func (iter *IndexIter) Close() {
+func (iter *badgerIndexIter) Close() {
 	iter.it.Close()
 	iter.txn.Discard()
 }

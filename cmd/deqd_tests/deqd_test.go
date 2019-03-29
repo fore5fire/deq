@@ -11,8 +11,9 @@ import (
 	"time"
 
 	"github.com/google/go-cmp/cmp"
+	"gitlab.com/katcheCode/deq"
 	"gitlab.com/katcheCode/deq/ack"
-	"gitlab.com/katcheCode/deq/deqc"
+	"gitlab.com/katcheCode/deq/legacyclient"
 	"google.golang.org/grpc"
 	"google.golang.org/grpc/codes"
 )
@@ -32,14 +33,14 @@ func gatherTestModels(conn *grpc.ClientConn, duration time.Duration) (result []*
 	ctx, cancel := context.WithTimeout(context.Background(), duration)
 	defer cancel()
 
-	sub := deqc.NewSubscriber(conn, deqc.SubscriberOpts{
+	sub := legacyclient.NewSubscriber(conn, legacyclient.SubscriberOpts{
 		Channel:     "TestChannel1",
 		IdleTimeout: time.Second / 3,
 	})
 
 	mut := sync.Mutex{}
 
-	err = sub.Sub(ctx, &TestModel{}, func(e deqc.Event) ack.Code {
+	err = sub.Sub(ctx, &TestModel{}, func(e legacyclient.Event) ack.Code {
 		mut.Lock()
 		defer mut.Unlock()
 		result = append(result, e.Msg.(*TestModel))
@@ -67,14 +68,14 @@ func TestCreateAndReceive(t *testing.T) {
 
 	// beforeTime := time.Now()
 
-	p := deqc.NewPublisher(conn, deqc.PublisherOpts{})
+	p := legacyclient.NewPublisher(conn, legacyclient.PublisherOpts{})
 	expected := []*TestModel{
 		&TestModel{
 			Msg: "Hello world!",
 		},
 	}
 
-	expectedE := deqc.Event{
+	expectedE := legacyclient.Event{
 		ID:  time.Now().String(),
 		Msg: expected[0],
 	}
@@ -83,7 +84,7 @@ func TestCreateAndReceive(t *testing.T) {
 	if err != nil {
 		t.Fatalf("Error Creating Event: %v", err)
 	}
-	expectedE.State = deqc.EventStateQueued
+	expectedE.State = deq.EventStateQueued
 	expectedE.CreateTime = e.CreateTime
 	if !cmp.Equal(expectedE, e) {
 		t.Errorf("(-want +got)\n%s", cmp.Diff(expectedE, e))
@@ -91,7 +92,7 @@ func TestCreateAndReceive(t *testing.T) {
 
 	// TODO: fix test if server time is out of sync with local time... or just move to unit test
 	// t.Logf("Event ID: %v", e.GetId())
-	// createTime := deqc.TimeFromID(e.GetId())
+	// createTime := legacyclient.TimeFromID(e.GetId())
 	// afterTime := time.Now()
 	//
 	// if createTime.Before(beforeTime) || createTime.After(afterTime) {
@@ -122,14 +123,14 @@ func TestPubDuplicate(t *testing.T) {
 
 	// beforeTime := time.Now()
 
-	p := deqc.NewPublisher(conn, deqc.PublisherOpts{})
+	p := legacyclient.NewPublisher(conn, legacyclient.PublisherOpts{})
 	expected := []*TestModel{
 		&TestModel{
 			Msg: "Hello world!",
 		},
 	}
 
-	expectedE := deqc.Event{
+	expectedE := legacyclient.Event{
 		ID:  time.Now().String(),
 		Msg: expected[0],
 	}
@@ -142,7 +143,7 @@ func TestPubDuplicate(t *testing.T) {
 	if err != nil {
 		t.Fatalf("Error Creating Event: %v", err)
 	}
-	expectedE.State = deqc.EventStateQueued
+	expectedE.State = deq.EventStateQueued
 	expectedE.CreateTime = e.CreateTime
 	if !cmp.Equal(expectedE, e) {
 		t.Errorf("(-want +got)\n%s", cmp.Diff(expectedE, e))
@@ -163,11 +164,11 @@ func TestMassPublish(t *testing.T) {
 	ctx, cancel := context.WithTimeout(context.Background(), time.Second*8)
 	defer cancel()
 
-	p := deqc.NewPublisher(conn, deqc.PublisherOpts{})
+	p := legacyclient.NewPublisher(conn, legacyclient.PublisherOpts{})
 	now := time.Now().UnixNano()
 
 	for i := 0; i < 500; i++ {
-		_, err := p.Pub(ctx, deqc.Event{
+		_, err := p.Pub(ctx, legacyclient.Event{
 			ID: fmt.Sprintf("%d-%.3d", now, i),
 			Msg: &TestModel{
 				Msg: fmt.Sprintf("Test Message - %.3d", i),
@@ -184,7 +185,7 @@ func TestMassPublish(t *testing.T) {
 	}
 
 	for i := 500; i < 1000; i++ {
-		_, err = p.Pub(ctx, deqc.Event{
+		_, err = p.Pub(ctx, legacyclient.Event{
 			ID: fmt.Sprintf("%d-%d", now, i),
 			Msg: &TestModel{
 				Msg: fmt.Sprintf("Test Message - %.3d", i),
@@ -224,9 +225,9 @@ func TestRequeue(t *testing.T) {
 	ctx, cancel := context.WithTimeout(context.Background(), time.Second*60)
 	defer cancel()
 
-	p := deqc.NewPublisher(conn, deqc.PublisherOpts{})
+	p := legacyclient.NewPublisher(conn, legacyclient.PublisherOpts{})
 
-	expected, err := p.Pub(ctx, deqc.Event{
+	expected, err := p.Pub(ctx, legacyclient.Event{
 		ID: "requeue-" + time.Now().String(),
 		Msg: &TestRequeueModel{
 			Msg: "Hello world of requeue!",
@@ -239,13 +240,13 @@ func TestRequeue(t *testing.T) {
 
 	time.Sleep(time.Second * 8)
 
-	consumer := deqc.NewSubscriber(conn, deqc.SubscriberOpts{
+	consumer := legacyclient.NewSubscriber(conn, legacyclient.SubscriberOpts{
 		Channel:     "TestChannel1",
 		IdleTimeout: time.Second * 10,
 	})
 
-	var results []deqc.Event
-	err = consumer.Sub(ctx, &TestRequeueModel{}, func(e deqc.Event) ack.Code {
+	var results []legacyclient.Event
+	err = consumer.Sub(ctx, &TestRequeueModel{}, func(e legacyclient.Event) ack.Code {
 		results = append(results, e)
 		if e.RequeueCount < 2 {
 			return ack.RequeueExponential
@@ -269,25 +270,25 @@ func TestRequeue(t *testing.T) {
 func TestNoTimeout(t *testing.T) {
 	t.Parallel()
 
-	sub := deqc.NewSubscriber(conn, deqc.SubscriberOpts{
+	sub := legacyclient.NewSubscriber(conn, legacyclient.SubscriberOpts{
 		Channel:     "TestChannel1",
 		IdleTimeout: 0,
 	})
 
-	expected := []deqc.Event{
-		deqc.Event{
+	expected := []legacyclient.Event{
+		legacyclient.Event{
 			ID: "NoTimeout-TestEvent1",
 			Msg: &TestNoTimeoutModel{
 				Msg: "hello no timeout!",
 			},
 		},
-		deqc.Event{
+		legacyclient.Event{
 			ID: "NoTimeout-TestEvent2",
 			Msg: &TestNoTimeoutModel{
 				Msg: "hello no timeout!",
 			},
 		},
-		deqc.Event{
+		legacyclient.Event{
 			ID: "NoTimeout-TestEvent3",
 			Msg: &TestNoTimeoutModel{
 				Msg: "hello no timeout!",
@@ -301,16 +302,16 @@ func TestNoTimeout(t *testing.T) {
 	defer cancel()
 
 	var subErr error
-	events := make(chan deqc.Event)
+	events := make(chan legacyclient.Event)
 	go func() {
-		subErr = sub.Sub(ctx, &TestNoTimeoutModel{}, func(e deqc.Event) ack.Code {
+		subErr = sub.Sub(ctx, &TestNoTimeoutModel{}, func(e legacyclient.Event) ack.Code {
 			events <- e
 			return ack.DequeueOK
 		})
 		close(events)
 	}()
 
-	pub := deqc.NewPublisher(conn, deqc.PublisherOpts{})
+	pub := legacyclient.NewPublisher(conn, legacyclient.PublisherOpts{})
 
 	for i, e := range expected {
 		created, err := pub.Pub(ctx, e)
@@ -347,12 +348,12 @@ func TestAwait(t *testing.T) {
 	ctx, cancel := context.WithTimeout(context.Background(), time.Second*5)
 	defer cancel()
 
-	sub := deqc.NewSubscriber(conn, deqc.SubscriberOpts{
+	sub := legacyclient.NewSubscriber(conn, legacyclient.SubscriberOpts{
 		Channel: "AwaitTestChannel",
 	})
-	pub := deqc.NewPublisher(conn, deqc.PublisherOpts{})
+	pub := legacyclient.NewPublisher(conn, legacyclient.PublisherOpts{})
 
-	expected, err := pub.Pub(ctx, deqc.Event{
+	expected, err := pub.Pub(ctx, legacyclient.Event{
 		ID: "id-1",
 		Msg: &TestAwaitModel{
 			Msg: "abc 123",
@@ -378,7 +379,7 @@ func TestAwait(t *testing.T) {
 
 	time.Sleep(time.Second / 4)
 
-	expected, err = pub.Pub(ctx, deqc.Event{
+	expected, err = pub.Pub(ctx, legacyclient.Event{
 		ID: "id-2",
 		Msg: &TestAwaitModel{
 			Msg: "abc 123",

@@ -1,4 +1,4 @@
-package deqc
+package legacyclient
 
 import (
 	"context"

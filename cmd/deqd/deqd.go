@@ -14,8 +14,8 @@ import (
 	"syscall"
 	"time"
 
-	"gitlab.com/katcheCode/deq"
 	pb "gitlab.com/katcheCode/deq/api/v1/deq"
+	"gitlab.com/katcheCode/deq/deqdb"
 	eventserver "gitlab.com/katcheCode/deq/internal/handlers"
 	"google.golang.org/grpc"
 	"google.golang.org/grpc/credentials"
@@ -119,7 +119,7 @@ func run(dbDir, address, statsAddress, certFile, keyFile string, insecure bool) 
 		return fmt.Errorf("create data directory %s: %v", dbDir, err)
 	}
 
-	store, err := deq.Open(deq.Options{
+	store, err := deqdb.Open(deqdb.Options{
 		Dir:                 dbDir,
 		KeepCorrupt:         keepCorrupt,
 		DefaultRequeueLimit: requeueLimit,

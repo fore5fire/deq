@@ -46,6 +46,8 @@ const (
 	// EventStateDequeuedError indicates that the event was not processed successfully and is not
 	// queued on the channel.
 	EventStateDequeuedError
+	// DefaultEventState is the default event state for new events if none is specified.
+	DefaultEventState = EventStateQueued
 )
 
 func (s EventState) String() string {
