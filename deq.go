@@ -354,6 +354,8 @@ var (
 	ErrAlreadyExists = errors.New("already exists")
 	// ErrVersionMismatch is returned when opening a database with an incorrect format.
 	ErrVersionMismatch = errors.New("version mismatch")
-	// ErrInternal is returned when an interanl error occurs
+	// ErrInternal is returned when an internal error occurs
 	ErrInternal = errors.New("internal error")
+	// ErrIterationComplete is returned after an iterator has returned it's last element.
+	ErrIterationComplete = errors.New("iteration complete")
 )

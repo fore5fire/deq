@@ -26,19 +26,7 @@ type File struct {
 }
 
 type Type struct {
-	GoName        string
-	ProtoFullName string
-}
-
-func NewType(protoName string) Type {
-	return Type{
-		GoName:        goName(protoName),
-		ProtoFullName: protoFullName(protoName),
-	}
-}
-
-func (t Type) String() string {
-	return t.GoName
+	Name string
 }
 
 type Service struct {
@@ -50,8 +38,8 @@ type Service struct {
 
 type Method struct {
 	Name    string
-	InType  Type
-	OutType Type
+	InType  string
+	OutType string
 	Service Service
 }
 
@@ -126,7 +114,9 @@ func generate(input *plugin.CodeGeneratorRequest) ([]*plugin.CodeGeneratorRespon
 		}
 
 		for j, mType := range descriptor.GetMessageType() {
-			file.Types[j] = NewType(descriptor.GetPackage() + "." + mType.GetName())
+			file.Types[j] = Type{
+				Name: goName(mType.GetName()),
+			}
 		}
 
 		for j, svc := range descriptor.GetService() {
@@ -135,30 +125,36 @@ func generate(input *plugin.CodeGeneratorRequest) ([]*plugin.CodeGeneratorRespon
 			typeSet := make(map[Type]struct{})
 
 			for k, method := range svc.GetMethod() {
+				inType := goName(method.GetInputType())
+				outType := goName(method.GetOutputType())
 				methods[k] = Method{
 					Name:    method.GetName(),
-					InType:  NewType(method.GetInputType()),
-					OutType: NewType(method.GetOutputType()),
+					InType:  inType,
+					OutType: outType,
 					Service: file.Services[j],
 				}
 
-				typeSet[NewType(method.GetInputType())] = struct{}{}
-				typeSet[NewType(method.GetOutputType())] = struct{}{}
+				typeSet[Type{
+					Name: inType,
+				}] = struct{}{}
+
+				typeSet[Type{
+					Name: outType,
+				}] = struct{}{}
 			}
 
-			// Create set of all types referenced by this service only
-			// types := make([]Type, len(typeSet))
-			// var i int
-			// for t := range typeSet {
-			// 	types[i] = t
-			// 	i++
-			// }
+			types := make([]Type, len(typeSet))
+			var i int
+			for t := range typeSet {
+				types[i] = t
+				i++
+			}
 
 			file.Services[j] = Service{
 				Name:    svc.GetName(),
 				File:    file,
 				Methods: methods,
-				Types:   file.Types,
+				Types:   types,
 			}
 		}
 
@@ -253,8 +249,4 @@ func LastComponent(s, sep string) string {
 
 func goName(name string) string {
 	return CamelCase(LastComponent(name, "."))
-}
-
-func protoFullName(name string) string {
-	return strings.TrimPrefix(name, ".")
 }
