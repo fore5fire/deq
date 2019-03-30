@@ -6,7 +6,6 @@ package {{ .Package }}
 
 import (
 	"context"
-	"errors"
 	"fmt"
 	"sync"
 	"time"
@@ -96,7 +95,7 @@ func (c *TopicConfig) Set{{.GoName}}Topic(topic string) {
 // {{.GoName}}EventIter is an iterator for {{.GoName}}Events. It has an identical interface to
 // deq.EventIter, except that the Event method returns a {{.GoName}}Event.
 type {{.GoName}}EventIter struct {
-	iter   *deq.EventIter
+	iter   deq.EventIter
 	config *TopicConfig
 }
 
@@ -104,7 +103,7 @@ type {{.GoName}}EventIter struct {
 // if one occured. See deq.EventIter.Next for more information.
 func (it *{{.GoName}}EventIter) Next(ctx context.Context) (*{{.GoName}}Event, error) {
 
-	if !it.iter.Next() {
+	if !it.iter.Next(ctx) {
 		return nil, deq.ErrIterationComplete
 	}
 	
@@ -122,36 +121,6 @@ func (it *{{.GoName}}EventIter) Close() {
 	it.iter.Close()
 }
 
-
-// {{.GoName}}IndexIter is an iterator for {{.GoName}}Events. It has an identical interface to
-// deq.IndexIter, except that the Event method returns a {{.GoName}}Event.
-type {{.GoName}}IndexIter struct {
-	iter   *deq.IndexIter
-	config *TopicConfig
-}
-
-// Next returns the next {{.GoName}}Event, deq.ErrIterationComplete if iteration completed or an error
-// if one occurred. See deq.IndexIter.Next for more information.
-func (iter *{{.GoName}}IndexIter) Next(ctx context.Context) (*{{.GoName}}Event, error) {
-
-	if !iter.iter.Next() {
-		return nil, deq.ErrIterationComplete
-	}
-	
-	deqEvent := iter.iter.Event()
-
-	e, err := iter.config.EventTo{{.GoName}}Event(deqEvent)
-	if err != nil {
-		return nil, fmt.Errorf("convert deq.Event to {{.GoName}}Event: %v", err)
-	}
-
-	return e, nil
-}
-
-func (it *{{.GoName}}IndexIter) Close() {
-	it.iter.Close()
-}
-
 {{- end -}}
 
 {{ range .Services }}
@@ -163,12 +132,12 @@ func (it *{{.GoName}}IndexIter) Close() {
 {{ define "client" }}
 {{- $ServiceName := .Name -}}
 type {{ .Name }}Client struct {
-	db      *deq.Store
+	db      deq.Client
 	channel string
 	config *TopicConfig
 }
 
-func New{{ .Name }}Client(db *deq.Store, channel string, config *TopicConfig) *{{.Name}}Client {
+func New{{ .Name }}Client(db deq.Client, channel string, config *TopicConfig) *{{.Name}}Client {
 	return &{{.Name}}Client{
 		db: db,
 		channel: channel,
@@ -189,7 +158,7 @@ func (c *{{.Name}}Client) SyncAllTo(ctx context.Context, remote deq.Client) erro
 		channel := c.db.Channel(c.channel, c.config.{{.GoName}}Topic())
 		defer channel.Close()
 
-		err := channel.SyncTo(ctx, remote)
+		err := deq.SyncTo(ctx, remote, channel)
 		if err != nil {
 			select {
 			default:
@@ -217,7 +186,7 @@ func (c *{{ $ServiceName }}Client) Get{{ .GoName }}Event(ctx context.Context, id
 	channel := c.db.Channel(c.channel, c.config.{{.GoName}}Topic())
 	defer channel.Close()
 
-	deqEvent, err := channel.Get(id)
+	deqEvent, err := channel.Get(ctx, id)
 	if err != nil {
 		return nil, err
 	}
@@ -273,12 +242,12 @@ func (c *{{ $ServiceName }}Client) New{{ .GoName }}EventIter(opts deq.IterOpts) 
 	}
 }
 
-func (c *{{ $ServiceName }}Client) New{{ .GoName }}IndexIter(opts deq.IterOpts) *{{ .GoName }}IndexIter {
+func (c *{{ $ServiceName }}Client) New{{ .GoName }}IndexIter(opts deq.IterOpts) *{{ .GoName }}EventIter {
 	
 	channel := c.db.Channel(c.channel, c.config.{{.GoName}}Topic())
 	defer channel.Close()
 	
-	return &{{.GoName}}IndexIter{
+	return &{{.GoName}}EventIter{
 		iter:   channel.NewIndexIter(opts),
 		config: c.config,
 	}
@@ -304,7 +273,7 @@ func (c *{{ $ServiceName }}Client) Pub{{.GoName}}Event(ctx context.Context, e *{
 }
 
 func (c *{{ $ServiceName }}Client) Del{{.GoName}}Event(ctx context.Context, id string) error {
-	return c.db.Del(c.config.{{.GoName}}Topic(), id)
+	return c.db.Del(ctx, c.config.{{.GoName}}Topic(), id)
 }
 {{ end -}}
 
@@ -344,13 +313,13 @@ type {{ .Name }}Handlers interface {
 
 type {{ .Name }}Server struct {
 	handlers {{ .Name }}Handlers
-	db       *deq.Store
+	db       deq.Client
 	channel  string
 	done     chan struct{}
 	config   *TopicConfig
 }
 
-func New{{ .Name }}Server(db *deq.Store, handlers {{ .Name }}Handlers, channel string, config *TopicConfig) (*{{ .Name }}Server) {
+func New{{ .Name }}Server(db deq.Client, handlers {{ .Name }}Handlers, channel string, config *TopicConfig) (*{{ .Name }}Server) {
 	return &{{ .Name }}Server{
 		handlers: handlers,
 		channel: channel,

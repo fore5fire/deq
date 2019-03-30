@@ -93,6 +93,22 @@ func (c *Client) Pub(ctx context.Context, e deq.Event) (deq.Event, error) {
 	return eventFromProto(event), nil
 }
 
+// Del deletes a previously published event.
+func (c *Client) Del(ctx context.Context, topic, id string) error {
+	_, err := c.client.Del(ctx, &api.DelRequest{
+		Topic:   topic,
+		EventId: id,
+	})
+	if status.Code(err) == codes.NotFound {
+		return deq.ErrNotFound
+	}
+	if err != nil {
+		return err
+	}
+
+	return nil
+}
+
 type clientChannel struct {
 	client      *Client
 	deqClient   api.DEQClient

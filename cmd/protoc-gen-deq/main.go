@@ -110,11 +110,7 @@ func generate(input *plugin.CodeGeneratorRequest) ([]*plugin.CodeGeneratorRespon
 
 		pkg := descriptor.GetOptions().GetGoPackage()
 		if pkg == "" {
-			pkg = baseName
-		}
-		lastSep := strings.LastIndex(pkg, "/")
-		if lastSep != -1 {
-			pkg = pkg[lastSep+1:]
+			pkg = strings.ReplaceAll(descriptor.GetPackage(), ".", "_")
 		}
 
 		file := File{

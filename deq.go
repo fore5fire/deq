@@ -9,7 +9,8 @@ import (
 )
 
 type Client interface {
-	Pub(context.Context, Event) (Event, error)
+	Pub(ctx context.Context, e Event) (Event, error)
+	Del(ctx context.Context, topic, id string) error
 	Channel(name, topic string) Channel
 }
 

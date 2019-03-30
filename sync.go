@@ -1,22 +1,21 @@
-package deqdb
+package deq
 
 import (
 	"context"
 	"sync"
 
-	"gitlab.com/katcheCode/deq"
-	api "gitlab.com/katcheCode/deq/api/v1/deq"
+	"gitlab.com/katcheCode/deq/ack"
 )
 
 // SyncTo copies the events in c's queue to the database that client is connected to.
-func (c *Channel) SyncTo(ctx context.Context, client deq.Client) error {
+func SyncTo(ctx context.Context, dst Client, src Channel) error {
 
 	ctx, cancel := context.WithCancel(ctx)
 	defer cancel()
 
 	workerCount := 3
 
-	queue := make(chan deq.Event, 30)
+	queue := make(chan Event, 30)
 	errorc := make(chan error, 1)
 
 	wg := sync.WaitGroup{}
@@ -26,7 +25,7 @@ func (c *Channel) SyncTo(ctx context.Context, client deq.Client) error {
 		go func() {
 			defer wg.Done()
 			defer cancel()
-			err := syncWorker(ctx, client, queue)
+			err := syncWorker(ctx, dst, queue)
 			if err != nil {
 				select {
 				// Try to send the error back to the original goroutine
@@ -34,39 +33,32 @@ func (c *Channel) SyncTo(ctx context.Context, client deq.Client) error {
 				// If there's no room in the buffer then another goroutine already returned an error
 				default:
 				}
+				return
 			}
 		}()
 	}
 
-	wg.Add(1)
+	err := src.Sub(ctx, func(ctx context.Context, e Event) (*Event, ack.Code) {
+		queue <- e
+		return nil, ack.DequeueOK
+	})
+	select {
+	// Try to send the error back to the original goroutine
+	case errorc <- err:
+	// If there's no room in the buffer then another goroutine already returned an error
+	default:
+	}
 
-	go func() {
-		defer wg.Done()
-		defer cancel()
-		for {
-			e, err := c.Next(ctx)
-			if err != nil {
-				close(queue)
-
-				select {
-				case errorc <- err:
-				default:
-				}
-				return
-			}
-
-			queue <- e
-		}
-	}()
-
+	close(queue)
+	cancel()
 	wg.Wait()
 
 	return <-errorc
 }
 
-func syncWorker(ctx context.Context, client deq.Client, queue <-chan deq.Event) error {
+func syncWorker(ctx context.Context, dst Client, queue <-chan Event) error {
 	for e := range queue {
-		_, err := client.Pub(ctx, deq.Event{
+		_, err := dst.Pub(ctx, Event{
 			ID:         e.ID,
 			CreateTime: e.CreateTime,
 			Topic:      e.Topic,
@@ -78,21 +70,6 @@ func syncWorker(ctx context.Context, client deq.Client, queue <-chan deq.Event) 
 	}
 
 	return nil
-}
-
-func stateToProto(e deq.EventState) api.EventState {
-	switch e {
-	case deq.EventStateUnspecified:
-		return api.EventState_UNSPECIFIED_STATE
-	case deq.EventStateQueued:
-		return api.EventState_QUEUED
-	case deq.EventStateDequeuedOK:
-		return api.EventState_DEQUEUED_OK
-	case deq.EventStateDequeuedError:
-		return api.EventState_DEQUEUED_ERROR
-	default:
-		panic("unrecognized EventState")
-	}
 }
 
 // func (s *Store) SyncFrom(ctx context.Context, client deqc.Client) error {

@@ -1,0 +1,716 @@
+&plugin_go.CodeGeneratorRequest{FileToGenerate:[]string{"cmd/protoc-gen-deq/testdata/test.proto"}, Parameter:(*string)(nil), ProtoFile:[]*descriptor.FileDescriptorProto{&descriptor.FileDescriptorProto{Name: func(v string) *string { return &v } ( "cmd/protoc-gen-deq/testdata/test.proto" ),
+Package: func(v string) *string { return &v } ( "example.greeter" ),
+MessageType: []*descriptor.DescriptorProto{&descriptor.DescriptorProto{Name: func(v string) *string { return &v } ( "HelloRequest" ),
+Field: []*descriptor.FieldDescriptorProto{&descriptor.FieldDescriptorProto{Name: func(v string) *string { return &v } ( "name" ),
+Number: func(v int32) *int32 { return &v } ( 1 ),
+Label: func(v FieldDescriptorProto_Label) *FieldDescriptorProto_Label { return &v } ( 1 ),
+Type: func(v FieldDescriptorProto_Type) *FieldDescriptorProto_Type { return &v } ( 9 ),
+JsonName: func(v string) *string { return &v } ( "name" ),
+}},
+}, &descriptor.DescriptorProto{Name: func(v string) *string { return &v } ( "HelloReply" ),
+Field: []*descriptor.FieldDescriptorProto{&descriptor.FieldDescriptorProto{Name: func(v string) *string { return &v } ( "message" ),
+Number: func(v int32) *int32 { return &v } ( 1 ),
+Label: func(v FieldDescriptorProto_Label) *FieldDescriptorProto_Label { return &v } ( 1 ),
+Type: func(v FieldDescriptorProto_Type) *FieldDescriptorProto_Type { return &v } ( 9 ),
+JsonName: func(v string) *string { return &v } ( "message" ),
+}},
+}},
+Service: []*descriptor.ServiceDescriptorProto{&descriptor.ServiceDescriptorProto{Name: func(v string) *string { return &v } ( "Greeter" ),
+Method: []*descriptor.MethodDescriptorProto{&descriptor.MethodDescriptorProto{Name: func(v string) *string { return &v } ( "SayHello" ),
+InputType: func(v string) *string { return &v } ( ".example.greeter.HelloRequest" ),
+OutputType: func(v string) *string { return &v } ( ".example.greeter.HelloReply" ),
+Options: &descriptor.MethodOptions{XXX_InternalExtensions: proto.NewUnsafeXXX_InternalExtensions(map[int32]proto.Extension{}),
+},
+}},
+}},
+SourceCodeInfo: &descriptor.SourceCodeInfo{Location: []*descriptor.SourceCodeInfo_Location{&descriptor.SourceCodeInfo_Location{Span: []int32{0, 0, 18, 1},
+}, &descriptor.SourceCodeInfo_Location{Path: []int32{12},
+Span: []int32{0, 0, 18},
+}, &descriptor.SourceCodeInfo_Location{Path: []int32{2},
+Span: []int32{2, 0, 24},
+}, &descriptor.SourceCodeInfo_Location{Path: []int32{6, 0},
+Span: []int32{5, 0, 8, 1},
+LeadingComments: func(v string) *string { return &v } ( " The greeter service definition.\n" ),
+}, &descriptor.SourceCodeInfo_Location{Path: []int32{6, 0, 1},
+Span: []int32{5, 8, 15},
+}, &descriptor.SourceCodeInfo_Location{Path: []int32{6, 0, 2, 0},
+Span: []int32{7, 2, 53},
+LeadingComments: func(v string) *string { return &v } ( " Sends a greeting\n" ),
+}, &descriptor.SourceCodeInfo_Location{Path: []int32{6, 0, 2, 0, 1},
+Span: []int32{7, 6, 14},
+}, &descriptor.SourceCodeInfo_Location{Path: []int32{6, 0, 2, 0, 2},
+Span: []int32{7, 16, 28},
+}, &descriptor.SourceCodeInfo_Location{Path: []int32{6, 0, 2, 0, 3},
+Span: []int32{7, 39, 49},
+}, &descriptor.SourceCodeInfo_Location{Path: []int32{4, 0},
+Span: []int32{11, 0, 13, 1},
+LeadingComments: func(v string) *string { return &v } ( " The request message containing the user's name.\n" ),
+}, &descriptor.SourceCodeInfo_Location{Path: []int32{4, 0, 1},
+Span: []int32{11, 8, 20},
+}, &descriptor.SourceCodeInfo_Location{Path: []int32{4, 0, 2, 0},
+Span: []int32{12, 2, 18},
+}, &descriptor.SourceCodeInfo_Location{Path: []int32{4, 0, 2, 0, 4},
+Span: []int32{12, 2, 11, 22},
+}, &descriptor.SourceCodeInfo_Location{Path: []int32{4, 0, 2, 0, 5},
+Span: []int32{12, 2, 8},
+}, &descriptor.SourceCodeInfo_Location{Path: []int32{4, 0, 2, 0, 1},
+Span: []int32{12, 9, 13},
+}, &descriptor.SourceCodeInfo_Location{Path: []int32{4, 0, 2, 0, 3},
+Span: []int32{12, 16, 17},
+}, &descriptor.SourceCodeInfo_Location{Path: []int32{4, 1},
+Span: []int32{16, 0, 18, 1},
+LeadingComments: func(v string) *string { return &v } ( " The response message containing the greetings\n" ),
+}, &descriptor.SourceCodeInfo_Location{Path: []int32{4, 1, 1},
+Span: []int32{16, 8, 18},
+}, &descriptor.SourceCodeInfo_Location{Path: []int32{4, 1, 2, 0},
+Span: []int32{17, 2, 21},
+}, &descriptor.SourceCodeInfo_Location{Path: []int32{4, 1, 2, 0, 4},
+Span: []int32{17, 2, 16, 20},
+}, &descriptor.SourceCodeInfo_Location{Path: []int32{4, 1, 2, 0, 5},
+Span: []int32{17, 2, 8},
+}, &descriptor.SourceCodeInfo_Location{Path: []int32{4, 1, 2, 0, 1},
+Span: []int32{17, 9, 16},
+}, &descriptor.SourceCodeInfo_Location{Path: []int32{4, 1, 2, 0, 3},
+Span: []int32{17, 19, 20},
+}},
+},
+Syntax: func(v string) *string { return &v } ( "proto3" ),
+}}, CompilerVersion:(*plugin_go.Version)(0xc00007c140), XXX_NoUnkeyedLiteral:struct {}{}, XXX_unrecognized:[]uint8(nil), XXX_sizecache:0}
+zöv
+*cmd/protoc-gen-deq/testdata/test.pb.deq.gozÇv///
+//  Generated code. Do not modify.
+//  source: cmd/protoc-gen-deq/testdata/test.proto
+///
+package test
+
+import (
+	"context"
+	"errors"
+	"fmt"
+	"sync"
+	"time"
+
+	"gitlab.com/katcheCode/deq"
+	"gitlab.com/katcheCode/deq/ack"
+)
+
+type TopicConfig struct {
+	topics map[string]string
+}
+
+func NewTopicConfig() *TopicConfig {
+	return &TopicConfig{
+		topics: make(map[string]string),
+	}
+}
+
+type HelloRequestEvent struct {
+	ID 				   string
+	Msg 			   *HelloRequest
+	CreateTime   time.Time
+	DefaultState deq.EventState
+	State        deq.EventState
+	Indexes      []string
+}
+
+func (c *TopicConfig) EventToHelloRequestEvent(e deq.Event) (*HelloRequestEvent, error) {
+
+	if e.Topic != c.HelloRequestTopic() {
+		return nil, fmt.Errorf("incorrect topic %s", e.Topic)
+	}
+
+	msg := new(HelloRequest)
+	err := msg.Unmarshal(e.Payload)
+	if err != nil {
+		return nil, fmt.Errorf("unmarshal payload: %v", err)
+	}
+
+	return &HelloRequestEvent{
+		ID:           e.ID,
+		Msg:          msg,
+		CreateTime:   e.CreateTime,
+		DefaultState: e.DefaultState,
+		State:        e.State,
+		Indexes:      e.Indexes,
+	}, nil
+}
+
+
+func (c *TopicConfig) HelloRequestEventToEvent(e *HelloRequestEvent) (deq.Event, error) {
+
+	buf, err := e.Msg.Marshal()
+	if err != nil {
+		return deq.Event{}, err
+	}
+
+	return deq.Event{
+		ID:           e.ID,
+		Payload:      buf,
+		CreateTime:   e.CreateTime,
+		DefaultState: e.DefaultState,
+		State:        e.State,
+		Topic:        c.HelloRequestTopic(),
+		Indexes:      e.Indexes,
+	}, nil
+}
+
+func (c *TopicConfig) HelloRequestTopic() string {
+	if c == nil {
+		return "example.greeter.HelloRequest"
+	}
+
+	topic, ok := c.topics["HelloRequest"]
+	if ok {
+		return topic
+	}
+	return "example.greeter.HelloRequest"
+}
+
+func (c *TopicConfig) SetHelloRequestTopic(topic string) {
+	c.topics["HelloRequest"] = topic
+}
+
+// HelloRequestEventIter is an iterator for HelloRequestEvents. It has an identical interface to
+// deq.EventIter, except that the Event method returns a HelloRequestEvent.
+type HelloRequestEventIter struct {
+	iter   *deq.EventIter
+	config *TopicConfig
+}
+
+// Next returns the next HelloRequestEvent, deq.ErrIterationComplete if iteration completed, or an error,
+// if one occured. See deq.EventIter.Next for more information.
+func (it *HelloRequestEventIter) Next(ctx context.Context) (*HelloRequestEvent, error) {
+
+	if !it.iter.Next() {
+		return nil, deq.ErrIterationComplete
+	}
+	
+	deqEvent := it.iter.Event()
+
+	e, err := it.config.EventToHelloRequestEvent(deqEvent)
+	if err != nil {
+		return nil, fmt.Errorf("convert deq.Event to HelloRequestEvent: %v", err)
+	}
+
+	return e, nil
+}
+
+func (it *HelloRequestEventIter) Close() {
+	it.iter.Close()
+}
+
+
+// HelloRequestIndexIter is an iterator for HelloRequestEvents. It has an identical interface to
+// deq.IndexIter, except that the Event method returns a HelloRequestEvent.
+type HelloRequestIndexIter struct {
+	iter   *deq.IndexIter
+	config *TopicConfig
+}
+
+// Next returns the next HelloRequestEvent, deq.ErrIterationComplete if iteration completed or an error
+// if one occurred. See deq.IndexIter.Next for more information.
+func (iter *HelloRequestIndexIter) Next(ctx context.Context) (*HelloRequestEvent, error) {
+
+	if !iter.iter.Next() {
+		return nil, deq.ErrIterationComplete
+	}
+	
+	deqEvent := iter.iter.Event()
+
+	e, err := iter.config.EventToHelloRequestEvent(deqEvent)
+	if err != nil {
+		return nil, fmt.Errorf("convert deq.Event to HelloRequestEvent: %v", err)
+	}
+
+	return e, nil
+}
+
+func (it *HelloRequestIndexIter) Close() {
+	it.iter.Close()
+}
+
+type HelloReplyEvent struct {
+	ID 				   string
+	Msg 			   *HelloReply
+	CreateTime   time.Time
+	DefaultState deq.EventState
+	State        deq.EventState
+	Indexes      []string
+}
+
+func (c *TopicConfig) EventToHelloReplyEvent(e deq.Event) (*HelloReplyEvent, error) {
+
+	if e.Topic != c.HelloReplyTopic() {
+		return nil, fmt.Errorf("incorrect topic %s", e.Topic)
+	}
+
+	msg := new(HelloReply)
+	err := msg.Unmarshal(e.Payload)
+	if err != nil {
+		return nil, fmt.Errorf("unmarshal payload: %v", err)
+	}
+
+	return &HelloReplyEvent{
+		ID:           e.ID,
+		Msg:          msg,
+		CreateTime:   e.CreateTime,
+		DefaultState: e.DefaultState,
+		State:        e.State,
+		Indexes:      e.Indexes,
+	}, nil
+}
+
+
+func (c *TopicConfig) HelloReplyEventToEvent(e *HelloReplyEvent) (deq.Event, error) {
+
+	buf, err := e.Msg.Marshal()
+	if err != nil {
+		return deq.Event{}, err
+	}
+
+	return deq.Event{
+		ID:           e.ID,
+		Payload:      buf,
+		CreateTime:   e.CreateTime,
+		DefaultState: e.DefaultState,
+		State:        e.State,
+		Topic:        c.HelloReplyTopic(),
+		Indexes:      e.Indexes,
+	}, nil
+}
+
+func (c *TopicConfig) HelloReplyTopic() string {
+	if c == nil {
+		return "example.greeter.HelloReply"
+	}
+
+	topic, ok := c.topics["HelloReply"]
+	if ok {
+		return topic
+	}
+	return "example.greeter.HelloReply"
+}
+
+func (c *TopicConfig) SetHelloReplyTopic(topic string) {
+	c.topics["HelloReply"] = topic
+}
+
+// HelloReplyEventIter is an iterator for HelloReplyEvents. It has an identical interface to
+// deq.EventIter, except that the Event method returns a HelloReplyEvent.
+type HelloReplyEventIter struct {
+	iter   *deq.EventIter
+	config *TopicConfig
+}
+
+// Next returns the next HelloReplyEvent, deq.ErrIterationComplete if iteration completed, or an error,
+// if one occured. See deq.EventIter.Next for more information.
+func (it *HelloReplyEventIter) Next(ctx context.Context) (*HelloReplyEvent, error) {
+
+	if !it.iter.Next() {
+		return nil, deq.ErrIterationComplete
+	}
+	
+	deqEvent := it.iter.Event()
+
+	e, err := it.config.EventToHelloReplyEvent(deqEvent)
+	if err != nil {
+		return nil, fmt.Errorf("convert deq.Event to HelloReplyEvent: %v", err)
+	}
+
+	return e, nil
+}
+
+func (it *HelloReplyEventIter) Close() {
+	it.iter.Close()
+}
+
+
+// HelloReplyIndexIter is an iterator for HelloReplyEvents. It has an identical interface to
+// deq.IndexIter, except that the Event method returns a HelloReplyEvent.
+type HelloReplyIndexIter struct {
+	iter   *deq.IndexIter
+	config *TopicConfig
+}
+
+// Next returns the next HelloReplyEvent, deq.ErrIterationComplete if iteration completed or an error
+// if one occurred. See deq.IndexIter.Next for more information.
+func (iter *HelloReplyIndexIter) Next(ctx context.Context) (*HelloReplyEvent, error) {
+
+	if !iter.iter.Next() {
+		return nil, deq.ErrIterationComplete
+	}
+	
+	deqEvent := iter.iter.Event()
+
+	e, err := iter.config.EventToHelloReplyEvent(deqEvent)
+	if err != nil {
+		return nil, fmt.Errorf("convert deq.Event to HelloReplyEvent: %v", err)
+	}
+
+	return e, nil
+}
+
+func (it *HelloReplyIndexIter) Close() {
+	it.iter.Close()
+}
+
+type GreeterClient struct {
+	db      *deq.Store
+	channel string
+	config *TopicConfig
+}
+
+func NewGreeterClient(db *deq.Store, channel string, config *TopicConfig) *GreeterClient {
+	return &GreeterClient{
+		db: db,
+		channel: channel,
+		config: config,
+	}
+}
+
+func (c *GreeterClient) SyncAllTo(ctx context.Context, remote deq.Client) error {
+	errc := make(chan error, 1)
+	wg := sync.WaitGroup{}
+	ctx, cancel := context.WithCancel(ctx)
+	
+	
+	wg.Add(1)
+	go func() {
+		defer wg.Done()
+
+		channel := c.db.Channel(c.channel, c.config.HelloRequestTopic())
+		defer channel.Close()
+
+		err := channel.SyncTo(ctx, remote)
+		if err != nil {
+			select {
+			default:
+			case errc <- err:
+			}
+		}
+	}()
+	
+	wg.Add(1)
+	go func() {
+		defer wg.Done()
+
+		channel := c.db.Channel(c.channel, c.config.HelloReplyTopic())
+		defer channel.Close()
+
+		err := channel.SyncTo(ctx, remote)
+		if err != nil {
+			select {
+			default:
+			case errc <- err:
+			}
+		}
+	}()
+	
+
+	go func() { 
+		wg.Wait()
+		close(errc)
+	}()
+
+	err := <-errc
+	cancel()
+	wg.Wait()
+
+	return err
+}
+func (c *GreeterClient) GetHelloRequestEvent(ctx context.Context, id string) (*HelloRequestEvent, error) {
+	
+	channel := c.db.Channel(c.channel, c.config.HelloRequestTopic())
+	defer channel.Close()
+
+	deqEvent, err := channel.Get(id)
+	if err != nil {
+		return nil, err
+	}
+
+	event, err := c.config.EventToHelloRequestEvent(deqEvent)
+	if err != nil {
+		return nil, fmt.Errorf("convert deq.Event to HelloRequestEvent: %v", err)
+	}
+
+	return event, nil
+}
+
+func (c *GreeterClient) AwaitHelloRequestEvent(ctx context.Context, id string) (*HelloRequestEvent, error) {
+	
+	channel := c.db.Channel(c.channel, c.config.HelloRequestTopic())
+	defer channel.Close()
+
+	deqEvent, err := channel.Await(ctx, id)
+	if err != nil {
+		return nil, err
+	}
+
+	event, err := c.config.EventToHelloRequestEvent(deqEvent)
+	if err != nil {
+		return nil, fmt.Errorf("convert deq.Event to HelloRequestEvent: %v", err)
+	}
+
+	return event, nil
+}
+
+func (c *GreeterClient) SubHelloRequestEvent(ctx context.Context, handler func(context.Context, *HelloRequestEvent) ack.Code) error {
+	channel := c.db.Channel(c.channel, c.config.HelloRequestTopic())
+	defer channel.Close()
+
+	return channel.Sub(ctx, func(ctx context.Context, e deq.Event) (*deq.Event, ack.Code) {
+			event, err := c.config.EventToHelloRequestEvent(e)
+			if err != nil {
+				panic("convert deq.Event to HelloRequestEvent: " + err.Error())
+			}
+
+			return nil, handler(ctx, event)
+	})
+}
+
+func (c *GreeterClient) NewHelloRequestEventIter(opts deq.IterOpts) *HelloRequestEventIter {
+	
+	channel := c.db.Channel(c.channel, c.config.HelloRequestTopic())
+	defer channel.Close()
+	
+	return &HelloRequestEventIter{
+		iter:   channel.NewEventIter(opts),
+		config: c.config,
+	}
+}
+
+func (c *GreeterClient) NewHelloRequestIndexIter(opts deq.IterOpts) *HelloRequestIndexIter {
+	
+	channel := c.db.Channel(c.channel, c.config.HelloRequestTopic())
+	defer channel.Close()
+	
+	return &HelloRequestIndexIter{
+		iter:   channel.NewIndexIter(opts),
+		config: c.config,
+	}
+}
+
+func (c *GreeterClient) PubHelloRequestEvent(ctx context.Context, e *HelloRequestEvent) (*HelloRequestEvent, error) {
+	deqEvent, err := c.config.HelloRequestEventToEvent(e)
+	if err != nil {
+		return nil, fmt.Errorf("convert HelloRequestEvent to deq.Event: %v", err)
+	}
+
+	deqEvent, err = c.db.Pub(ctx, deqEvent)
+	if err != nil {
+		return nil, fmt.Errorf("pub: %v", err)
+	}
+
+	e, err = c.config.EventToHelloRequestEvent(deqEvent)
+	if err != nil {
+		return nil, fmt.Errorf("convert deq.Event to HelloRequestEvent: %v", err)
+	}
+
+	return e, nil
+}
+
+func (c *GreeterClient) DelHelloRequestEvent(ctx context.Context, id string) error {
+	return c.db.Del(c.config.HelloRequestTopic(), id)
+}
+
+func (c *GreeterClient) GetHelloReplyEvent(ctx context.Context, id string) (*HelloReplyEvent, error) {
+	
+	channel := c.db.Channel(c.channel, c.config.HelloReplyTopic())
+	defer channel.Close()
+
+	deqEvent, err := channel.Get(id)
+	if err != nil {
+		return nil, err
+	}
+
+	event, err := c.config.EventToHelloReplyEvent(deqEvent)
+	if err != nil {
+		return nil, fmt.Errorf("convert deq.Event to HelloReplyEvent: %v", err)
+	}
+
+	return event, nil
+}
+
+func (c *GreeterClient) AwaitHelloReplyEvent(ctx context.Context, id string) (*HelloReplyEvent, error) {
+	
+	channel := c.db.Channel(c.channel, c.config.HelloReplyTopic())
+	defer channel.Close()
+
+	deqEvent, err := channel.Await(ctx, id)
+	if err != nil {
+		return nil, err
+	}
+
+	event, err := c.config.EventToHelloReplyEvent(deqEvent)
+	if err != nil {
+		return nil, fmt.Errorf("convert deq.Event to HelloReplyEvent: %v", err)
+	}
+
+	return event, nil
+}
+
+func (c *GreeterClient) SubHelloReplyEvent(ctx context.Context, handler func(context.Context, *HelloReplyEvent) ack.Code) error {
+	channel := c.db.Channel(c.channel, c.config.HelloReplyTopic())
+	defer channel.Close()
+
+	return channel.Sub(ctx, func(ctx context.Context, e deq.Event) (*deq.Event, ack.Code) {
+			event, err := c.config.EventToHelloReplyEvent(e)
+			if err != nil {
+				panic("convert deq.Event to HelloReplyEvent: " + err.Error())
+			}
+
+			return nil, handler(ctx, event)
+	})
+}
+
+func (c *GreeterClient) NewHelloReplyEventIter(opts deq.IterOpts) *HelloReplyEventIter {
+	
+	channel := c.db.Channel(c.channel, c.config.HelloReplyTopic())
+	defer channel.Close()
+	
+	return &HelloReplyEventIter{
+		iter:   channel.NewEventIter(opts),
+		config: c.config,
+	}
+}
+
+func (c *GreeterClient) NewHelloReplyIndexIter(opts deq.IterOpts) *HelloReplyIndexIter {
+	
+	channel := c.db.Channel(c.channel, c.config.HelloReplyTopic())
+	defer channel.Close()
+	
+	return &HelloReplyIndexIter{
+		iter:   channel.NewIndexIter(opts),
+		config: c.config,
+	}
+}
+
+func (c *GreeterClient) PubHelloReplyEvent(ctx context.Context, e *HelloReplyEvent) (*HelloReplyEvent, error) {
+	deqEvent, err := c.config.HelloReplyEventToEvent(e)
+	if err != nil {
+		return nil, fmt.Errorf("convert HelloReplyEvent to deq.Event: %v", err)
+	}
+
+	deqEvent, err = c.db.Pub(ctx, deqEvent)
+	if err != nil {
+		return nil, fmt.Errorf("pub: %v", err)
+	}
+
+	e, err = c.config.EventToHelloReplyEvent(deqEvent)
+	if err != nil {
+		return nil, fmt.Errorf("convert deq.Event to HelloReplyEvent: %v", err)
+	}
+
+	return e, nil
+}
+
+func (c *GreeterClient) DelHelloReplyEvent(ctx context.Context, id string) error {
+	return c.db.Del(c.config.HelloReplyTopic(), id)
+}
+
+
+func (c *GreeterClient) SayHello(ctx context.Context, e *HelloRequestEvent) (*HelloReplyEvent, error) {
+
+	_, err := c.PubHelloRequestEvent(ctx, e)
+	if err != nil {
+		return nil, fmt.Errorf("pub: %v", err)
+	}
+
+	channel := c.db.Channel(c.channel, c.config.HelloReplyTopic())
+	defer channel.Close()
+
+	deqResult, err := channel.Await(ctx, e.ID)
+	if err != nil {
+		return nil, fmt.Errorf("get response: %v", err)
+	}
+
+	result, err := c.config.EventToHelloReplyEvent(deqResult)
+	if err != nil {
+		return nil, fmt.Errorf("convert deq.Event to HelloReplyEvent: %v", err)
+	}
+
+	return result, nil
+}
+
+type GreeterHandlers interface {
+	SayHello(ctx context.Context, req *HelloRequestEvent) (*HelloReplyEvent, ack.Code)
+}
+
+type GreeterServer struct {
+	handlers GreeterHandlers
+	db       *deq.Store
+	channel  string
+	done     chan struct{}
+	config   *TopicConfig
+}
+
+func NewGreeterServer(db *deq.Store, handlers GreeterHandlers, channel string, config *TopicConfig) (*GreeterServer) {
+	return &GreeterServer{
+		handlers: handlers,
+		channel: channel,
+		db: db,
+		done: make(chan struct{}),
+		config: config,
+	}
+}
+
+func (s *GreeterServer) Listen(ctx context.Context) error {
+	errc := make(chan error, 1)
+	wg := sync.WaitGroup{}
+	ctx, cancel := context.WithCancel(ctx)
+	defer cancel()
+	
+	wg.Add(1)
+  go func() {
+		defer wg.Done()
+		
+		channel := s.db.Channel(s.channel, s.config.HelloRequestTopic())
+		defer channel.Close()
+		
+		err := channel.Sub(ctx, func(ctx context.Context, e deq.Event) (*deq.Event, ack.Code) {
+			event, err := s.config.EventToHelloRequestEvent(e)
+			if err != nil {
+				panic("convert deq.Event to HelloRequestEvent: " + err.Error())
+			}
+
+			response, code := s.handlers.SayHello(ctx, event)
+			if response == nil {
+				return nil, code
+			}
+
+			deqResponse, err := s.config.HelloReplyEventToEvent(response)
+			if err != nil {
+				panic("convert response of type HelloReplyEvent to deq.Event: " + err.Error())
+			}
+			return &deqResponse, code
+		})
+		if err != nil {
+			if err != ctx.Err() {
+				err = fmt.Errorf("SayHello: %v", err)
+			}
+			// If no one is recieving then the outer function already has returned
+			select {
+			case errc <- err:
+			default:
+			}
+		}
+	}()
+
+	go func() {
+		wg.Wait()
+		close(errc)
+	}()
+
+	select {
+	case <-s.done:
+		return nil
+	case err := <-errc:
+		return err
+	}
+}
+
+func (s *GreeterServer) Close() {
+	close(s.done)
+}
+
+

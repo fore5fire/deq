@@ -285,7 +285,7 @@ func (s *Store) Pub(ctx context.Context, e deq.Event) (deq.Event, error) {
 }
 
 // Del deletes an event
-func (s *Store) Del(topic, id string) error {
+func (s *Store) Del(ctx context.Context, topic, id string) error {
 
 	txn := s.db.NewTransaction(true)
 	defer txn.Discard()
