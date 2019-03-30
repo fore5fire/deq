@@ -277,6 +277,28 @@ func (c *Channel) Get(ctx context.Context, eventID string) (deq.Event, error) {
 	return *e, nil
 }
 
+// GetIndex returns the event for an event's index, or ErrNotFound if none is found
+func (c *Channel) GetIndex(ctx context.Context, index string) (deq.Event, error) {
+	txn := c.db.NewTransaction(false)
+	defer txn.Discard()
+
+	var payload data.IndexPayload
+	err := getIndexPayload(txn, data.IndexKey{
+		Topic: c.topic,
+		Value: index,
+	}, &payload)
+	if err != nil {
+		return deq.Event{}, err
+	}
+
+	e, err := getEvent(txn, c.topic, payload.EventId, c.name)
+	if err != nil {
+		return deq.Event{}, err
+	}
+
+	return *e, nil
+}
+
 // Await gets an event for the requested event id, waiting for the event to be created if it does
 // not already exist.
 //

@@ -218,6 +218,9 @@ func (s *Server) Get(ctx context.Context, in *pb.GetRequest) (*pb.Event, error) 
 	if in.Channel == "" {
 		return nil, status.Error(codes.InvalidArgument, "argument channel is required")
 	}
+	if in.Await && in.UseIndex {
+		return nil, status.Error(codes.InvalidArgument, "await and use_index canoot both be true")
+	}
 
 	channel := s.store.Channel(in.Channel, in.Topic)
 	defer channel.Close()
@@ -232,6 +235,12 @@ func (s *Server) Get(ctx context.Context, in *pb.GetRequest) (*pb.Event, error) 
 		}
 		if err != nil {
 			log.Printf("Get: await event: %v", err)
+			return nil, status.Error(codes.Internal, "")
+		}
+	} else if in.UseIndex {
+		e, err = channel.GetIndex(ctx, in.EventId)
+		if err != nil {
+			log.Printf("Get: get event by index: %v", err)
 			return nil, status.Error(codes.Internal, "")
 		}
 	} else {
@@ -303,7 +312,7 @@ func (s *Server) Del(ctx context.Context, in *pb.DelRequest) (*pb.Empty, error) 
 		return nil, status.Error(codes.InvalidArgument, "topic is required")
 	}
 
-	err := s.store.Del(in.Topic, in.EventId)
+	err := s.store.Del(ctx, in.Topic, in.EventId)
 	if err == deq.ErrNotFound {
 		return nil, status.Error(codes.NotFound, "")
 	}

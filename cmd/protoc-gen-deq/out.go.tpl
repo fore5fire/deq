@@ -7,22 +7,14 @@ package {{ .Package }}
 import (
 	"context"
 	"fmt"
-	"sync"
-	"time"
+	{{if .HasMethods}}"sync"{{end}}
+	{{if .Types}}"time"{{end}}
 
 	"gitlab.com/katcheCode/deq"
+	{{if .HasMethods -}}
 	"gitlab.com/katcheCode/deq/ack"
+	{{- end }}
 )
-
-type TopicConfig struct {
-	topics map[string]string
-}
-
-func NewTopicConfig() *TopicConfig {
-	return &TopicConfig{
-		topics: make(map[string]string),
-	}
-}
 
 {{- range .Types }}
 
@@ -35,68 +27,15 @@ type {{.GoName}}Event struct {
 	Indexes      []string
 }
 
-func (c *TopicConfig) EventTo{{.GoName}}Event(e deq.Event) (*{{.GoName}}Event, error) {
-
-	if e.Topic != c.{{.GoName}}Topic() {
-		return nil, fmt.Errorf("incorrect topic %s", e.Topic)
-	}
-
-	msg := new({{ .GoName }})
-	err := msg.Unmarshal(e.Payload)
-	if err != nil {
-		return nil, fmt.Errorf("unmarshal payload: %v", err)
-	}
-
-	return &{{.GoName}}Event{
-		ID:           e.ID,
-		Msg:          msg,
-		CreateTime:   e.CreateTime,
-		DefaultState: e.DefaultState,
-		State:        e.State,
-		Indexes:      e.Indexes,
-	}, nil
-}
-
-
-func (c *TopicConfig) {{.GoName}}EventToEvent(e *{{.GoName}}Event) (deq.Event, error) {
-
-	buf, err := e.Msg.Marshal()
-	if err != nil {
-		return deq.Event{}, err
-	}
-
-	return deq.Event{
-		ID:           e.ID,
-		Payload:      buf,
-		CreateTime:   e.CreateTime,
-		DefaultState: e.DefaultState,
-		State:        e.State,
-		Topic:        c.{{.GoName}}Topic(),
-		Indexes:      e.Indexes,
-	}, nil
-}
-
-func (c *TopicConfig) {{.GoName}}Topic() string {
-	if c == nil {
-		return "{{.ProtoFullName}}"
-	}
-
-	topic, ok := c.topics["{{.GoName}}"]
-	if ok {
-		return topic
-	}
-	return "{{.ProtoFullName}}"
-}
-
-func (c *TopicConfig) Set{{.GoName}}Topic(topic string) {
-	c.topics["{{.GoName}}"] = topic
+type _{{.GoName}}TopicConfig interface {
+	EventTo{{.GoName}}Event(deq.Event) (*{{.GoName}}Event, error)
 }
 
 // {{.GoName}}EventIter is an iterator for {{.GoName}}Events. It has an identical interface to
 // deq.EventIter, except that the Event method returns a {{.GoName}}Event.
 type {{.GoName}}EventIter struct {
 	iter   deq.EventIter
-	config *TopicConfig
+	config _{{.GoName}}TopicConfig
 }
 
 // Next returns the next {{.GoName}}Event, deq.ErrIterationComplete if iteration completed, or an error,
@@ -120,10 +59,76 @@ func (it *{{.GoName}}EventIter) Next(ctx context.Context) (*{{.GoName}}Event, er
 func (it *{{.GoName}}EventIter) Close() {
 	it.iter.Close()
 }
-
-{{- end -}}
+{{ end -}}
 
 {{ range .Services }}
+type {{.Name}}TopicConfig struct {
+	topics map[string]string
+}
+
+func New{{.Name}}TopicConfig() *{{.Name}}TopicConfig {
+	return &{{.Name}}TopicConfig{
+		topics: make(map[string]string),
+	}
+}
+{{ $ServiceName := .Name -}}
+{{ range .Types }}
+func (c *{{$ServiceName}}TopicConfig) EventTo{{.GoName}}Event(e deq.Event) (*{{.GoName}}Event, error) {
+
+	if e.Topic != c.{{.GoName}}Topic() {
+		return nil, fmt.Errorf("incorrect topic %s", e.Topic)
+	}
+
+	msg := new({{ .GoName }})
+	err := msg.Unmarshal(e.Payload)
+	if err != nil {
+		return nil, fmt.Errorf("unmarshal payload: %v", err)
+	}
+
+	return &{{.GoName}}Event{
+		ID:           e.ID,
+		Msg:          msg,
+		CreateTime:   e.CreateTime,
+		DefaultState: e.DefaultState,
+		State:        e.State,
+		Indexes:      e.Indexes,
+	}, nil
+}
+
+func (c *{{$ServiceName}}TopicConfig) {{.GoName}}EventToEvent(e *{{.GoName}}Event) (deq.Event, error) {
+
+	buf, err := e.Msg.Marshal()
+	if err != nil {
+		return deq.Event{}, err
+	}
+
+	return deq.Event{
+		ID:           e.ID,
+		Payload:      buf,
+		CreateTime:   e.CreateTime,
+		DefaultState: e.DefaultState,
+		State:        e.State,
+		Topic:        c.{{.GoName}}Topic(),
+		Indexes:      e.Indexes,
+	}, nil
+}
+
+func (c *{{$ServiceName}}TopicConfig) {{.GoName}}Topic() string {
+	if c == nil {
+		return "{{.ProtoFullName}}"
+	}
+
+	topic, ok := c.topics["{{.GoName}}"]
+	if ok {
+		return topic
+	}
+	return "{{.ProtoFullName}}"
+}
+
+func (c *{{$ServiceName}}TopicConfig) Set{{.GoName}}Topic(topic string) {
+	c.topics["{{.GoName}}"] = topic
+}
+{{ end }}
 
 {{ template "client" . }}
 {{ template "service" . }}
@@ -134,10 +139,10 @@ func (it *{{.GoName}}EventIter) Close() {
 type {{ .Name }}Client struct {
 	db      deq.Client
 	channel string
-	config *TopicConfig
+	config *{{$ServiceName}}TopicConfig
 }
 
-func New{{ .Name }}Client(db deq.Client, channel string, config *TopicConfig) *{{.Name}}Client {
+func New{{ .Name }}Client(db deq.Client, channel string, config *{{$ServiceName}}TopicConfig) *{{.Name}}Client {
 	return &{{.Name}}Client{
 		db: db,
 		channel: channel,
@@ -187,6 +192,24 @@ func (c *{{ $ServiceName }}Client) Get{{ .GoName }}Event(ctx context.Context, id
 	defer channel.Close()
 
 	deqEvent, err := channel.Get(ctx, id)
+	if err != nil {
+		return nil, err
+	}
+
+	event, err := c.config.EventTo{{.GoName}}Event(deqEvent)
+	if err != nil {
+		return nil, fmt.Errorf("convert deq.Event to {{.GoName}}Event: %v", err)
+	}
+
+	return event, nil
+}
+
+func (c *{{ $ServiceName }}Client) Get{{ .GoName }}Index(ctx context.Context, index string) (*{{ .GoName }}Event, error) {
+	
+	channel := c.db.Channel(c.channel, c.config.{{.GoName}}Topic())
+	defer channel.Close()
+
+	deqEvent, err := channel.GetIndex(ctx, index)
 	if err != nil {
 		return nil, err
 	}
@@ -316,10 +339,10 @@ type {{ .Name }}Server struct {
 	db       deq.Client
 	channel  string
 	done     chan struct{}
-	config   *TopicConfig
+	config   *{{.Name}}TopicConfig
 }
 
-func New{{ .Name }}Server(db deq.Client, handlers {{ .Name }}Handlers, channel string, config *TopicConfig) (*{{ .Name }}Server) {
+func New{{ .Name }}Server(db deq.Client, handlers {{ .Name }}Handlers, channel string, config *{{.Name}}TopicConfig) (*{{ .Name }}Server) {
 	return &{{ .Name }}Server{
 		handlers: handlers,
 		channel: channel,

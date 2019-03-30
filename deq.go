@@ -17,6 +17,7 @@ type Client interface {
 type Channel interface {
 	Sub(ctx context.Context, handler SubHandler) error
 	Get(ctx context.Context, id string) (Event, error)
+	GetIndex(ctx context.Context, index string) (Event, error)
 	NewEventIter(IterOpts) EventIter
 	NewIndexIter(IterOpts) EventIter
 	Await(ctx context.Context, eventID string) (Event, error)

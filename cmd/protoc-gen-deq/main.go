@@ -18,11 +18,12 @@ import (
 )
 
 type File struct {
-	Name     string
-	Source   string
-	Package  string
-	Services []Service
-	Types    []Type
+	Name       string
+	Source     string
+	Package    string
+	Services   []Service
+	Types      []Type
+	HasMethods bool
 }
 
 type Type struct {
@@ -94,13 +95,22 @@ func reply(response *plugin.CodeGeneratorResponse) {
 	}
 }
 
+func containsString(target string, candidates []string) bool {
+	for _, str := range candidates {
+		if str == target {
+			return true
+		}
+	}
+	return false
+}
+
 func generate(input *plugin.CodeGeneratorRequest) ([]*plugin.CodeGeneratorResponse_File, error) {
 
-	outfiles := make([]*plugin.CodeGeneratorResponse_File, len(input.GetProtoFile()))
+	outfiles := make([]*plugin.CodeGeneratorResponse_File, 0, len(input.GetFileToGenerate()))
 
-	for i, descriptor := range input.GetProtoFile() {
+	for _, descriptor := range input.GetProtoFile() {
 
-		if len(descriptor.GetMessageType()) == 0 {
+		if !containsString(descriptor.GetName(), input.GetFileToGenerate()) {
 			continue
 		}
 
@@ -131,6 +141,8 @@ func generate(input *plugin.CodeGeneratorRequest) ([]*plugin.CodeGeneratorRespon
 			typeSet := make(map[Type]struct{})
 
 			for k, method := range svc.GetMethod() {
+				file.HasMethods = true
+
 				methods[k] = Method{
 					Name:    method.GetName(),
 					InType:  NewType(method.GetInputType()),
@@ -143,18 +155,16 @@ func generate(input *plugin.CodeGeneratorRequest) ([]*plugin.CodeGeneratorRespon
 			}
 
 			// Create set of all types referenced by this service only
-			// types := make([]Type, len(typeSet))
-			// var i int
-			// for t := range typeSet {
-			// 	types[i] = t
-			// 	i++
-			// }
+			types := make([]Type, 0, len(typeSet))
+			for t := range typeSet {
+				types = append(types, t)
+			}
 
 			file.Services[j] = Service{
 				Name:    svc.GetName(),
 				File:    file,
 				Methods: methods,
-				Types:   file.Types,
+				Types:   types,
 			}
 		}
 
@@ -179,7 +189,7 @@ func generate(input *plugin.CodeGeneratorRequest) ([]*plugin.CodeGeneratorRespon
 		}
 		outfile.Content = proto.String(outbuffer.String())
 
-		outfiles[i] = outfile
+		outfiles = append(outfiles, outfile)
 	}
 
 	return outfiles, nil

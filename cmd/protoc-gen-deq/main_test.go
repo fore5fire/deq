@@ -5,7 +5,6 @@ import (
 	"fmt"
 	"io"
 	"io/ioutil"
-	"log"
 	"os"
 	"os/exec"
 	"path"
@@ -23,15 +22,14 @@ func TestProtocGenDEQ(t *testing.T) {
 		t.Fatalf("create test directory: %v", err)
 	}
 	defer os.RemoveAll(dir)
-	fmt.Println(dir)
 
 	files, err := generate(testRequest)
 	if err != nil {
 		t.Fatal(err)
 	}
 
-	if len(files) != 1 {
-		t.Errorf("count generated files: expected 1, got %d", len(files))
+	if len(files) != 2 {
+		t.Errorf("count generated files: expected 2, got %d", len(files))
 	}
 
 	// Copy protoc-gen-gogofaster output to directory
@@ -55,50 +53,89 @@ func TestProtocGenDEQ(t *testing.T) {
 	cmd.Stderr = &errBuf
 	err = cmd.Run()
 	if err != nil {
-		t.Fatalf("go build: %v: %s\n%s", err, errBuf.Bytes(), files[0].GetContent())
+		t.Logf("go build: %v: %s\n", err, errBuf.Bytes())
+		for _, file := range files {
+			t.Logf("%s\n", file.GetContent())
+		}
+		t.FailNow()
 	}
 }
 
 // Generated from testdata/greeter.proto. See TestGenerateTestRequest for details of generating
 // this struct.
 var testRequest = &plugin_go.CodeGeneratorRequest{
-	FileToGenerate: []string{"greeter.proto"},
+	FileToGenerate: []string{"greeter.proto", "greeter2.proto"},
 	Parameter:      nil,
-	ProtoFile: []*descriptor.FileDescriptorProto{{
-		Name:    func(v string) *string { return &v }("greeter.proto"),
-		Package: func(v string) *string { return &v }("example.greeter"),
-		MessageType: []*descriptor.DescriptorProto{
-			{
-				Name: func(v string) *string { return &v }("HelloRequest"),
-				Field: []*descriptor.FieldDescriptorProto{{
-					Name:     func(v string) *string { return &v }("name"),
-					Number:   func(v int32) *int32 { return &v }(1),
-					Label:    func(v descriptor.FieldDescriptorProto_Label) *descriptor.FieldDescriptorProto_Label { return &v }(1),
-					Type:     func(v descriptor.FieldDescriptorProto_Type) *descriptor.FieldDescriptorProto_Type { return &v }(9),
-					JsonName: func(v string) *string { return &v }("name"),
-				}},
+	ProtoFile: []*descriptor.FileDescriptorProto{
+		&descriptor.FileDescriptorProto{
+			Name:    func(v string) *string { return &v }("greeter.proto"),
+			Package: func(v string) *string { return &v }("example.greeter"),
+			MessageType: []*descriptor.DescriptorProto{
+				{
+					Name: func(v string) *string { return &v }("HelloRequest"),
+					Field: []*descriptor.FieldDescriptorProto{{
+						Name:     func(v string) *string { return &v }("name"),
+						Number:   func(v int32) *int32 { return &v }(1),
+						Label:    func(v descriptor.FieldDescriptorProto_Label) *descriptor.FieldDescriptorProto_Label { return &v }(1),
+						Type:     func(v descriptor.FieldDescriptorProto_Type) *descriptor.FieldDescriptorProto_Type { return &v }(9),
+						JsonName: func(v string) *string { return &v }("name"),
+					}},
+				},
+				{
+					Name: func(v string) *string { return &v }("HelloReply"),
+					Field: []*descriptor.FieldDescriptorProto{{
+						Name:     func(v string) *string { return &v }("message"),
+						Number:   func(v int32) *int32 { return &v }(1),
+						Label:    func(v descriptor.FieldDescriptorProto_Label) *descriptor.FieldDescriptorProto_Label { return &v }(1),
+						Type:     func(v descriptor.FieldDescriptorProto_Type) *descriptor.FieldDescriptorProto_Type { return &v }(9),
+						JsonName: func(v string) *string { return &v }("message"),
+					}},
+				},
 			},
-			{
-				Name: func(v string) *string { return &v }("HelloReply"),
-				Field: []*descriptor.FieldDescriptorProto{{
-					Name:     func(v string) *string { return &v }("message"),
-					Number:   func(v int32) *int32 { return &v }(1),
-					Label:    func(v descriptor.FieldDescriptorProto_Label) *descriptor.FieldDescriptorProto_Label { return &v }(1),
-					Type:     func(v descriptor.FieldDescriptorProto_Type) *descriptor.FieldDescriptorProto_Type { return &v }(9),
-					JsonName: func(v string) *string { return &v }("message"),
-				}},
-			},
-		},
-		Service: []*descriptor.ServiceDescriptorProto{{
-			Name: func(v string) *string { return &v }("Greeter"),
-			Method: []*descriptor.MethodDescriptorProto{{
-				Name:       func(v string) *string { return &v }("SayHello"),
-				InputType:  func(v string) *string { return &v }(".example.greeter.HelloRequest"),
-				OutputType: func(v string) *string { return &v }(".example.greeter.HelloReply"),
+			EnumType: []*descriptor.EnumDescriptorProto{{
+				Name: func(v string) *string { return &v }("HelloType"),
+				Value: []*descriptor.EnumValueDescriptorProto{
+					{
+						Name:   func(v string) *string { return &v }("DEFAULT"),
+						Number: func(v int32) *int32 { return &v }(0),
+					},
+					{
+						Name:   func(v string) *string { return &v }("FRIENDLY"),
+						Number: func(v int32) *int32 { return &v }(1),
+					},
+				},
 			}},
-		}},
-		Syntax: func(v string) *string { return &v }("proto3"),
-	}},
+			Service: []*descriptor.ServiceDescriptorProto{{
+				Name: func(v string) *string { return &v }("Greeter"),
+				Method: []*descriptor.MethodDescriptorProto{{
+					Name:       func(v string) *string { return &v }("SayHello"),
+					InputType:  func(v string) *string { return &v }(".example.greeter.HelloRequest"),
+					OutputType: func(v string) *string { return &v }(".example.greeter.HelloReply"),
+					Options:    &descriptor.MethodOptions{XXX_InternalExtensions: proto.NewUnsafeXXX_InternalExtensions(map[int32]proto.Extension{})},
+				}},
+			}},
+			Syntax: func(v string) *string { return &v }("proto3"),
+		},
+		&descriptor.FileDescriptorProto{
+			Name:       func(v string) *string { return &v }("greeter2.proto"),
+			Package:    func(v string) *string { return &v }("example.greeter2"),
+			Dependency: []string{"greeter.proto"},
+			Service: []*descriptor.ServiceDescriptorProto{{
+				Name: func(v string) *string { return &v }("Greeter2"),
+				Method: []*descriptor.MethodDescriptorProto{{
+					Name:       func(v string) *string { return &v }("SayHello"),
+					InputType:  func(v string) *string { return &v }(".example.greeter.HelloRequest"),
+					OutputType: func(v string) *string { return &v }(".example.greeter.HelloReply"),
+					Options:    &descriptor.MethodOptions{XXX_InternalExtensions: proto.NewUnsafeXXX_InternalExtensions(map[int32]proto.Extension{})},
+				}},
+			}},
+			Options: &descriptor.FileOptions{
+				GoPackage:              func(v string) *string { return &v }("example_greeter"),
+				XXX_InternalExtensions: proto.NewUnsafeXXX_InternalExtensions(map[int32]proto.Extension{}),
+			},
+			Syntax: func(v string) *string { return &v }("proto3"),
+		},
+	},
 }
 
 func CopyTo(dstDir string, sources ...string) error {
@@ -131,33 +168,38 @@ func CopyTo(dstDir string, sources ...string) error {
 
 func TestGenerateTestRequest(t *testing.T) {
 	// Uncomment the next line to run the generator:
-	// t.Skip()
+	t.Skip()
 
-	cmd := exec.Command("protoc", "--descriptor_set_out=testdata/greeter_descriptor.pb", "testdata/greeter.proto")
-	cmd.Stderr = os.Stderr
-	err := cmd.Run()
+	workdir, err := os.Getwd()
 	if err != nil {
-		log.Fatal(err)
+		t.Fatalf("get working directory: %v", err)
+	}
+	cmd := exec.Command("protoc", "--descriptor_set_out=greeter_descriptor.pb", "greeter.proto", "greeter2.proto")
+	cmd.Dir = path.Join(workdir, "testdata")
+	cmd.Stderr = os.Stderr
+	err = cmd.Run()
+	if err != nil {
+		t.Fatal(err)
 	}
 	defer os.Remove("testdata/greeter_descriptor.pb")
 
 	descriptors := new(descriptor.FileDescriptorSet)
 	buf, err := ioutil.ReadFile("testdata/greeter_descriptor.pb")
 	if err != nil {
-		log.Fatal(err)
+		t.Fatal(err)
 	}
 
 	err = proto.Unmarshal(buf, descriptors)
 	if err != nil {
-		log.Fatal(err)
+		t.Fatal(err)
 	}
 
 	fmt.Printf(`
 var testRequest = &plugin_go.CodeGeneratorRequest{
 	FileToGenerate: []string{"greeter.proto"},
 	Parameter:      nil,
-	ProtoFile:      %#v
+	ProtoFile:      %#v,
 }
-	`, descriptors.File[0])
-	t.Fatal()
+	`, descriptors.File)
+	t.Error()
 }
