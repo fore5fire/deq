@@ -16,6 +16,8 @@ type eventIter struct {
 	cancel func()
 	errMut sync.Mutex
 	err    error
+
+	reversed bool
 }
 
 func (c *clientChannel) NewEventIter(opts deq.IterOpts) deq.EventIter {
@@ -23,9 +25,10 @@ func (c *clientChannel) NewEventIter(opts deq.IterOpts) deq.EventIter {
 	ctx, cancel := context.WithCancel(context.Background())
 
 	it := &eventIter{
-		next:   make(chan *api.Event, opts.PrefetchCount/2),
-		cancel: cancel,
-		client: c.deqClient,
+		next:     make(chan *api.Event, opts.PrefetchCount/2),
+		cancel:   cancel,
+		client:   c.deqClient,
+		reversed: opts.Reversed,
 	}
 
 	go it.loadEvents(ctx, &api.ListRequest{
@@ -42,6 +45,10 @@ func (c *clientChannel) NewEventIter(opts deq.IterOpts) deq.EventIter {
 
 func (c *clientChannel) NewIndexIter(opts deq.IterOpts) deq.EventIter {
 
+	if opts.PrefetchCount < 0 {
+		panic("opts.PrefetchCount cannot be negative")
+	}
+
 	ctx, cancel := context.WithCancel(context.Background())
 
 	it := &eventIter{
@@ -57,7 +64,7 @@ func (c *clientChannel) NewIndexIter(opts deq.IterOpts) deq.EventIter {
 		MaxId:    opts.Max,
 		Reversed: opts.Reversed,
 		UseIndex: true,
-		PageSize: int32(opts.PrefetchCount/2 + opts.PrefetchCount%2),
+		PageSize: int32((opts.PrefetchCount+1)/2 + (opts.PrefetchCount+1)%2),
 	})
 
 	return it
@@ -114,8 +121,13 @@ func (it *eventIter) loadEvents(ctx context.Context, request *api.ListRequest) {
 			break
 		}
 
-		// Set MinId to just after the last id of the last page.
-		req.MinId = list.Events[len(list.Events)-1].Id + "\x01"
+		// Set bounds to return results just after the last id of the last page.
+		last := list.Events[len(list.Events)-1].Id
+		if it.reversed {
+			req.MaxId = last
+		} else {
+			req.MinId = last + "\x01"
+		}
 
 		for _, e := range list.Events {
 			select {
