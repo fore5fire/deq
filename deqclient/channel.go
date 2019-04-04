@@ -27,7 +27,7 @@ func (c *Client) Channel(name, topic string) deq.Channel {
 	if topic == "" {
 		panic("topic is required")
 	}
-	if strings.Contains(topic, "\xff") {
+	if strings.Contains(topic, "\x00") {
 		panic("topic is invalid")
 	}
 	return &clientChannel{
