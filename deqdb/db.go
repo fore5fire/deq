@@ -144,7 +144,7 @@ func writeEvent(txn *badger.Txn, e *deq.Event) error {
 		// id hash is greater.
 		var existing data.IndexPayload
 		err := getIndexPayload(txn, indexKey, &existing)
-		if err != nil && err != badger.ErrKeyNotFound {
+		if err != nil && err != deq.ErrNotFound {
 			return fmt.Errorf("lookup existing index: %v", err)
 		}
 		if err == nil && !shouldUpdateIndex(&existing, e) {
