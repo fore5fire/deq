@@ -73,8 +73,11 @@ func (c *clientChannel) NewIndexIter(opts deq.IterOpts) deq.EventIter {
 func (it *eventIter) Next(ctx context.Context) bool {
 	select {
 	case e, ok := <-it.next:
+		if !ok {
+			return false
+		}
 		it.current = eventFromProto(e)
-		return ok
+		return true
 	case <-ctx.Done():
 		it.setErr(ctx.Err())
 		return false
