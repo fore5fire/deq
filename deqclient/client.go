@@ -65,9 +65,10 @@ type Client struct {
 	client api.DEQClient
 }
 
-// NewClient constructs a new client.
+// New constructs a new client.
+//
 // conn can be used by multiple Publishers and Subscribers in parallel
-func NewClient(conn *grpc.ClientConn) *Client {
+func New(conn *grpc.ClientConn) *Client {
 	return &Client{
 		client: api.NewDEQClient(conn),
 	}
