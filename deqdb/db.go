@@ -226,6 +226,9 @@ func getIndexPayload(txn *badger.Txn, key data.IndexKey, dst *data.IndexPayload)
 		return fmt.Errorf("marshal index: %v", err)
 	}
 	item, err := txn.Get(rawkey)
+	if err == badger.ErrKeyNotFound {
+		return deq.ErrNotFound
+	}
 	if err != nil {
 		return err
 	}

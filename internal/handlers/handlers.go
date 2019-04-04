@@ -239,12 +239,18 @@ func (s *Server) Get(ctx context.Context, in *pb.GetRequest) (*pb.Event, error) 
 		}
 	} else if in.UseIndex {
 		e, err = channel.GetIndex(ctx, in.EventId)
+		if err == deq.ErrNotFound {
+			return nil, status.Error(codes.NotFound, "")
+		}
 		if err != nil {
 			log.Printf("Get: get event by index: %v", err)
 			return nil, status.Error(codes.Internal, "")
 		}
 	} else {
 		e, err = channel.Get(ctx, in.EventId)
+		if err == deq.ErrNotFound {
+			return nil, status.Error(codes.NotFound, "")
+		}
 		if err != nil {
 			log.Printf("Get: get event: %v", err)
 			return nil, status.Error(codes.Internal, "")
