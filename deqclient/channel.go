@@ -3,6 +3,7 @@ package deqclient
 import (
 	"context"
 	"io"
+	"strings"
 	"sync"
 	"time"
 
@@ -14,12 +15,21 @@ import (
 )
 
 type clientChannel struct {
-	client      *Client
+	client      deq.Client
 	deqClient   api.DEQClient
 	name, topic string
 }
 
 func (c *Client) Channel(name, topic string) deq.Channel {
+	if name == "" {
+		panic("name is required")
+	}
+	if topic == "" {
+		panic("topic is required")
+	}
+	if strings.Contains(topic, "\xff") {
+		panic("topic is invalid")
+	}
 	return &clientChannel{
 		client:    c,
 		deqClient: c.client,
@@ -106,6 +116,8 @@ func (c *clientChannel) SetEventState(ctx context.Context, id string, state deq.
 }
 
 func (c *clientChannel) Sub(ctx context.Context, handler deq.SubHandler) error {
+	ctx, cancel := context.WithCancel(ctx)
+
 	stream, err := c.deqClient.Sub(ctx, &api.SubRequest{
 		Channel: c.name,
 		Topic:   c.topic,
@@ -128,8 +140,6 @@ func (c *clientChannel) Sub(ctx context.Context, handler deq.SubHandler) error {
 
 	results := make(chan Result, 30)
 	defer close(results)
-
-	ctx, cancel := context.WithCancel(ctx)
 
 	// workers handle results without blocking processing of next event
 	const numWorkers = 3
@@ -177,6 +187,8 @@ func (c *clientChannel) Sub(ctx context.Context, handler deq.SubHandler) error {
 		case results <- Result{event, response, code}:
 		case err := <-errc:
 			return err
+		case <-ctx.Done():
+			return ctx.Err()
 		}
 	}
 }

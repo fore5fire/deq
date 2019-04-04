@@ -137,7 +137,7 @@ func eventFromProto(e *api.Event) deq.Event {
 
 	// If CreateTime is a zero as a unix timestamp, don't convert it because time.Time{}.UnixNano() != 0
 	var createTime time.Time
-	if e.CreateTime == 0 {
+	if e.CreateTime != 0 {
 		createTime = time.Unix(0, e.CreateTime)
 	}
 
