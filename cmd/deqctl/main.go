@@ -106,7 +106,7 @@ func main() {
 				fmt.Printf("recieve message: %v\n", err)
 				os.Exit(2)
 			}
-			fmt.Printf("id: %v, topic: %s, %s\n", e.Id, e.Topic, e.Payload)
+			fmt.Printf("id: %v, topic: %s\nindexes: %v\n %s\n\n", e.Id, e.Topic, e.Indexes, e.Payload)
 		}
 
 	case "help", "":
