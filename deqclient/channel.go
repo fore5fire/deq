@@ -121,6 +121,7 @@ func (c *clientChannel) Sub(ctx context.Context, handler deq.SubHandler) error {
 	stream, err := c.deqClient.Sub(ctx, &api.SubRequest{
 		Channel: c.name,
 		Topic:   c.topic,
+		Follow:  true,
 	})
 	if err != nil {
 		return err

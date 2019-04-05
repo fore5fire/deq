@@ -7,7 +7,10 @@ package {{ .Package }}
 import (
 	"context"
 	"fmt"
-	{{if .HasMethods}}"sync"{{end}}
+	{{- if .HasMethods }}
+	"sync"
+	"strings"
+	{{- end }}
 	{{if .Types}}"time"{{end}}
 
 	"gitlab.com/katcheCode/deq"
@@ -20,11 +23,12 @@ import (
 
 type {{.GoName}}Event struct {
 	ID 				   string
-	Msg 			   *{{.GoName}}
 	CreateTime   time.Time
 	DefaultState deq.EventState
 	State        deq.EventState
 	Indexes      []string
+
+	{{.GoName}} *{{.GoName}}
 }
 
 type _{{.GoName}}TopicConfig interface {
@@ -33,14 +37,19 @@ type _{{.GoName}}TopicConfig interface {
 
 // {{.GoName}}EventIter is an iterator for {{.GoName}}Events. It has an identical interface to
 // deq.EventIter, except that the Event method returns a {{.GoName}}Event.
-type {{.GoName}}EventIter struct {
+type {{.GoName}}EventIter interface {
+	Next(ctx context.Context) (*{{.GoName}}Event, error)
+	Close()
+}
+
+type _{{.GoName}}EventIter struct {
 	iter   deq.EventIter
 	config _{{.GoName}}TopicConfig
 }
 
 // Next returns the next {{.GoName}}Event, deq.ErrIterationComplete if iteration completed, or an error,
 // if one occured. See deq.EventIter.Next for more information.
-func (it *{{.GoName}}EventIter) Next(ctx context.Context) (*{{.GoName}}Event, error) {
+func (it *_{{.GoName}}EventIter) Next(ctx context.Context) (*{{.GoName}}Event, error) {
 
 	if !it.iter.Next(ctx) {
 		return nil, deq.ErrIterationComplete
@@ -56,7 +65,7 @@ func (it *{{.GoName}}EventIter) Next(ctx context.Context) (*{{.GoName}}Event, er
 	return e, nil
 }
 
-func (it *{{.GoName}}EventIter) Close() {
+func (it *_{{.GoName}}EventIter) Close() {
 	it.iter.Close()
 }
 {{ end -}}
@@ -87,7 +96,7 @@ func (c *{{$ServiceName}}TopicConfig) EventTo{{.GoName}}Event(e deq.Event) (*{{.
 
 	return &{{.GoName}}Event{
 		ID:           e.ID,
-		Msg:          msg,
+		{{.GoName}}:          msg,
 		CreateTime:   e.CreateTime,
 		DefaultState: e.DefaultState,
 		State:        e.State,
@@ -97,7 +106,7 @@ func (c *{{$ServiceName}}TopicConfig) EventTo{{.GoName}}Event(e deq.Event) (*{{.
 
 func (c *{{$ServiceName}}TopicConfig) {{.GoName}}EventToEvent(e *{{.GoName}}Event) (deq.Event, error) {
 
-	buf, err := e.Msg.Marshal()
+	buf, err := e.{{.GoName}}.Marshal()
 	if err != nil {
 		return deq.Event{}, err
 	}
@@ -136,21 +145,38 @@ func (c *{{$ServiceName}}TopicConfig) Set{{.GoName}}Topic(topic string) {
 
 {{ define "client" }}
 {{- $ServiceName := .Name -}}
-type {{ .Name }}Client struct {
+type {{ .Name }}Client interface {
+	SyncAllTo(ctx context.Context, remote deq.Client) error
+	{{- range .Types }}
+	Get{{ .GoName }}Event(ctx context.Context, id string) (*{{ .GoName }}Event, error)
+	Get{{ .GoName }}Index(ctx context.Context, index string) (*{{ .GoName }}Event, error)
+	Await{{ .GoName }}Event(ctx context.Context, id string) (*{{ .GoName }}Event, error)
+	Sub{{ .GoName }}Event(ctx context.Context, handler func(context.Context, *{{.GoName}}Event) ack.Code) error
+	New{{ .GoName }}EventIter(opts deq.IterOpts) {{ .GoName }}EventIter
+	New{{ .GoName }}IndexIter(opts deq.IterOpts) {{ .GoName }}EventIter
+	Pub{{.GoName}}Event(ctx context.Context, e *{{.GoName}}Event) (*{{.GoName}}Event, error)
+	Del{{.GoName}}Event(ctx context.Context, id string) error
+	{{ end -}}
+	{{ range .Methods }}
+	{{ .Name }}(ctx context.Context, e *{{.InType}}Event) (*{{.OutType}}Event, error)
+	{{ end -}}
+}
+
+type _{{ .Name }}Client struct {
 	db      deq.Client
 	channel string
 	config *{{$ServiceName}}TopicConfig
 }
 
-func New{{ .Name }}Client(db deq.Client, channel string, config *{{$ServiceName}}TopicConfig) *{{.Name}}Client {
-	return &{{.Name}}Client{
+func New{{ .Name }}Client(db deq.Client, channel string, config *{{$ServiceName}}TopicConfig) {{.Name}}Client {
+	return &_{{.Name}}Client{
 		db: db,
 		channel: channel,
 		config: config,
 	}
 }
 
-func (c *{{.Name}}Client) SyncAllTo(ctx context.Context, remote deq.Client) error {
+func (c *_{{.Name}}Client) SyncAllTo(ctx context.Context, remote deq.Client) error {
 	errc := make(chan error, 1)
 	wg := sync.WaitGroup{}
 	ctx, cancel := context.WithCancel(ctx)
@@ -186,7 +212,7 @@ func (c *{{.Name}}Client) SyncAllTo(ctx context.Context, remote deq.Client) erro
 } 
 
 {{- range .Types }}
-func (c *{{ $ServiceName }}Client) Get{{ .GoName }}Event(ctx context.Context, id string) (*{{ .GoName }}Event, error) {
+func (c *_{{ $ServiceName }}Client) Get{{ .GoName }}Event(ctx context.Context, id string) (*{{ .GoName }}Event, error) {
 	
 	channel := c.db.Channel(c.channel, c.config.{{.GoName}}Topic())
 	defer channel.Close()
@@ -204,7 +230,7 @@ func (c *{{ $ServiceName }}Client) Get{{ .GoName }}Event(ctx context.Context, id
 	return event, nil
 }
 
-func (c *{{ $ServiceName }}Client) Get{{ .GoName }}Index(ctx context.Context, index string) (*{{ .GoName }}Event, error) {
+func (c *_{{ $ServiceName }}Client) Get{{ .GoName }}Index(ctx context.Context, index string) (*{{ .GoName }}Event, error) {
 	
 	channel := c.db.Channel(c.channel, c.config.{{.GoName}}Topic())
 	defer channel.Close()
@@ -222,7 +248,7 @@ func (c *{{ $ServiceName }}Client) Get{{ .GoName }}Index(ctx context.Context, in
 	return event, nil
 }
 
-func (c *{{ $ServiceName }}Client) Await{{ .GoName }}Event(ctx context.Context, id string) (*{{ .GoName }}Event, error) {
+func (c *_{{ $ServiceName }}Client) Await{{ .GoName }}Event(ctx context.Context, id string) (*{{ .GoName }}Event, error) {
 	
 	channel := c.db.Channel(c.channel, c.config.{{.GoName}}Topic())
 	defer channel.Close()
@@ -240,7 +266,7 @@ func (c *{{ $ServiceName }}Client) Await{{ .GoName }}Event(ctx context.Context, 
 	return event, nil
 }
 
-func (c *{{ $ServiceName }}Client) Sub{{ .GoName }}Event(ctx context.Context, handler func(context.Context, *{{.GoName}}Event) ack.Code) error {
+func (c *_{{ $ServiceName }}Client) Sub{{ .GoName }}Event(ctx context.Context, handler func(context.Context, *{{.GoName}}Event) ack.Code) error {
 	channel := c.db.Channel(c.channel, c.config.{{.GoName}}Topic())
 	defer channel.Close()
 
@@ -254,29 +280,29 @@ func (c *{{ $ServiceName }}Client) Sub{{ .GoName }}Event(ctx context.Context, ha
 	})
 }
 
-func (c *{{ $ServiceName }}Client) New{{ .GoName }}EventIter(opts deq.IterOpts) *{{ .GoName }}EventIter {
+func (c *_{{ $ServiceName }}Client) New{{ .GoName }}EventIter(opts deq.IterOpts) {{ .GoName }}EventIter {
 	
 	channel := c.db.Channel(c.channel, c.config.{{.GoName}}Topic())
 	defer channel.Close()
 	
-	return &{{.GoName}}EventIter{
+	return &_{{.GoName}}EventIter{
 		iter:   channel.NewEventIter(opts),
 		config: c.config,
 	}
 }
 
-func (c *{{ $ServiceName }}Client) New{{ .GoName }}IndexIter(opts deq.IterOpts) *{{ .GoName }}EventIter {
+func (c *_{{ $ServiceName }}Client) New{{ .GoName }}IndexIter(opts deq.IterOpts) {{ .GoName }}EventIter {
 	
 	channel := c.db.Channel(c.channel, c.config.{{.GoName}}Topic())
 	defer channel.Close()
 	
-	return &{{.GoName}}EventIter{
+	return &_{{.GoName}}EventIter{
 		iter:   channel.NewIndexIter(opts),
 		config: c.config,
 	}
 }
 
-func (c *{{ $ServiceName }}Client) Pub{{.GoName}}Event(ctx context.Context, e *{{.GoName}}Event) (*{{.GoName}}Event, error) {
+func (c *_{{ $ServiceName }}Client) Pub{{.GoName}}Event(ctx context.Context, e *{{.GoName}}Event) (*{{.GoName}}Event, error) {
 	deqEvent, err := c.config.{{.GoName}}EventToEvent(e)
 	if err != nil {
 		return nil, fmt.Errorf("convert {{.GoName}}Event to deq.Event: %v", err)
@@ -295,14 +321,14 @@ func (c *{{ $ServiceName }}Client) Pub{{.GoName}}Event(ctx context.Context, e *{
 	return e, nil
 }
 
-func (c *{{ $ServiceName }}Client) Del{{.GoName}}Event(ctx context.Context, id string) error {
+func (c *_{{ $ServiceName }}Client) Del{{.GoName}}Event(ctx context.Context, id string) error {
 	return c.db.Del(ctx, c.config.{{.GoName}}Topic(), id)
 }
 {{ end -}}
 
 {{- range .Methods }}
 
-func (c *{{ $ServiceName }}Client) {{ .Name }}(ctx context.Context, e *{{.InType}}Event) (*{{.OutType}}Event, error) {
+func (c *_{{ $ServiceName }}Client) {{ .Name }}(ctx context.Context, e *{{.InType}}Event) (*{{.OutType}}Event, error) {
 
 	_, err := c.Pub{{.InType}}Event(ctx, e)
 	if err != nil {
@@ -312,14 +338,9 @@ func (c *{{ $ServiceName }}Client) {{ .Name }}(ctx context.Context, e *{{.InType
 	channel := c.db.Channel(c.channel, c.config.{{.OutType}}Topic())
 	defer channel.Close()
 
-	deqResult, err := channel.Await(ctx, e.ID)
+	result, err := channel.Await{{.OutType}}Event(ctx, e.ID)
 	if err != nil {
 		return nil, fmt.Errorf("get response: %v", err)
-	}
-
-	result, err := c.config.EventTo{{.OutType}}Event(deqResult)
-	if err != nil {
-		return nil, fmt.Errorf("convert deq.Event to {{.OutType}}Event: %v", err)
 	}
 
 	return result, nil
@@ -334,7 +355,12 @@ type {{ .Name }}Handlers interface {
 {{- end }}
 }
 
-type {{ .Name }}Server struct {
+type {{.Name}}Server interface {
+	Listen(ctx context.Context) error
+	Close()
+}
+
+type _{{ .Name }}Server struct {
 	handlers {{ .Name }}Handlers
 	db       deq.Client
 	channel  string
@@ -342,17 +368,17 @@ type {{ .Name }}Server struct {
 	config   *{{.Name}}TopicConfig
 }
 
-func New{{ .Name }}Server(db deq.Client, handlers {{ .Name }}Handlers, channel string, config *{{.Name}}TopicConfig) (*{{ .Name }}Server) {
-	return &{{ .Name }}Server{
+func New{{ .Name }}Server(db deq.Client, handlers {{ .Name }}Handlers, channelPrefix string, config *{{.Name}}TopicConfig) {{ .Name }}Server {
+	return &_{{ .Name }}Server{
 		handlers: handlers,
-		channel: channel,
+		channel: channelPrefix,
 		db: db,
 		done: make(chan struct{}),
 		config: config,
 	}
 }
 
-func (s *{{ .Name }}Server) Listen(ctx context.Context) error {
+func (s *_{{ .Name }}Server) Listen(ctx context.Context) error {
 	errc := make(chan error, 1)
 	wg := sync.WaitGroup{}
 	ctx, cancel := context.WithCancel(ctx)
@@ -362,7 +388,7 @@ func (s *{{ .Name }}Server) Listen(ctx context.Context) error {
   go func() {
 		defer wg.Done()
 		
-		channel := s.db.Channel(s.channel, s.config.{{.InType}}Topic())
+		channel := s.db.Channel(strings.TrimSuffix(s.channel, ".") + ".{{.Name}}", s.config.{{.InType}}Topic())
 		defer channel.Close()
 		
 		err := channel.Sub(ctx, func(ctx context.Context, e deq.Event) (*deq.Event, ack.Code) {
@@ -408,7 +434,7 @@ func (s *{{ .Name }}Server) Listen(ctx context.Context) error {
 	}
 }
 
-func (s *{{ .Name }}Server) Close() {
+func (s *_{{ .Name }}Server) Close() {
 	close(s.done)
 }
 

@@ -77,7 +77,7 @@ func main() {
 		}
 	case "list":
 		if topic == "" {
-			flag.Usage()
+			fmt.Printf("flag -topic is required")
 			os.Exit(1)
 		}
 
@@ -109,6 +109,31 @@ func main() {
 			fmt.Printf("id: %v, topic: %s\nindexes: %v\n %s\n\n", e.Id, e.Topic, e.Indexes, e.Payload)
 		}
 
+	case "delete":
+		if topic == "" {
+			fmt.Printf("flag -topic is required.\n")
+			os.Exit(1)
+		}
+		id := flag.Arg(1)
+		if id == "" {
+			fmt.Printf("argument <id> is required.\n")
+			os.Exit(1)
+		}
+
+		deqc, err := dial(host, nameOverride, insecure)
+		if err != nil {
+			fmt.Printf("dial: %v\n", err)
+			os.Exit(1)
+		}
+
+		_, err = deqc.Del(ctx, &deq.DelRequest{
+			Topic:   topic,
+			EventId: id,
+		})
+		if err != nil {
+			fmt.Printf("%v", err)
+			os.Exit(2)
+		}
 	case "help", "":
 		flag.Usage()
 	default:
