@@ -14,7 +14,7 @@ func TestEmptyTopicIter(t *testing.T) {
 	db, discard := newTestDB()
 	defer discard()
 
-	iter := db.NewTopicIter(DefaultIterOpts)
+	iter := db.NewTopicIter(DefaultIterOptions)
 	defer iter.Close()
 
 	for iter.Next() {
@@ -68,7 +68,7 @@ func TestTopicIter(t *testing.T) {
 	expected := []string{"TopicA", "TopicB", "TopicC"}
 	var actual []string
 
-	iter := db.NewTopicIter(DefaultIterOpts)
+	iter := db.NewTopicIter(DefaultIterOptions)
 	defer iter.Close()
 
 	for iter.Next() {
@@ -126,7 +126,7 @@ func TestTopicIterReversed(t *testing.T) {
 	expected := []string{"TopicC", "TopicB", "TopicA"}
 	var actual []string
 
-	opts := DefaultIterOpts
+	opts := DefaultIterOptions
 	opts.Reversed = true
 	iter := db.NewTopicIter(opts)
 	defer iter.Close()
@@ -186,7 +186,7 @@ func TestTopicIterMin(t *testing.T) {
 	expected := []string{"TopicB", "TopicC"}
 	var actual []string
 
-	opts := DefaultIterOpts
+	opts := DefaultIterOptions
 	opts.Min = "TopicAA"
 	iter := db.NewTopicIter(opts)
 	defer iter.Close()
@@ -262,7 +262,7 @@ func TestTopicIterMax(t *testing.T) {
 	expected := []string{"TopicA", "TopicB"}
 	var actual []string
 
-	opts := DefaultIterOpts
+	opts := DefaultIterOptions
 	opts.Max = "TopicBB"
 	iter := db.NewTopicIter(opts)
 	defer iter.Close()
@@ -301,7 +301,7 @@ func TestEmptyEventIter(t *testing.T) {
 	channel := db.Channel("channel1", "topic1")
 	defer channel.Close()
 
-	iter := channel.NewEventIter(DefaultIterOpts)
+	iter := channel.NewEventIter(DefaultIterOptions)
 	defer iter.Close()
 
 	for iter.Next() {
@@ -366,7 +366,7 @@ func TestEventIter(t *testing.T) {
 	channel := db.Channel("channel1", "topic1")
 	defer channel.Close()
 
-	iter := channel.NewEventIter(DefaultIterOpts)
+	iter := channel.NewEventIter(DefaultIterOptions)
 	defer iter.Close()
 
 	for iter.Next() {
@@ -438,7 +438,7 @@ func TestEventIterReversed(t *testing.T) {
 	channel := db.Channel("channel1", "topic1")
 	defer channel.Close()
 
-	opts := DefaultIterOpts
+	opts := DefaultIterOptions
 	opts.Reversed = true
 	iter := channel.NewEventIter(opts)
 	defer iter.Close()
@@ -464,7 +464,7 @@ func TestEmptyIndexIter(t *testing.T) {
 	channel := db.Channel("channel1", "topic1")
 	defer channel.Close()
 
-	iter := channel.NewIndexIter(DefaultIterOpts)
+	iter := channel.NewIndexIter(DefaultIterOptions)
 	defer iter.Close()
 
 	for iter.Next() {
@@ -562,7 +562,7 @@ func TestIndexIter(t *testing.T) {
 	channel := db.Channel("channel1", "topic1")
 	defer channel.Close()
 
-	iter := channel.NewIndexIter(DefaultIterOpts)
+	iter := channel.NewIndexIter(DefaultIterOptions)
 	defer iter.Close()
 
 	for iter.Next() {
@@ -650,7 +650,7 @@ func TestIndexIterReversed(t *testing.T) {
 	channel := db.Channel("channel1", "topic1")
 	defer channel.Close()
 
-	opts := DefaultIterOpts
+	opts := DefaultIterOptions
 	opts.Reversed = true
 	iter := channel.NewIndexIter(opts)
 	defer iter.Close()
@@ -733,7 +733,7 @@ func TestIndexIterLimits(t *testing.T) {
 	channel := db.Channel("channel1", "topic1")
 	defer channel.Close()
 
-	opts := DefaultIterOpts
+	opts := DefaultIterOptions
 	opts.Min = "index10"
 	opts.Max = "index50"
 	iter := channel.NewIndexIter(opts)

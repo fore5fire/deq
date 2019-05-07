@@ -146,7 +146,7 @@ func TestMassPub(t *testing.T) {
 	}
 
 	var actual []Event
-	iter := channel.NewEventIter(IterOpts{})
+	iter := channel.NewEventIter(IterOptions{})
 	for iter.Next() {
 		actual = append(actual, iter.Event())
 	}

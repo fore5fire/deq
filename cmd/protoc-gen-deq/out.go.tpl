@@ -152,8 +152,8 @@ type {{ .Name }}Client interface {
 	Get{{ .GoName }}Index(ctx context.Context, index string) (*{{ .GoName }}Event, error)
 	Await{{ .GoName }}Event(ctx context.Context, id string) (*{{ .GoName }}Event, error)
 	Sub{{ .GoName }}Event(ctx context.Context, handler func(context.Context, *{{.GoName}}Event) ack.Code) error
-	New{{ .GoName }}EventIter(opts deq.IterOpts) {{ .GoName }}EventIter
-	New{{ .GoName }}IndexIter(opts deq.IterOpts) {{ .GoName }}EventIter
+	New{{ .GoName }}EventIter(opts deq.IterOptions) {{ .GoName }}EventIter
+	New{{ .GoName }}IndexIter(opts deq.IterOptions) {{ .GoName }}EventIter
 	Pub{{.GoName}}Event(ctx context.Context, e *{{.GoName}}Event) (*{{.GoName}}Event, error)
 	Del{{.GoName}}Event(ctx context.Context, id string) error
 	{{ end -}}
@@ -280,7 +280,7 @@ func (c *_{{ $ServiceName }}Client) Sub{{ .GoName }}Event(ctx context.Context, h
 	})
 }
 
-func (c *_{{ $ServiceName }}Client) New{{ .GoName }}EventIter(opts deq.IterOpts) {{ .GoName }}EventIter {
+func (c *_{{ $ServiceName }}Client) New{{ .GoName }}EventIter(opts deq.IterOptions) {{ .GoName }}EventIter {
 	
 	channel := c.db.Channel(c.channel, c.config.{{.GoName}}Topic())
 	defer channel.Close()
@@ -291,7 +291,7 @@ func (c *_{{ $ServiceName }}Client) New{{ .GoName }}EventIter(opts deq.IterOpts)
 	}
 }
 
-func (c *_{{ $ServiceName }}Client) New{{ .GoName }}IndexIter(opts deq.IterOpts) {{ .GoName }}EventIter {
+func (c *_{{ $ServiceName }}Client) New{{ .GoName }}IndexIter(opts deq.IterOptions) {{ .GoName }}EventIter {
 	
 	channel := c.db.Channel(c.channel, c.config.{{.GoName}}Topic())
 	defer channel.Close()

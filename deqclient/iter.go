@@ -20,7 +20,11 @@ type eventIter struct {
 	reversed bool
 }
 
-func (c *clientChannel) NewEventIter(opts deq.IterOpts) deq.EventIter {
+func (c *clientChannel) NewEventIter(opts *deq.IterOptions) deq.EventIter {
+
+	if opts == nil {
+		opts = &deq.IterOptions{}
+	}
 
 	ctx, cancel := context.WithCancel(context.Background())
 
@@ -43,16 +47,27 @@ func (c *clientChannel) NewEventIter(opts deq.IterOpts) deq.EventIter {
 	return it
 }
 
-func (c *clientChannel) NewIndexIter(opts deq.IterOpts) deq.EventIter {
+func (c *clientChannel) NewIndexIter(opts *deq.IterOptions) deq.EventIter {
 
-	if opts.PrefetchCount < 0 {
-		panic("opts.PrefetchCount cannot be negative")
+	if opts == nil {
+		opts = &deq.IterOptions{}
+	}
+
+	prefetchCount := 20
+	if opts.PrefetchCount < -1 {
+		panic("opts.PrefetchCount cannot be less than -1")
+	}
+	if opts.PrefetchCount == -1 {
+		prefetchCount = 0
+	}
+	if opts.PrefetchCount > 0 {
+		prefetchCount = opts.PrefetchCount
 	}
 
 	ctx, cancel := context.WithCancel(context.Background())
 
 	it := &eventIter{
-		next:   make(chan *api.Event, opts.PrefetchCount/2),
+		next:   make(chan *api.Event, prefetchCount/2),
 		cancel: cancel,
 		client: c.deqClient,
 	}
@@ -64,7 +79,7 @@ func (c *clientChannel) NewIndexIter(opts deq.IterOpts) deq.EventIter {
 		MaxId:    opts.Max,
 		Reversed: opts.Reversed,
 		UseIndex: true,
-		PageSize: int32((opts.PrefetchCount+1)/2 + (opts.PrefetchCount+1)%2),
+		PageSize: int32((prefetchCount+1)/2 + (prefetchCount+1)%2),
 	})
 
 	return it

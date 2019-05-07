@@ -161,7 +161,7 @@ func TestPubDuplicate(t *testing.T) {
 func TestMassPublish(t *testing.T) {
 	t.Parallel()
 
-	ctx, cancel := context.WithTimeout(context.Background(), time.Second*8)
+	ctx, cancel := context.WithTimeout(context.Background(), time.Second*10)
 	defer cancel()
 
 	p := legacyclient.NewPublisher(conn, legacyclient.PublisherOpts{})

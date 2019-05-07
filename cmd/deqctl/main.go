@@ -41,16 +41,16 @@ func main() {
 	}
 
 	var host, channel, topic, nameOverride string
-	var follow, insecure bool
+	var follow, insecure, useIndex bool
 	var timeout int
 
 	flag.StringVar(&host, "host", "localhost:3000", "specify deq host and port.")
 	flag.StringVar(&channel, "c", strconv.FormatInt(int64(rand.Int()), 16), "specify channel.")
 	flag.BoolVar(&follow, "f", false, "continue streaming when idling.")
-	flag.StringVar(&topic, "t", "", "topic to print. required.")
 	flag.IntVar(&timeout, "timeout", 10000, "timeout of the request in milliseconds.")
 	flag.BoolVar(&insecure, "insecure", false, "disables tls")
 	flag.StringVar(&nameOverride, "tls-name-override", "", "overrides the expected name on the server's TLS certificate.")
+	flag.BoolVar(&useIndex, "index", false, "use the index instead of IDs for getting events")
 
 	flag.Parse()
 
@@ -76,8 +76,9 @@ func main() {
 			fmt.Println(topic)
 		}
 	case "list":
+		topic := flag.Arg(1)
 		if topic == "" {
-			fmt.Printf("flag -topic is required")
+			fmt.Printf("topic is required")
 			os.Exit(1)
 		}
 
@@ -108,6 +109,37 @@ func main() {
 			}
 			fmt.Printf("id: %v, topic: %s\nindexes: %v\n %s\n\n", e.Id, e.Topic, e.Indexes, e.Payload)
 		}
+
+	case "get":
+		topic := flag.Arg(1)
+		id := flag.Arg(2)
+		if topic == "" {
+			fmt.Printf("topic is required\n")
+			os.Exit(1)
+		}
+		if id == "" {
+			fmt.Printf("id is required\n")
+			os.Exit(1)
+		}
+
+		deqc, err := dial(host, nameOverride, insecure)
+		if err != nil {
+			fmt.Printf("dial: %v\n", err)
+			os.Exit(1)
+		}
+
+		e, err := deqc.Get(ctx, &deq.GetRequest{
+			Channel:  channel,
+			Topic:    topic,
+			EventId:  id,
+			UseIndex: useIndex,
+		})
+		if err != nil {
+			fmt.Printf("get: %v\n", err)
+			os.Exit(2)
+		}
+
+		fmt.Printf("id: %v, topic: %s\nindexes: %v\n %s\n\n", e.Id, e.Topic, e.Indexes, e.Payload)
 
 	case "delete":
 		if topic == "" {

@@ -18,10 +18,7 @@ Channel.NewEventIter, and should always be closed after it is done being used.
 
 Example usage:
 
-	opts := deq.DefaultIterOpts
-	// customize options as needed
-
-	iter := channel.NewEventIter(opts)
+	iter := channel.NewEventIter(nil)
 	defer iter.Close()
 
 	for iter.Next() {
@@ -33,20 +30,24 @@ Example usage:
 */
 
 type badgerEventIter struct {
-	txn     *badger.Txn
-	it      *badger.Iterator
-	opts    deq.IterOpts
-	current deq.Event
-	err     error
-	end     []byte
-	channel string
+	txn      *badger.Txn
+	it       *badger.Iterator
+	current  deq.Event
+	err      error
+	end      []byte
+	channel  string
+	reversed bool
 }
 
 // NewEventIter creates a new EventIter that iterates events on the topic and channel of c.
 //
 // opts.Min and opts.Max specify the range of event IDs to read from c's topic. EventIter only has
 // partial support for opts.PrefetchCount.
-func (c *Channel) NewEventIter(opts deq.IterOpts) deq.EventIter {
+func (c *Channel) NewEventIter(opts *deq.IterOptions) deq.EventIter {
+
+	if opts == nil {
+		opts = &deq.IterOptions{}
+	}
 
 	// Topic should be valid, no need to check error
 	prefix, _ := data.EventTimePrefixTopic(c.topic)
@@ -72,11 +73,11 @@ func (c *Channel) NewEventIter(opts deq.IterOpts) deq.EventIter {
 	it.Seek(start)
 
 	return &badgerEventIter{
-		opts:    opts,
-		txn:     txn,
-		it:      it,
-		end:     end,
-		channel: c.name,
+		reversed: opts.Reversed,
+		txn:      txn,
+		it:       it,
+		end:      end,
+		channel:  c.name,
 	}
 }
 
@@ -89,7 +90,7 @@ func (iter *badgerEventIter) Next(ctx context.Context) bool {
 
 	// Check if there are any values left
 	target := 1
-	if iter.opts.Reversed {
+	if iter.reversed {
 		target = -1
 	}
 	if !iter.it.Valid() || bytes.Compare(iter.it.Item().Key(), iter.end) == target {
@@ -198,10 +199,9 @@ from a snapshot of the database at the time the TopicIter was created. Each indi
 not safe for concurrent use, but mutliple TopicIters can be used concurrently.
 
 Example usage:
-	opts := deq.DefaultIterOpts
-	opts.Min = "example-min"
-
-  iter := db.NewTopicIter(opts)
+  iter := db.NewTopicIter(&deq.IterOptions{
+		Min: "example-min",
+	})
 	defer iter.Close()
 
   for iter.Next(ctx) {
@@ -212,26 +212,29 @@ Example usage:
 */
 
 type badgerTopicIter struct {
-	txn     *badger.Txn
-	it      *badger.Iterator
-	cursor  []byte
-	current string
-	opts    deq.IterOpts
-	end     []byte
+	txn      *badger.Txn
+	it       *badger.Iterator
+	cursor   []byte
+	current  string
+	end      []byte
+	reversed bool
 }
 
 // NewTopicIter creates a new TopicIter that can be used to iterate topics in the database.
 //
-// For details on available options, see IterOpts. TopicIter doesn't support opts.PrefetchCount.
+// For details on available options, see IterOptions. TopicIter doesn't support opts.PrefetchCount.
 // If opts.Min or opts.Max isn't a valid topic name, NewTopicIter panics.
-func (s *Store) NewTopicIter(opts deq.IterOpts) deq.TopicIter {
+func (s *Store) NewTopicIter(opts *deq.IterOptions) deq.TopicIter {
 
 	txn := s.db.NewTransaction(false)
 	return newTopicIter(txn, opts)
 }
 
-func newTopicIter(txn *badger.Txn, opts deq.IterOpts) *badgerTopicIter {
+func newTopicIter(txn *badger.Txn, opts *deq.IterOptions) *badgerTopicIter {
 	// Apply default options
+	if opts == nil {
+		opts = &deq.IterOptions{}
+	}
 	max := opts.Max
 	if max == "" {
 		max = data.LastTopic
@@ -260,11 +263,11 @@ func newTopicIter(txn *badger.Txn, opts deq.IterOpts) *badgerTopicIter {
 	})
 
 	return &badgerTopicIter{
-		opts:   opts,
-		txn:    txn,
-		it:     it,
-		cursor: start,
-		end:    end,
+		reversed: opts.Reversed,
+		txn:      txn,
+		it:       it,
+		cursor:   start,
+		end:      end,
 	}
 }
 
@@ -282,7 +285,7 @@ func (iter *badgerTopicIter) Next(ctx context.Context) bool {
 
 	// Check if we've passed our end value
 	target := 1
-	if iter.opts.Reversed {
+	if iter.reversed {
 		target = -1
 	}
 	if bytes.Compare(item.Key(), iter.end) == target {
@@ -309,7 +312,7 @@ func (iter *badgerTopicIter) Next(ctx context.Context) bool {
 	iter.current = key.Topic
 
 	// Update the cursor for our next iteration
-	if iter.opts.Reversed {
+	if iter.reversed {
 		// No error check should be needed here because the topic comes directly from an unmarshalled key.
 		iter.cursor, _ = data.EventTimeCursorBeforeTopic(key.Topic)
 	} else {
@@ -341,10 +344,7 @@ Channel.NewIndexIter, and should always be closed after it is done being used.
 
 Example usage:
 
-	opts := deq.DefaultIterOpts
-	// customize options as needed
-
-	iter := channel.NewIndexIter(opts)
+	iter := channel.NewIndexIter(nil)
 	defer iter.Close()
 
 	for iter.Next(ctx) {
@@ -356,20 +356,24 @@ Example usage:
 */
 
 type badgerIndexIter struct {
-	txn     *badger.Txn
-	it      *badger.Iterator
-	opts    deq.IterOpts
-	current deq.Event
-	err     error
-	end     []byte
-	channel string
+	txn      *badger.Txn
+	it       *badger.Iterator
+	current  deq.Event
+	err      error
+	end      []byte
+	channel  string
+	reversed bool
 }
 
 // NewIndexIter creates a new IndexIter that iterates events on the topic and channel of c.
 //
 // opts.Min and opts.Max specify the range of event IDs to read from c's topic. EventIter only has
 // partial support for opts.PrefetchCount.
-func (c *Channel) NewIndexIter(opts deq.IterOpts) deq.EventIter {
+func (c *Channel) NewIndexIter(opts *deq.IterOptions) deq.EventIter {
+
+	if opts == nil {
+		opts = &deq.IterOptions{}
+	}
 
 	// Topic should be valid, no need to check error
 	prefix, _ := data.IndexPrefixTopic(c.topic)
@@ -395,11 +399,11 @@ func (c *Channel) NewIndexIter(opts deq.IterOpts) deq.EventIter {
 	it.Seek(start)
 
 	return &badgerIndexIter{
-		opts:    opts,
-		txn:     txn,
-		it:      it,
-		end:     end,
-		channel: c.name,
+		reversed: opts.Reversed,
+		txn:      txn,
+		it:       it,
+		end:      end,
+		channel:  c.name,
 	}
 }
 
@@ -412,7 +416,7 @@ func (iter *badgerIndexIter) Next(ctx context.Context) bool {
 
 	// Check if there are any values left
 	target := 1
-	if iter.opts.Reversed {
+	if iter.reversed {
 		target = -1
 	}
 	if !iter.it.Valid() || bytes.Compare(iter.it.Item().Key(), iter.end) == target {

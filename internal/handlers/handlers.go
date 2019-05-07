@@ -275,10 +275,12 @@ func (s *Server) List(ctx context.Context, in *pb.ListRequest) (*pb.ListResponse
 
 	events := make([]deq.Event, 0, in.PageSize)
 
-	opts := deq.DefaultIterOpts
-	opts.Reversed = in.Reversed
-	opts.Min = in.MinId
-	opts.Max = in.MaxId
+	opts := &deq.IterOptions{
+		Reversed:      in.Reversed,
+		Min:           in.MinId,
+		Max:           in.MaxId,
+		PrefetchCount: int(in.PageSize),
+	}
 
 	var iter deq.EventIter
 	if in.UseIndex {
@@ -335,10 +337,9 @@ func (s *Server) Topics(ctx context.Context, in *pb.TopicsRequest) (*pb.TopicsRe
 
 	var topics []string
 
-	opts := deq.DefaultIterOpts
 	// TODO: expose paging and sorting options
 
-	iter := s.store.NewTopicIter(opts)
+	iter := s.store.NewTopicIter(&deq.IterOptions{})
 	defer iter.Close()
 
 	for ctx.Err() == nil && iter.Next(ctx) {

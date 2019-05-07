@@ -76,8 +76,8 @@ Span: []int32{17, 19, 20},
 },
 Syntax: func(v string) *string { return &v } ( "proto3" ),
 }}, CompilerVersion:(*plugin_go.Version)(0xc00007c140), XXX_NoUnkeyedLiteral:struct {}{}, XXX_unrecognized:[]uint8(nil), XXX_sizecache:0}
-zöv
-*cmd/protoc-gen-deq/testdata/test.pb.deq.gozÇv///
+zï¿½v
+*cmd/protoc-gen-deq/testdata/test.pb.deq.gozï¿½v///
 //  Generated code. Do not modify.
 //  source: cmd/protoc-gen-deq/testdata/test.proto
 ///
@@ -468,7 +468,7 @@ func (c *GreeterClient) SubHelloRequestEvent(ctx context.Context, handler func(c
 	})
 }
 
-func (c *GreeterClient) NewHelloRequestEventIter(opts deq.IterOpts) *HelloRequestEventIter {
+func (c *GreeterClient) NewHelloRequestEventIter(opts deq.IterOptions) *HelloRequestEventIter {
 	
 	channel := c.db.Channel(c.channel, c.config.HelloRequestTopic())
 	defer channel.Close()
@@ -479,7 +479,7 @@ func (c *GreeterClient) NewHelloRequestEventIter(opts deq.IterOpts) *HelloReques
 	}
 }
 
-func (c *GreeterClient) NewHelloRequestIndexIter(opts deq.IterOpts) *HelloRequestIndexIter {
+func (c *GreeterClient) NewHelloRequestIndexIter(opts deq.IterOptions) *HelloRequestIndexIter {
 	
 	channel := c.db.Channel(c.channel, c.config.HelloRequestTopic())
 	defer channel.Close()
@@ -563,7 +563,7 @@ func (c *GreeterClient) SubHelloReplyEvent(ctx context.Context, handler func(con
 	})
 }
 
-func (c *GreeterClient) NewHelloReplyEventIter(opts deq.IterOpts) *HelloReplyEventIter {
+func (c *GreeterClient) NewHelloReplyEventIter(opts deq.IterOptions) *HelloReplyEventIter {
 	
 	channel := c.db.Channel(c.channel, c.config.HelloReplyTopic())
 	defer channel.Close()
@@ -574,7 +574,7 @@ func (c *GreeterClient) NewHelloReplyEventIter(opts deq.IterOpts) *HelloReplyEve
 	}
 }
 
-func (c *GreeterClient) NewHelloReplyIndexIter(opts deq.IterOpts) *HelloReplyIndexIter {
+func (c *GreeterClient) NewHelloReplyIndexIter(opts deq.IterOptions) *HelloReplyIndexIter {
 	
 	channel := c.db.Channel(c.channel, c.config.HelloReplyTopic())
 	defer channel.Close()
