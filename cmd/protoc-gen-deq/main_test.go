@@ -33,7 +33,7 @@ func TestProtocGenDEQ(t *testing.T) {
 	}
 
 	// Copy protoc-gen-gogofaster output to directory
-	err = CopyTo(dir, "testdata/greeter.pb.go")
+	err = CopyTo(dir, "example/greeter/greeter.pb.go")
 	if err != nil {
 		t.Fatalf("copy test data: %v", err)
 	}
@@ -69,7 +69,7 @@ var testRequest = &plugin_go.CodeGeneratorRequest{
 	ProtoFile: []*descriptor.FileDescriptorProto{
 		&descriptor.FileDescriptorProto{
 			Name:    func(v string) *string { return &v }("greeter.proto"),
-			Package: func(v string) *string { return &v }("example.greeter"),
+			Package: func(v string) *string { return &v }("greeter"),
 			MessageType: []*descriptor.DescriptorProto{
 				{
 					Name: func(v string) *string { return &v }("HelloRequest"),
@@ -109,8 +109,8 @@ var testRequest = &plugin_go.CodeGeneratorRequest{
 				Name: func(v string) *string { return &v }("Greeter"),
 				Method: []*descriptor.MethodDescriptorProto{{
 					Name:       func(v string) *string { return &v }("SayHello"),
-					InputType:  func(v string) *string { return &v }(".example.greeter.HelloRequest"),
-					OutputType: func(v string) *string { return &v }(".example.greeter.HelloReply"),
+					InputType:  func(v string) *string { return &v }(".greeter.HelloRequest"),
+					OutputType: func(v string) *string { return &v }(".greeter.HelloReply"),
 					Options:    &descriptor.MethodOptions{XXX_InternalExtensions: proto.NewUnsafeXXX_InternalExtensions(map[int32]proto.Extension{})},
 				}},
 			}},
@@ -118,19 +118,19 @@ var testRequest = &plugin_go.CodeGeneratorRequest{
 		},
 		&descriptor.FileDescriptorProto{
 			Name:       func(v string) *string { return &v }("greeter2.proto"),
-			Package:    func(v string) *string { return &v }("example.greeter2"),
+			Package:    func(v string) *string { return &v }("greeter2"),
 			Dependency: []string{"greeter.proto"},
 			Service: []*descriptor.ServiceDescriptorProto{{
 				Name: func(v string) *string { return &v }("Greeter2"),
 				Method: []*descriptor.MethodDescriptorProto{{
 					Name:       func(v string) *string { return &v }("SayHello"),
-					InputType:  func(v string) *string { return &v }(".example.greeter.HelloRequest"),
-					OutputType: func(v string) *string { return &v }(".example.greeter.HelloReply"),
+					InputType:  func(v string) *string { return &v }(".greeter.HelloRequest"),
+					OutputType: func(v string) *string { return &v }(".greeter.HelloReply"),
 					Options:    &descriptor.MethodOptions{XXX_InternalExtensions: proto.NewUnsafeXXX_InternalExtensions(map[int32]proto.Extension{})},
 				}},
 			}},
 			Options: &descriptor.FileOptions{
-				GoPackage:              func(v string) *string { return &v }("example_greeter"),
+				GoPackage:              func(v string) *string { return &v }("greeter"),
 				XXX_InternalExtensions: proto.NewUnsafeXXX_InternalExtensions(map[int32]proto.Extension{}),
 			},
 			Syntax: func(v string) *string { return &v }("proto3"),

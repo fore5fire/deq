@@ -83,7 +83,7 @@ func (c *Channel) Next(ctx context.Context) (deq.Event, error) {
 				Channel: c.name,
 				Topic:   c.topic,
 				ID:      e.ID,
-			})
+			}, eventStateToProto(e.DefaultState))
 			if err != nil {
 				return deq.Event{}, err
 			}
@@ -135,7 +135,7 @@ func (c *Channel) Sub(ctx context.Context, handler deq.SubHandler) error {
 		code ack.Code
 	}
 
-	// Wait for background goroutine to cleanup before returning
+	// Wait for background goroutines to cleanup before returning
 	var wg sync.WaitGroup
 	defer wg.Wait()
 
@@ -143,6 +143,7 @@ func (c *Channel) Sub(ctx context.Context, handler deq.SubHandler) error {
 	defer close(results)
 
 	ctx, cancel := context.WithCancel(ctx)
+	defer cancel()
 
 	// workers handle results without blocking processing of next event
 	const numWorkers = 3
@@ -346,7 +347,7 @@ func (c *Channel) SetEventState(ctx context.Context, id string, state deq.EventS
 		txn := c.db.NewTransaction(true)
 		defer txn.Discard()
 
-		channelEvent, err := getChannelEvent(txn, key)
+		channelEvent, err := getChannelEvent(txn, key, data.EventState_UNSPECIFIED_STATE)
 		if err != nil {
 			return err
 		}

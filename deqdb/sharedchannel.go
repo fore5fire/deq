@@ -289,6 +289,18 @@ func (s *sharedChannel) catchUp(cursor []byte) ([]byte, error) {
 		item := it.Item()
 		lastKey = item.KeyCopy(lastKey)
 
+		val, err := item.Value()
+		if err != nil {
+			return nil, err
+		}
+
+		var e data.EventPayload
+		err = proto.Unmarshal(val, &e)
+		if err != nil {
+			log.Printf("unmarshal event: %v", err)
+			continue
+		}
+
 		var key data.EventKey
 		err = data.UnmarshalTo(lastKey, &key)
 		if err != nil {
@@ -300,25 +312,13 @@ func (s *sharedChannel) catchUp(cursor []byte) ([]byte, error) {
 			Channel: s.name,
 			Topic:   key.Topic,
 			ID:      key.ID,
-		})
+		}, e.DefaultEventState)
 		if err != nil {
 			log.Printf("get channel event: %v", err)
 			continue
 		}
 		if channel.EventState != data.EventState_QUEUED {
 			// Not queued, don't send
-			continue
-		}
-
-		val, err := item.Value()
-		if err != nil {
-			return nil, err
-		}
-
-		var e data.EventPayload
-		err = proto.Unmarshal(val, &e)
-		if err != nil {
-			log.Printf("unmarshal event: %v", err)
 			continue
 		}
 

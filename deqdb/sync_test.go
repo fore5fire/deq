@@ -7,6 +7,7 @@ import (
 	"time"
 
 	"github.com/google/go-cmp/cmp"
+	"gitlab.com/katcheCode/deq"
 	"gitlab.com/katcheCode/deq/ack"
 )
 
@@ -23,9 +24,9 @@ func TestSyncTo(t *testing.T) {
 
 	// Publish some events
 	events := struct {
-		Before, After, Expected []Event
+		Before, After, Expected []deq.Event
 	}{
-		Before: []Event{
+		Before: []deq.Event{
 			{
 				ID:         "before-event1",
 				Topic:      "TopicA",
@@ -42,7 +43,7 @@ func TestSyncTo(t *testing.T) {
 				CreateTime: createTime,
 			},
 		},
-		After: []Event{
+		After: []deq.Event{
 			{
 				ID:         "after-event1",
 				Topic:      "TopicA",
@@ -59,41 +60,41 @@ func TestSyncTo(t *testing.T) {
 				CreateTime: createTime,
 			},
 		},
-		Expected: []Event{
+		Expected: []deq.Event{
 			{
 				ID:           "after-event1",
 				Topic:        "TopicA",
 				CreateTime:   createTime,
-				DefaultState: EventStateQueued,
-				State:        EventStateQueued,
+				DefaultState: deq.EventStateQueued,
+				State:        deq.EventStateQueued,
 			},
 			{
 				ID:           "after-event2",
 				Topic:        "TopicA",
 				CreateTime:   createTime,
-				DefaultState: EventStateQueued,
-				State:        EventStateQueued,
+				DefaultState: deq.EventStateQueued,
+				State:        deq.EventStateQueued,
 			},
 			{
 				ID:           "before-event1",
 				Topic:        "TopicA",
 				CreateTime:   createTime,
-				DefaultState: EventStateQueued,
-				State:        EventStateQueued,
+				DefaultState: deq.EventStateQueued,
+				State:        deq.EventStateQueued,
 			},
 			{
 				ID:           "before-event2",
 				Topic:        "TopicA",
 				CreateTime:   createTime,
-				DefaultState: EventStateQueued,
-				State:        EventStateQueued,
+				DefaultState: deq.EventStateQueued,
+				State:        deq.EventStateQueued,
 			},
 		},
 	}
 
 	errc := make(chan error)
 	errc2 := make(chan error)
-	recieved := make(chan Event)
+	recieved := make(chan deq.Event)
 
 	ctx, cancel := context.WithCancel(context.Background())
 	defer func() {
@@ -124,7 +125,7 @@ func TestSyncTo(t *testing.T) {
 		channel := db.Channel("test-channel", "TopicA")
 		defer channel.Close()
 
-		errc <- channel.SyncTo(ctx, db2)
+		errc <- deq.SyncTo(ctx, AsClient(db2), channel)
 	}()
 
 	// Subscribe to synced events
@@ -134,7 +135,7 @@ func TestSyncTo(t *testing.T) {
 		channel := db2.Channel("test-channel-remote", "TopicA")
 		defer channel.Close()
 
-		errc2 <- channel.Sub(ctx, func(ctx context.Context, e Event) (*Event, ack.Code) {
+		errc2 <- channel.Sub(ctx, func(ctx context.Context, e deq.Event) (*deq.Event, ack.Code) {
 
 			recieved <- e
 
@@ -151,7 +152,7 @@ func TestSyncTo(t *testing.T) {
 	}
 
 	// Verify that events were recieved by synced database
-	var actual []Event
+	var actual []deq.Event
 	for e := range recieved {
 		actual = append(actual, e)
 		if len(actual) >= len(events.Expected) {

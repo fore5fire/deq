@@ -137,7 +137,7 @@ func (iter *badgerEventIter) Next(ctx context.Context) bool {
 		Channel: iter.channel,
 		Topic:   key.Topic,
 		ID:      key.ID,
-	})
+	}, e.DefaultEventState)
 	if err != nil {
 		iter.err = fmt.Errorf("get channel event: %v", err)
 		return true

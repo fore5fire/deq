@@ -146,16 +146,23 @@ func Open(opts Options) (*Store, error) {
 	txn := db.NewTransaction(true)
 
 	version, err := s.getDBVersion(txn)
-	if err != nil {
+	if err != nil && err != badger.ErrKeyNotFound {
 		return nil, fmt.Errorf("read current database version: %v", err)
 	}
+	if err == badger.ErrKeyNotFound {
+		// No version on disk, should be a new database.
+		log.Printf("no version found, assuming new database")
+		err := txn.Set([]byte(dbVersionKey), []byte(dbCodeVersion))
+		if err != nil {
+			return nil, fmt.Errorf("write version for new db: %v", err)
+		}
+		version = dbCodeVersion
+	}
+
+	log.Printf("current database version is %s", version)
+
 	if version != dbCodeVersion {
-		if version == "" {
-			err := txn.Set([]byte(dbVersionKey), []byte(dbCodeVersion))
-			if err != nil {
-				return nil, fmt.Errorf("write version for new db: %v", err)
-			}
-		} else if !opts.UpgradeIfNeeded {
+		if !opts.UpgradeIfNeeded {
 			return nil, deq.ErrVersionMismatch
 		}
 

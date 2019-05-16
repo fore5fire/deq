@@ -1,4 +1,4 @@
-package handlers
+package handler
 
 import (
 	"context"
@@ -13,18 +13,18 @@ import (
 	"google.golang.org/grpc/status"
 )
 
-// Server represents the gRPC server
-type Server struct {
+// Handler handles requests for service DEQ.
+type Handler struct {
 	store *deqdb.Store
 }
 
-// NewServer creates a new event store server initalized with a backing event store
-func NewServer(eventStore *deqdb.Store) *Server {
-	return &Server{eventStore}
+// New creates a new Handler with the provided backing event store
+func New(eventStore *deqdb.Store) *Handler {
+	return &Handler{eventStore}
 }
 
 // Pub implements DEQ.Pub
-func (s *Server) Pub(ctx context.Context, in *pb.PubRequest) (*pb.Event, error) {
+func (s *Handler) Pub(ctx context.Context, in *pb.PubRequest) (*pb.Event, error) {
 
 	if in.Event == nil {
 		return nil, status.Error(codes.InvalidArgument, "Missing required argument event")
@@ -77,7 +77,7 @@ func (s *Server) Pub(ctx context.Context, in *pb.PubRequest) (*pb.Event, error) 
 }
 
 // Sub implements DEQ.Sub
-func (s *Server) Sub(in *pb.SubRequest, stream pb.DEQ_SubServer) error {
+func (s *Handler) Sub(in *pb.SubRequest, stream pb.DEQ_SubServer) error {
 
 	if in.Channel == "" {
 		return status.Error(codes.InvalidArgument, "Missing required argument 'channel'")
@@ -133,7 +133,7 @@ func (s *Server) Sub(in *pb.SubRequest, stream pb.DEQ_SubServer) error {
 }
 
 // Ack implements DEQ.Ack
-func (s *Server) Ack(ctx context.Context, in *pb.AckRequest) (*pb.AckResponse, error) {
+func (s *Handler) Ack(ctx context.Context, in *pb.AckRequest) (*pb.AckResponse, error) {
 
 	if in.Channel == "" {
 		return nil, status.Error(codes.InvalidArgument, "Missing required argument 'channel'")
@@ -207,7 +207,7 @@ func (s *Server) Ack(ctx context.Context, in *pb.AckRequest) (*pb.AckResponse, e
 }
 
 // Get implements DEQ.Get
-func (s *Server) Get(ctx context.Context, in *pb.GetRequest) (*pb.Event, error) {
+func (s *Handler) Get(ctx context.Context, in *pb.GetRequest) (*pb.Event, error) {
 
 	if in.EventId == "" {
 		return nil, status.Error(codes.InvalidArgument, "argument event_id is required")
@@ -261,43 +261,52 @@ func (s *Server) Get(ctx context.Context, in *pb.GetRequest) (*pb.Event, error) 
 }
 
 // List implements DEQ.List
-func (s *Server) List(ctx context.Context, in *pb.ListRequest) (*pb.ListResponse, error) {
+func (s *Handler) List(ctx context.Context, in *pb.ListRequest) (*pb.ListResponse, error) {
 
 	if in.Topic == "" {
 		return nil, status.Error(codes.InvalidArgument, "topic is required")
 	}
 	if in.Channel == "" {
-		return nil, status.Error(codes.InvalidArgument, "argument channel is required")
+		return nil, status.Error(codes.InvalidArgument, "channel is required")
+	}
+
+	pageSize := 20
+	if in.PageSize < 0 {
+		return nil, status.Error(codes.InvalidArgument, "page_size cannot be negative")
+	}
+	if in.PageSize > 0 {
+		pageSize = int(in.PageSize)
 	}
 
 	channel := s.store.Channel(in.Channel, in.Topic)
 	defer channel.Close()
 
-	events := make([]deq.Event, 0, in.PageSize)
+	events := make([]deq.Event, 0, pageSize)
 
 	opts := &deq.IterOptions{
 		Reversed:      in.Reversed,
 		Min:           in.MinId,
 		Max:           in.MaxId,
-		PrefetchCount: int(in.PageSize),
+		PrefetchCount: pageSize,
 	}
 
 	var iter deq.EventIter
 	if in.UseIndex {
 		iter = channel.NewIndexIter(opts)
+		defer iter.Close()
 	} else {
 		iter = channel.NewEventIter(opts)
+		defer iter.Close()
 	}
-	defer iter.Close()
 
 	for {
-		for len(events) < cap(events) && iter.Next(ctx) {
+		for len(events) < pageSize && iter.Next(ctx) {
 			events = append(events, iter.Event())
 		}
 		if iter.Err() == nil {
 			break
 		}
-		log.Printf("List: iterate event: %v", iter.Err())
+		log.Printf("[WARN] List: iterate event: %v", iter.Err())
 	}
 
 	results := make([]*pb.Event, len(events))
@@ -311,7 +320,7 @@ func (s *Server) List(ctx context.Context, in *pb.ListRequest) (*pb.ListResponse
 }
 
 // Del implements DEQ.Del
-func (s *Server) Del(ctx context.Context, in *pb.DelRequest) (*pb.Empty, error) {
+func (s *Handler) Del(ctx context.Context, in *pb.DelRequest) (*pb.Empty, error) {
 
 	if in.EventId == "" {
 		return nil, status.Error(codes.InvalidArgument, "argument event_id is required")
@@ -333,7 +342,7 @@ func (s *Server) Del(ctx context.Context, in *pb.DelRequest) (*pb.Empty, error) 
 }
 
 // Topics implements DEQ.Topics
-func (s *Server) Topics(ctx context.Context, in *pb.TopicsRequest) (*pb.TopicsResponse, error) {
+func (s *Handler) Topics(ctx context.Context, in *pb.TopicsRequest) (*pb.TopicsResponse, error) {
 
 	var topics []string
 

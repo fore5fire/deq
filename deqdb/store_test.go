@@ -9,6 +9,7 @@ import (
 	"time"
 
 	"github.com/google/go-cmp/cmp"
+	"gitlab.com/katcheCode/deq"
 )
 
 func newTestDB() (*Store, func()) {
@@ -39,12 +40,12 @@ func TestDel(t *testing.T) {
 	db, discard := newTestDB()
 	defer discard()
 
-	expected := Event{
+	expected := deq.Event{
 		ID:           "event1",
 		Topic:        "topic",
 		CreateTime:   time.Now(),
-		DefaultState: EventStateQueued,
-		State:        EventStateQueued,
+		DefaultState: deq.EventStateQueued,
+		State:        deq.EventStateQueued,
 	}
 
 	_, err := db.Pub(ctx, expected)
@@ -52,7 +53,7 @@ func TestDel(t *testing.T) {
 		t.Fatalf("pub: %v", err)
 	}
 
-	err = db.Del(expected.Topic, expected.ID)
+	err = db.Del(ctx, expected.Topic, expected.ID)
 	if err != nil {
 		t.Fatalf("del: %v", err)
 	}
@@ -60,11 +61,11 @@ func TestDel(t *testing.T) {
 	channel := db.Channel("channel", expected.Topic)
 	defer channel.Close()
 
-	_, err = channel.Get(expected.ID)
+	_, err = channel.Get(ctx, expected.ID)
 	if err == nil {
 		t.Fatalf("returned deleted event")
 	}
-	if err != ErrNotFound {
+	if err != deq.ErrNotFound {
 		t.Fatalf("get deleted: %v", err)
 	}
 }
@@ -77,12 +78,12 @@ func TestPub(t *testing.T) {
 	db, discard := newTestDB()
 	defer discard()
 
-	expected := Event{
+	expected := deq.Event{
 		ID:           "event1",
 		Topic:        "topic",
 		CreateTime:   time.Now(),
-		DefaultState: EventStateQueued,
-		State:        EventStateQueued,
+		DefaultState: deq.EventStateQueued,
+		State:        deq.EventStateQueued,
 	}
 
 	channel := db.Channel("channel", expected.Topic)
@@ -101,9 +102,9 @@ func TestPub(t *testing.T) {
 		t.Errorf("get next:\n%s", cmp.Diff(expected, event))
 	}
 
-	expected.State = EventStateQueued
+	expected.State = deq.EventStateQueued
 
-	event, err = channel.Get(expected.ID)
+	event, err = channel.Get(ctx, expected.ID)
 	if err != nil {
 		t.Fatalf("get: %v", err)
 	}
@@ -124,14 +125,14 @@ func TestMassPub(t *testing.T) {
 	// Round(0) to discard's leap-second info that's lost in serialization
 	createTime := time.Now().Round(0)
 
-	expected := make([]Event, 500)
+	expected := make([]deq.Event, 500)
 	for i := 0; i < 500; i++ {
-		expected[i] = Event{
+		expected[i] = deq.Event{
 			ID:           fmt.Sprintf("event%03d", i),
 			Topic:        topic,
 			CreateTime:   createTime,
-			DefaultState: EventStateQueued,
-			State:        EventStateQueued,
+			DefaultState: deq.EventStateQueued,
+			State:        deq.EventStateQueued,
 		}
 	}
 
@@ -145,9 +146,9 @@ func TestMassPub(t *testing.T) {
 		}
 	}
 
-	var actual []Event
-	iter := channel.NewEventIter(IterOptions{})
-	for iter.Next() {
+	var actual []deq.Event
+	iter := channel.NewEventIter(nil)
+	for iter.Next(ctx) {
 		actual = append(actual, iter.Event())
 	}
 	if iter.Err() != nil {
@@ -166,12 +167,12 @@ func TestPubDuplicate(t *testing.T) {
 	db, discard := newTestDB()
 	defer discard()
 
-	expected := Event{
+	expected := deq.Event{
 		ID:           "event1",
 		Topic:        "topic",
 		CreateTime:   time.Now(),
-		DefaultState: EventStateQueued,
-		State:        EventStateQueued,
+		DefaultState: deq.EventStateQueued,
+		State:        deq.EventStateQueued,
 	}
 
 	channel := db.Channel("channel", expected.Topic)
@@ -192,7 +193,7 @@ func TestPubDuplicate(t *testing.T) {
 	// Publish and verify event with same id and different payload
 	expected.Payload = []byte{1}
 	_, err = db.Pub(ctx, expected)
-	if err != ErrAlreadyExists {
+	if err != deq.ErrAlreadyExists {
 		t.Fatalf("modified duplicate pub: %v", err)
 	}
 	expected.Payload = nil
@@ -205,9 +206,9 @@ func TestPubDuplicate(t *testing.T) {
 		t.Errorf("get next:\n%s", cmp.Diff(expected, event))
 	}
 
-	expected.State = EventStateQueued
+	expected.State = deq.EventStateQueued
 
-	event, err = channel.Get(expected.ID)
+	event, err = channel.Get(ctx, expected.ID)
 	if err != nil {
 		t.Fatalf("get: %v", err)
 	}

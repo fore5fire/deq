@@ -63,9 +63,6 @@ func (s *Store) upgradeDB(currentVersion string) error {
 
 func (s *Store) getDBVersion(txn *badger.Txn) (string, error) {
 	item, err := txn.Get([]byte(dbVersionKey))
-	if err == badger.ErrKeyNotFound {
-		return "1.0.0", nil
-	}
 	if err != nil {
 		return "", err
 	}

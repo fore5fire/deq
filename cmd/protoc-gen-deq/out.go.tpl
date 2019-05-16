@@ -52,6 +52,9 @@ type _{{.GoName}}EventIter struct {
 func (it *_{{.GoName}}EventIter) Next(ctx context.Context) (*{{.GoName}}Event, error) {
 
 	if !it.iter.Next(ctx) {
+		if it.iter.Err() != nil {
+			return nil, it.iter.Err()
+		}
 		return nil, deq.ErrIterationComplete
 	}
 	
@@ -152,8 +155,8 @@ type {{ .Name }}Client interface {
 	Get{{ .GoName }}Index(ctx context.Context, index string) (*{{ .GoName }}Event, error)
 	Await{{ .GoName }}Event(ctx context.Context, id string) (*{{ .GoName }}Event, error)
 	Sub{{ .GoName }}Event(ctx context.Context, handler func(context.Context, *{{.GoName}}Event) ack.Code) error
-	New{{ .GoName }}EventIter(opts deq.IterOptions) {{ .GoName }}EventIter
-	New{{ .GoName }}IndexIter(opts deq.IterOptions) {{ .GoName }}EventIter
+	New{{ .GoName }}EventIter(opts *deq.IterOptions) {{ .GoName }}EventIter
+	New{{ .GoName }}IndexIter(opts *deq.IterOptions) {{ .GoName }}EventIter
 	Pub{{.GoName}}Event(ctx context.Context, e *{{.GoName}}Event) (*{{.GoName}}Event, error)
 	Del{{.GoName}}Event(ctx context.Context, id string) error
 	{{ end -}}
@@ -280,7 +283,7 @@ func (c *_{{ $ServiceName }}Client) Sub{{ .GoName }}Event(ctx context.Context, h
 	})
 }
 
-func (c *_{{ $ServiceName }}Client) New{{ .GoName }}EventIter(opts deq.IterOptions) {{ .GoName }}EventIter {
+func (c *_{{ $ServiceName }}Client) New{{ .GoName }}EventIter(opts *deq.IterOptions) {{ .GoName }}EventIter {
 	
 	channel := c.db.Channel(c.channel, c.config.{{.GoName}}Topic())
 	defer channel.Close()
@@ -291,7 +294,7 @@ func (c *_{{ $ServiceName }}Client) New{{ .GoName }}EventIter(opts deq.IterOptio
 	}
 }
 
-func (c *_{{ $ServiceName }}Client) New{{ .GoName }}IndexIter(opts deq.IterOptions) {{ .GoName }}EventIter {
+func (c *_{{ $ServiceName }}Client) New{{ .GoName }}IndexIter(opts *deq.IterOptions) {{ .GoName }}EventIter {
 	
 	channel := c.db.Channel(c.channel, c.config.{{.GoName}}Topic())
 	defer channel.Close()
@@ -335,10 +338,7 @@ func (c *_{{ $ServiceName }}Client) {{ .Name }}(ctx context.Context, e *{{.InTyp
 		return nil, fmt.Errorf("pub: %v", err)
 	}
 
-	channel := c.db.Channel(c.channel, c.config.{{.OutType}}Topic())
-	defer channel.Close()
-
-	result, err := channel.Await{{.OutType}}Event(ctx, e.ID)
+	result, err := c.Await{{.OutType}}Event(ctx, e.ID)
 	if err != nil {
 		return nil, fmt.Errorf("get response: %v", err)
 	}

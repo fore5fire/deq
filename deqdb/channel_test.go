@@ -5,10 +5,12 @@ import (
 	"io/ioutil"
 	"log"
 	"os"
+	"sort"
 	"testing"
 	"time"
 
 	"github.com/google/go-cmp/cmp"
+	"gitlab.com/katcheCode/deq"
 	"gitlab.com/katcheCode/deq/ack"
 )
 
@@ -40,9 +42,9 @@ func TestSub(t *testing.T) {
 
 	// Publish some events
 	events := struct {
-		Before, After, ExpectedBefore, ExpectedAfter, ExpectedResponses []Event
+		Before, After, ExpectedBefore, ExpectedAfter, ExpectedResponses []deq.Event
 	}{
-		Before: []Event{
+		Before: []deq.Event{
 			{
 				ID:         "before-event1",
 				Topic:      "TopicA",
@@ -59,83 +61,83 @@ func TestSub(t *testing.T) {
 				CreateTime: createTime,
 			},
 		},
-		ExpectedBefore: []Event{
+		ExpectedBefore: []deq.Event{
 			{
 				ID:           "before-event1",
 				Topic:        "TopicA",
 				CreateTime:   createTime,
-				DefaultState: EventStateQueued,
-				State:        EventStateQueued,
+				DefaultState: deq.EventStateQueued,
+				State:        deq.EventStateQueued,
 			},
 			{
 				ID:           "before-event2",
 				Topic:        "TopicA",
 				CreateTime:   createTime,
-				DefaultState: EventStateQueued,
-				State:        EventStateQueued,
+				DefaultState: deq.EventStateQueued,
+				State:        deq.EventStateQueued,
 			},
 		},
-		After: []Event{
+		After: []deq.Event{
 			{
-				ID:         "after-event1",
+				ID:         "~after-event1",
 				Topic:      "TopicA",
 				CreateTime: createTime,
 			},
 			{
-				ID:         "after-event2",
+				ID:         "~after-event2",
 				Topic:      "TopicA",
 				CreateTime: createTime,
 			},
 			{
-				ID:         "after-event1",
+				ID:         "~after-event1",
 				Topic:      "TopicB",
 				CreateTime: createTime,
 			},
 		},
-		ExpectedAfter: []Event{
+		ExpectedAfter: []deq.Event{
 			{
-				ID:           "after-event1",
+				ID:           "~after-event1",
 				Topic:        "TopicA",
 				CreateTime:   createTime,
-				DefaultState: EventStateQueued,
-				State:        EventStateQueued,
+				DefaultState: deq.EventStateQueued,
+				State:        deq.EventStateQueued,
 			},
 			{
-				ID:           "after-event2",
+				ID:           "~after-event2",
 				Topic:        "TopicA",
 				CreateTime:   createTime,
-				DefaultState: EventStateQueued,
-				State:        EventStateQueued,
+				DefaultState: deq.EventStateQueued,
+				State:        deq.EventStateQueued,
 			},
 		},
-		ExpectedResponses: []Event{
+		ExpectedResponses: []deq.Event{
 			{
 				ID:           "before-event1",
 				Topic:        "Response-TopicA",
 				CreateTime:   createTime,
-				DefaultState: EventStateQueued,
-				State:        EventStateQueued,
+				DefaultState: deq.EventStateQueued,
+				State:        deq.EventStateQueued,
 			},
 			{
 				ID:           "before-event2",
 				Topic:        "Response-TopicA",
 				CreateTime:   createTime,
-				DefaultState: EventStateQueued,
-				State:        EventStateQueued,
+				DefaultState: deq.EventStateQueued,
+				State:        deq.EventStateQueued,
 			},
 			{
-				ID:           "after-event1",
+				ID:           "~after-event1",
 				Topic:        "Response-TopicA",
 				CreateTime:   createTime,
-				DefaultState: EventStateQueued,
-				State:        EventStateQueued,
+				DefaultState: deq.EventStateQueued,
+				State:        deq.EventStateQueued,
 			},
 			{
-				ID:           "after-event2",
+				ID:           "~after-event2",
 				Topic:        "Response-TopicA",
 				CreateTime:   createTime,
-				DefaultState: EventStateQueued,
-				State:        EventStateQueued,
+				DefaultState: deq.EventStateQueued,
+				State:        deq.EventStateQueued,
 			},
 		},
 	}
@@ -147,17 +149,17 @@ func TestSub(t *testing.T) {
 		}
 	}
 
-	recieved := make(chan Event)
-	responses := make(chan Event)
+	recieved := make(chan deq.Event)
+	responses := make(chan deq.Event)
 
 	// // Subscribe to events
 	go func() {
 		channel := db.Channel("test-channel", "TopicA")
-		err := channel.Sub(ctx, func(ctx context.Context, e Event) (*Event, ack.Code) {
+		err := channel.Sub(ctx, func(ctx context.Context, e deq.Event) (*deq.Event, ack.Code) {
 
 			recieved <- e
 
-			return &Event{
+			return &deq.Event{
 				ID:         e.ID,
 				Topic:      "Response-TopicA",
 				CreateTime: createTime,
@@ -170,7 +172,7 @@ func TestSub(t *testing.T) {
 	// Subscribe to response events
 	go func() {
 		channel := db.Channel("test-channel", "Response-TopicA")
-		err := channel.Sub(ctx, func(ctx context.Context, e Event) (*Event, ack.Code) {
+		err := channel.Sub(ctx, func(ctx context.Context, e deq.Event) (*deq.Event, ack.Code) {
 
 			responses <- e
 
@@ -181,12 +183,9 @@ func TestSub(t *testing.T) {
 	}()
 
 	// Verify that events were recieved by handler
-	var actual []Event
-	for e := range recieved {
-		actual = append(actual, e)
-		if len(actual) >= len(events.ExpectedBefore) {
-			break
-		}
+	var actual []deq.Event
+	for len(actual) < len(events.ExpectedBefore) {
+		actual = append(actual, <-recieved)
 	}
 	if !cmp.Equal(events.ExpectedBefore, actual) {
 		t.Errorf("pre-sub recieved events:\n%s", cmp.Diff(events.ExpectedBefore, actual))
@@ -202,11 +201,8 @@ func TestSub(t *testing.T) {
 
 	// Verify that events were recieved by handler
 	actual = nil
-	for e := range recieved {
-		actual = append(actual, e)
-		if len(actual) >= len(events.ExpectedAfter) {
-			break
-		}
+	for len(actual) < len(events.ExpectedAfter) {
+		actual = append(actual, <-recieved)
 	}
 	if !cmp.Equal(events.ExpectedAfter, actual) {
 		t.Errorf("post-sub recieved events:\n%s", cmp.Diff(events.ExpectedAfter, actual))
@@ -214,12 +210,12 @@ func TestSub(t *testing.T) {
 
 	// Verify that response events were published
 	actual = nil
-	for e := range responses {
-		actual = append(actual, e)
-		if len(actual) >= len(events.ExpectedResponses) {
-			break
-		}
+	for len(actual) < len(events.ExpectedResponses) {
+		actual = append(actual, <-responses)
 	}
+	sort.SliceStable(actual, func(i, j int) bool {
+		return actual[i].ID < actual[j].ID
+	})
 	if !cmp.Equal(events.ExpectedResponses, actual) {
 		t.Errorf("response events:\n%s", cmp.Diff(events.ExpectedResponses, actual))
 	}
@@ -231,12 +227,12 @@ func TestAwait(t *testing.T) {
 	db, discard := newTestDB()
 	defer discard()
 
-	expected := Event{
+	expected := deq.Event{
 		ID:           "event1",
 		Topic:        "test-topic",
 		CreateTime:   time.Now(),
-		DefaultState: EventStateQueued,
-		State:        EventStateQueued,
+		DefaultState: deq.EventStateQueued,
+		State:        deq.EventStateQueued,
 	}
 
 	ctx, cancel := context.WithCancel(context.Background())
@@ -246,7 +242,7 @@ func TestAwait(t *testing.T) {
 	defer channel.Close()
 
 	type AwaitResponse struct {
-		Event Event
+		Event deq.Event
 		Err   error
 	}
 	recieved := make(chan AwaitResponse)
@@ -290,7 +286,7 @@ func TestAwaitChannelTimeout(t *testing.T) {
 	ctx, cancel := context.WithTimeout(context.Background(), time.Second/4)
 	defer cancel()
 
-	_, err := db.Pub(ctx, Event{
+	_, err := db.Pub(ctx, deq.Event{
 		ID:         "event1",
 		Topic:      "topic",
 		CreateTime: time.Now(),
@@ -322,7 +318,7 @@ func TestAwaitChannelClose(t *testing.T) {
 
 	ctx := context.Background()
 
-	_, err := db.Pub(ctx, Event{
+	_, err := db.Pub(ctx, deq.Event{
 		ID:         "event1",
 		Topic:      "topic",
 		CreateTime: time.Now(),
@@ -360,7 +356,7 @@ func TestAwaitChannel(t *testing.T) {
 	ctx, cancel := context.WithTimeout(context.Background(), time.Second*3)
 	defer cancel()
 
-	_, err := db.Pub(ctx, Event{
+	_, err := db.Pub(ctx, deq.Event{
 		ID:         "event1",
 		Topic:      "topic",
 		CreateTime: time.Now(),
@@ -374,7 +370,7 @@ func TestAwaitChannel(t *testing.T) {
 		channel := db.Channel("channel", "topic")
 		defer channel.Close()
 
-		err := channel.SetEventState("event1", EventStateDequeuedOK)
+		err := channel.SetEventState(ctx, "event1", deq.EventStateDequeuedOK)
 		if err != nil {
 			log.Printf("set event state: %v", err)
 		}
@@ -390,7 +386,7 @@ func TestAwaitChannel(t *testing.T) {
 	if err != nil {
 		t.Fatalf("await dequeue: %v", err)
 	}
-	if state != EventStateDequeuedOK {
+	if state != deq.EventStateDequeuedOK {
 		t.Fatalf("returned incorrect state: %v", state)
 	}
 }
@@ -403,7 +399,7 @@ func TestGet(t *testing.T) {
 	db, discard := newTestDB()
 	defer discard()
 
-	expected := Event{
+	expected := deq.Event{
 		ID:         "event1",
 		Topic:      "topic",
 		CreateTime: time.Now(),
@@ -414,13 +410,13 @@ func TestGet(t *testing.T) {
 		t.Fatalf("pub: %v", err)
 	}
 
-	expected.DefaultState = EventStateQueued
-	expected.State = EventStateQueued
+	expected.DefaultState = deq.EventStateQueued
+	expected.State = deq.EventStateQueued
 
 	channel := db.Channel("channel", expected.Topic)
 	defer channel.Close()
 
-	actual, err := channel.Get(expected.ID)
+	actual, err := channel.Get(ctx, expected.ID)
 	if err != nil {
 		t.Fatalf("get: %v", err)
 	}
@@ -428,14 +424,14 @@ func TestGet(t *testing.T) {
 		t.Errorf("\n%s", cmp.Diff(expected, actual))
 	}
 
-	err = channel.SetEventState(expected.ID, EventStateDequeuedOK)
+	err = channel.SetEventState(ctx, expected.ID, deq.EventStateDequeuedOK)
 	if err != nil {
 		t.Fatalf("set event state: %v", err)
 	}
 
-	expected.State = EventStateDequeuedOK
+	expected.State = deq.EventStateDequeuedOK
 
-	actual, err = channel.Get(expected.ID)
+	actual, err = channel.Get(ctx, expected.ID)
 	if err != nil {
 		t.Fatalf("get after set state: %v", err)
 	}
@@ -455,11 +451,11 @@ func TestDequeue(t *testing.T) {
 	}
 	defer os.RemoveAll(dir)
 
-	expected := Event{
+	expected := deq.Event{
 		ID:         "event1",
 		Topic:      "topic",
 		CreateTime: time.Now(),
-		State:      EventStateQueued,
+		State:      deq.EventStateQueued,
 	}
 
 	func() {
@@ -480,7 +476,7 @@ func TestDequeue(t *testing.T) {
 		channel := db.Channel("channel", expected.Topic)
 		defer channel.Close()
 
-		err = channel.SetEventState(expected.ID, EventStateDequeuedError)
+		err = channel.SetEventState(ctx, expected.ID, deq.EventStateDequeuedError)
 		if err != nil {
 			t.Fatalf("set event state: %v", err)
 		}

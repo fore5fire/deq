@@ -1,4 +1,5 @@
-//go:generate go-bindata -pkg main -o tpl.go out.go.tpl
+//go:generate go-bindata -pkg main -o out.go out.go.tpl
+//go:generate go generate ./example/greeter
 
 package main
 

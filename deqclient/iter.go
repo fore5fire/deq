@@ -53,6 +53,11 @@ func (c *clientChannel) NewIndexIter(opts *deq.IterOptions) deq.EventIter {
 		opts = &deq.IterOptions{}
 	}
 
+	max := "\uffff"
+	if opts.Max != "" {
+		max = opts.Max
+	}
+
 	prefetchCount := 20
 	if opts.PrefetchCount < -1 {
 		panic("opts.PrefetchCount cannot be less than -1")
@@ -67,7 +72,7 @@ func (c *clientChannel) NewIndexIter(opts *deq.IterOptions) deq.EventIter {
 	ctx, cancel := context.WithCancel(context.Background())
 
 	it := &eventIter{
-		next:   make(chan *api.Event, prefetchCount/2),
+		next:   make(chan *api.Event, (prefetchCount)/2),
 		cancel: cancel,
 		client: c.deqClient,
 	}
@@ -76,7 +81,7 @@ func (c *clientChannel) NewIndexIter(opts *deq.IterOptions) deq.EventIter {
 		Topic:    c.topic,
 		Channel:  c.name,
 		MinId:    opts.Min,
-		MaxId:    opts.Max,
+		MaxId:    max,
 		Reversed: opts.Reversed,
 		UseIndex: true,
 		PageSize: int32((prefetchCount+1)/2 + (prefetchCount+1)%2),

@@ -8,6 +8,7 @@ import (
 
 	"github.com/dgraph-io/badger"
 	"github.com/google/go-cmp/cmp"
+	"gitlab.com/katcheCode/deq"
 	"gitlab.com/katcheCode/deq/internal/data"
 )
 
@@ -33,7 +34,7 @@ func TestWriteEvent(t *testing.T) {
 
 	// Setup existing channels - currently we have to ack an existing event on the
 	// channels we want
-	err = writeEvent(txn, &Event{
+	err = writeEvent(txn, &deq.Event{
 		Topic:      "topic",
 		ID:         "event0",
 		CreateTime: time.Now(),
@@ -42,7 +43,7 @@ func TestWriteEvent(t *testing.T) {
 	if err != nil {
 		t.Fatal("write event: ", err)
 	}
-	err = writeEvent(txn, &Event{
+	err = writeEvent(txn, &deq.Event{
 		Topic:      "topic",
 		ID:         "event00",
 		CreateTime: time.Now(),
@@ -77,14 +78,15 @@ func TestWriteEvent(t *testing.T) {
 	}
 
 	// Write actual event
-	expected := &Event{
-		Topic:        "topic",
-		ID:           "event1",
-		CreateTime:   time.Now(),
-		Payload:      []byte{1, 2, 3},
-		DefaultState: EventStateDequeuedOK,
+	expected := &deq.Event{
+		Topic:      "topic",
+		ID:         "event1",
+		CreateTime: time.Now(),
+		Payload:    []byte{1, 2, 3},
+		// Should make State start as deq.EventStateDequeuedOK
+		DefaultState: deq.EventStateDequeuedOK,
 		// Should be ignored.
-		State: EventStateDequeuedError,
+		State: deq.EventStateDequeuedError,
 	}
 
 	err = writeEvent(txn, expected)
@@ -92,7 +94,7 @@ func TestWriteEvent(t *testing.T) {
 		t.Fatal("write event: ", err)
 	}
 
-	expected.State = EventStateDequeuedOK
+	expected.State = deq.EventStateDequeuedOK
 
 	actual, err := getEvent(txn, expected.Topic, expected.ID, "channel")
 	if err != nil {
@@ -109,7 +111,7 @@ func TestWriteEvent(t *testing.T) {
 		t.Errorf("\n%s", cmp.Diff(expected, actual))
 	}
 
-	expected.State = EventStateQueued
+	// expected.State = deq.EventStateQueued
 
 	actual, err = getEvent(txn, expected.Topic, expected.ID, "newchannel")
 	if err != nil {
@@ -145,23 +147,26 @@ func BenchmarkWriteEvent(b *testing.B) {
 	txn := db.NewTransaction(true)
 	defer txn.Discard()
 
-	expected := Event{
-		Topic:        "topic",
-		ID:           "event1",
-		CreateTime:   time.Now(),
-		Payload:      []byte{1, 2, 3},
-		DefaultState: EventStateDequeuedOK,
-		// Should be ignored.
-		State: EventStateDequeuedError,
-	}
+	for i := 0; i < b.N; i++ {
 
-	err = writeEvent(txn, &expected)
-	if err != nil {
-		b.Fatal("write event: ", err)
-	}
+		expected := deq.Event{
+			Topic:        "topic",
+			ID:           "event1",
+			CreateTime:   time.Now(),
+			Payload:      []byte{1, 2, 3},
+			DefaultState: deq.EventStateDequeuedOK,
+			// Should be ignored.
+			State: deq.EventStateDequeuedError,
+		}
 
-	err = txn.Commit(nil)
-	if err != nil {
-		b.Error("commit: ", err)
+		err = writeEvent(txn, &expected)
+		if err != nil {
+			b.Fatal("write event: ", err)
+		}
+
+		err = txn.Commit(nil)
+		if err != nil {
+			b.Error("commit: ", err)
+		}
 	}
 }

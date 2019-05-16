@@ -46,7 +46,7 @@ func getEvent(txn *badger.Txn, topic, eventID, channel string) (*deq.Event, erro
 			ID:      eventID,
 			Topic:   topic,
 			Channel: channel,
-		})
+		}, event.DefaultEventState)
 		if err != nil {
 			return nil, fmt.Errorf("get event state: %v", err)
 		}
@@ -83,6 +83,11 @@ func printKeys(txn *badger.Txn) {
 }
 
 func writeEvent(txn *badger.Txn, e *deq.Event) error {
+
+	if e.DefaultState == deq.EventStateUnspecified {
+		e.DefaultState = deq.EventStateQueued
+	}
+
 	key, err := data.EventTimeKey{
 		Topic: e.Topic,
 		ID:    e.ID,
@@ -160,43 +165,43 @@ func writeEvent(txn *badger.Txn, e *deq.Event) error {
 		}
 	}
 
-	if e.DefaultState != deq.EventStateUnspecified && e.DefaultState != deq.EventStateQueued {
+	// if e.DefaultState != deq.EventStateQueued {
 
-		it := txn.NewIterator(badger.DefaultIteratorOptions)
-		defer it.Close()
+	// 	it := txn.NewIterator(badger.DefaultIteratorOptions)
+	// 	defer it.Close()
 
-		prefix := []byte{data.ChannelTag, data.Sep}
-		cursor := prefix
+	// 	prefix := []byte{data.ChannelTag, data.Sep}
+	// 	cursor := prefix
 
-		for it.Seek(cursor); it.ValidForPrefix(prefix); it.Seek(cursor) {
+	// 	for it.Seek(cursor); it.ValidForPrefix(prefix); it.Seek(cursor) {
 
-			var key data.ChannelKey
-			err := data.UnmarshalChannelKey(it.Item().Key(), &key)
-			if err != nil {
-				return fmt.Errorf("unmarshal channel key: %v", err)
-			}
+	// 		var key data.ChannelKey
+	// 		err := data.UnmarshalChannelKey(it.Item().Key(), &key)
+	// 		if err != nil {
+	// 			return fmt.Errorf("unmarshal channel key: %v", err)
+	// 		}
 
-			// Skip to next channel
-			cursor, err = data.ChannelPrefix(key.Channel + "\u0001")
-			if err != nil {
-				return fmt.Errorf("marshal channel prefix: %v", err)
-			}
+	// 		// Skip to next channel
+	// 		cursor, err = data.ChannelPrefix(key.Channel + "\u0001")
+	// 		if err != nil {
+	// 			return fmt.Errorf("marshal channel prefix: %v", err)
+	// 		}
 
-			newKey := data.ChannelKey{
-				Topic:   e.Topic,
-				Channel: key.Channel,
-				ID:      e.ID,
-			}
+	// 		newKey := data.ChannelKey{
+	// 			Topic:   e.Topic,
+	// 			Channel: key.Channel,
+	// 			ID:      e.ID,
+	// 		}
 
-			err = setChannelEvent(txn, newKey, data.ChannelPayload{
-				EventState:   eventStateToProto(deq.DefaultEventState),
-				RequeueCount: int32(e.RequeueCount),
-			})
-			if err != nil {
-				return fmt.Errorf("set event state on channel %s: %v", key.Channel, err)
-			}
-		}
-	}
+	// 		err = setChannelEvent(txn, newKey, data.ChannelPayload{
+	// 			EventState:   eventStateToProto(e.DefaultState),
+	// 			RequeueCount: int32(e.RequeueCount),
+	// 		})
+	// 		if err != nil {
+	// 			return fmt.Errorf("set event state on channel %s: %v", key.Channel, err)
+	// 		}
+	// 	}
+	// }
 
 	return nil
 }
@@ -326,11 +331,7 @@ func getEventPayload(txn *badger.Txn, key data.EventKey) (payload data.EventPayl
 	return payload, nil
 }
 
-var defaultChannelPayload = data.ChannelPayload{
-	EventState: eventStateToProto(deq.EventStateQueued),
-}
-
-func getChannelEvent(txn *badger.Txn, key data.ChannelKey) (data.ChannelPayload, error) {
+func getChannelEvent(txn *badger.Txn, key data.ChannelKey, defaultState data.EventState) (data.ChannelPayload, error) {
 
 	rawKey, err := key.Marshal(nil)
 	if err != nil {
@@ -339,7 +340,9 @@ func getChannelEvent(txn *badger.Txn, key data.ChannelKey) (data.ChannelPayload,
 
 	item, err := txn.Get(rawKey)
 	if err == badger.ErrKeyNotFound {
-		return defaultChannelPayload, nil
+		return data.ChannelPayload{
+			EventState: defaultState,
+		}, nil
 	}
 	if err != nil {
 		return data.ChannelPayload{}, err
@@ -397,7 +400,7 @@ func incrementSavedRequeueCount(txn *badger.Txn, channel, topic string, defaultR
 		ID:      e.ID,
 	}
 
-	channelEvent, err := getChannelEvent(txn, key)
+	channelEvent, err := getChannelEvent(txn, key, eventStateToProto(e.DefaultState))
 	if err != nil {
 		return nil, err
 	}

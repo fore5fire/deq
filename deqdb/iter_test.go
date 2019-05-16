@@ -6,18 +6,20 @@ import (
 	"time"
 
 	"github.com/google/go-cmp/cmp"
+	"gitlab.com/katcheCode/deq"
 )
 
 func TestEmptyTopicIter(t *testing.T) {
 	t.Parallel()
+	ctx := context.Background()
 
 	db, discard := newTestDB()
 	defer discard()
 
-	iter := db.NewTopicIter(DefaultIterOptions)
+	iter := db.NewTopicIter(nil)
 	defer iter.Close()
 
-	for iter.Next() {
+	for iter.Next(ctx) {
 		t.Errorf("iterate empty db: %v", iter.Topic())
 	}
 }
@@ -30,7 +32,7 @@ func TestTopicIter(t *testing.T) {
 	db, discard := newTestDB()
 	defer discard()
 
-	events := []Event{
+	events := []deq.Event{
 		{
 			ID:         "event1",
 			Topic:      "TopicA",
@@ -68,10 +70,10 @@ func TestTopicIter(t *testing.T) {
 	expected := []string{"TopicA", "TopicB", "TopicC"}
 	var actual []string
 
-	iter := db.NewTopicIter(DefaultIterOptions)
+	iter := db.NewTopicIter(nil)
 	defer iter.Close()
 
-	for iter.Next() {
+	for iter.Next(ctx) {
 		actual = append(actual, iter.Topic())
 	}
 
@@ -88,7 +90,7 @@ func TestTopicIterReversed(t *testing.T) {
 	db, discard := newTestDB()
 	defer discard()
 
-	events := []Event{
+	events := []deq.Event{
 		{
 			ID:         "event1",
 			Topic:      "TopicA",
@@ -126,12 +128,12 @@ func TestTopicIterReversed(t *testing.T) {
 	expected := []string{"TopicC", "TopicB", "TopicA"}
 	var actual []string
 
-	opts := DefaultIterOptions
-	opts.Reversed = true
-	iter := db.NewTopicIter(opts)
+	iter := db.NewTopicIter(&deq.IterOptions{
+		Reversed: true,
+	})
 	defer iter.Close()
 
-	for iter.Next() {
+	for iter.Next(ctx) {
 		actual = append(actual, iter.Topic())
 	}
 
@@ -148,7 +150,7 @@ func TestTopicIterMin(t *testing.T) {
 	db, discard := newTestDB()
 	defer discard()
 
-	events := []Event{
+	events := []deq.Event{
 		{
 			ID:         "event1",
 			Topic:      "TopicA",
@@ -186,12 +188,12 @@ func TestTopicIterMin(t *testing.T) {
 	expected := []string{"TopicB", "TopicC"}
 	var actual []string
 
-	opts := DefaultIterOptions
-	opts.Min = "TopicAA"
-	iter := db.NewTopicIter(opts)
+	iter := db.NewTopicIter(&deq.IterOptions{
+		Min: "TopicAA",
+	})
 	defer iter.Close()
 
-	for iter.Next() {
+	for iter.Next(ctx) {
 		actual = append(actual, iter.Topic())
 	}
 
@@ -203,11 +205,12 @@ func TestTopicIterMin(t *testing.T) {
 	actual = nil
 
 	// Test inclusive boundry
-	opts.Min = "TopicA"
-	iter2 := db.NewTopicIter(opts)
+	iter2 := db.NewTopicIter(&deq.IterOptions{
+		Min: "TopicA",
+	})
 	defer iter2.Close()
 
-	for iter2.Next() {
+	for iter2.Next(ctx) {
 		actual = append(actual, iter2.Topic())
 	}
 
@@ -224,7 +227,7 @@ func TestTopicIterMax(t *testing.T) {
 	db, discard := newTestDB()
 	defer discard()
 
-	events := []Event{
+	events := []deq.Event{
 		{
 			ID:         "event1",
 			Topic:      "TopicA",
@@ -262,12 +265,12 @@ func TestTopicIterMax(t *testing.T) {
 	expected := []string{"TopicA", "TopicB"}
 	var actual []string
 
-	opts := DefaultIterOptions
-	opts.Max = "TopicBB"
-	iter := db.NewTopicIter(opts)
+	iter := db.NewTopicIter(&deq.IterOptions{
+		Max: "TopicBB",
+	})
 	defer iter.Close()
 
-	for iter.Next() {
+	for iter.Next(ctx) {
 		actual = append(actual, iter.Topic())
 	}
 
@@ -279,11 +282,12 @@ func TestTopicIterMax(t *testing.T) {
 	actual = nil
 
 	// Test inclusive boundry
-	opts.Max = "TopicC"
-	iter2 := db.NewTopicIter(opts)
+	iter2 := db.NewTopicIter(&deq.IterOptions{
+		Max: "TopicC",
+	})
 	defer iter2.Close()
 
-	for iter2.Next() {
+	for iter2.Next(ctx) {
 		actual = append(actual, iter2.Topic())
 	}
 
@@ -294,6 +298,7 @@ func TestTopicIterMax(t *testing.T) {
 
 func TestEmptyEventIter(t *testing.T) {
 	t.Parallel()
+	ctx := context.Background()
 
 	db, discard := newTestDB()
 	defer discard()
@@ -301,10 +306,10 @@ func TestEmptyEventIter(t *testing.T) {
 	channel := db.Channel("channel1", "topic1")
 	defer channel.Close()
 
-	iter := channel.NewEventIter(DefaultIterOptions)
+	iter := channel.NewEventIter(nil)
 	defer iter.Close()
 
-	for iter.Next() {
+	for iter.Next(ctx) {
 		t.Errorf("iterate empty db")
 	}
 }
@@ -319,7 +324,7 @@ func TestEventIter(t *testing.T) {
 
 	createTime := time.Now()
 
-	created := []Event{
+	created := []deq.Event{
 		{
 			ID:         "event2",
 			Topic:      "topic1",
@@ -344,32 +349,32 @@ func TestEventIter(t *testing.T) {
 		}
 	}
 
-	expected := []Event{
+	expected := []deq.Event{
 		{
 			ID:           "event1",
 			Topic:        "topic1",
 			CreateTime:   createTime,
-			DefaultState: EventStateQueued,
-			State:        EventStateQueued,
+			DefaultState: deq.EventStateQueued,
+			State:        deq.EventStateQueued,
 		},
 		{
 			ID:           "event2",
 			Topic:        "topic1",
 			CreateTime:   createTime,
-			DefaultState: EventStateQueued,
-			State:        EventStateQueued,
+			DefaultState: deq.EventStateQueued,
+			State:        deq.EventStateQueued,
 		},
 	}
 
-	var actual []Event
+	var actual []deq.Event
 
 	channel := db.Channel("channel1", "topic1")
 	defer channel.Close()
 
-	iter := channel.NewEventIter(DefaultIterOptions)
+	iter := channel.NewEventIter(nil)
 	defer iter.Close()
 
-	for iter.Next() {
+	for iter.Next(ctx) {
 		actual = append(actual, iter.Event())
 	}
 	if iter.Err() != nil {
@@ -391,7 +396,7 @@ func TestEventIterReversed(t *testing.T) {
 
 	createTime := time.Now()
 
-	created := []Event{
+	created := []deq.Event{
 		{
 			ID:         "event2",
 			Topic:      "topic1",
@@ -416,34 +421,34 @@ func TestEventIterReversed(t *testing.T) {
 		}
 	}
 
-	expected := []Event{
+	expected := []deq.Event{
 		{
 			ID:           "event2",
 			Topic:        "topic1",
 			CreateTime:   createTime,
-			DefaultState: EventStateQueued,
-			State:        EventStateQueued,
+			DefaultState: deq.EventStateQueued,
+			State:        deq.EventStateQueued,
 		},
 		{
 			ID:           "event1",
 			Topic:        "topic1",
 			CreateTime:   createTime,
-			DefaultState: EventStateQueued,
-			State:        EventStateQueued,
+			DefaultState: deq.EventStateQueued,
+			State:        deq.EventStateQueued,
 		},
 	}
 
-	var actual []Event
+	var actual []deq.Event
 
 	channel := db.Channel("channel1", "topic1")
 	defer channel.Close()
 
-	opts := DefaultIterOptions
-	opts.Reversed = true
-	iter := channel.NewEventIter(opts)
+	iter := channel.NewEventIter(&deq.IterOptions{
+		Reversed: true,
+	})
 	defer iter.Close()
 
-	for iter.Next() {
+	for iter.Next(ctx) {
 		actual = append(actual, iter.Event())
 	}
 	if iter.Err() != nil {
@@ -457,6 +462,7 @@ func TestEventIterReversed(t *testing.T) {
 
 func TestEmptyIndexIter(t *testing.T) {
 	t.Parallel()
+	ctx := context.Background()
 
 	db, discard := newTestDB()
 	defer discard()
@@ -464,10 +470,10 @@ func TestEmptyIndexIter(t *testing.T) {
 	channel := db.Channel("channel1", "topic1")
 	defer channel.Close()
 
-	iter := channel.NewIndexIter(DefaultIterOptions)
+	iter := channel.NewIndexIter(nil)
 	defer iter.Close()
 
-	for iter.Next() {
+	for iter.Next(ctx) {
 		t.Errorf("iterate empty db")
 	}
 }
@@ -483,7 +489,7 @@ func TestIndexIter(t *testing.T) {
 	firstTime := time.Now().Round(0)
 	secondTime := firstTime.Add(time.Second).Round(0)
 
-	created := []Event{
+	created := []deq.Event{
 		{
 			ID:         "event2",
 			Topic:      "topic1",
@@ -522,50 +528,50 @@ func TestIndexIter(t *testing.T) {
 		}
 	}
 
-	expected := []Event{
+	expected := []deq.Event{
 		{
 			ID:           "event3",
 			Topic:        "topic1",
 			Indexes:      []string{"index1", "index4", "index0"},
 			CreateTime:   firstTime,
-			DefaultState: EventStateQueued,
-			State:        EventStateQueued,
+			DefaultState: deq.EventStateQueued,
+			State:        deq.EventStateQueued,
 		},
 		{
 			ID:           "event4",
 			Topic:        "topic1",
 			Indexes:      []string{"index1"},
 			CreateTime:   secondTime,
-			DefaultState: EventStateQueued,
-			State:        EventStateQueued,
+			DefaultState: deq.EventStateQueued,
+			State:        deq.EventStateQueued,
 		},
 		{
 			ID:           "event2",
 			Topic:        "topic1",
 			Indexes:      []string{"index3"},
 			CreateTime:   firstTime,
-			DefaultState: EventStateQueued,
-			State:        EventStateQueued,
+			DefaultState: deq.EventStateQueued,
+			State:        deq.EventStateQueued,
 		},
 		{
 			ID:           "event3",
 			Topic:        "topic1",
 			Indexes:      []string{"index1", "index4", "index0"},
 			CreateTime:   firstTime,
-			DefaultState: EventStateQueued,
-			State:        EventStateQueued,
+			DefaultState: deq.EventStateQueued,
+			State:        deq.EventStateQueued,
 		},
 	}
 
-	var actual []Event
+	var actual []deq.Event
 
 	channel := db.Channel("channel1", "topic1")
 	defer channel.Close()
 
-	iter := channel.NewIndexIter(DefaultIterOptions)
+	iter := channel.NewIndexIter(nil)
 	defer iter.Close()
 
-	for iter.Next() {
+	for iter.Next(ctx) {
 		actual = append(actual, iter.Event())
 	}
 	if iter.Err() != nil {
@@ -587,7 +593,7 @@ func TestIndexIterReversed(t *testing.T) {
 
 	createTime := time.Now()
 
-	created := []Event{
+	created := []deq.Event{
 		{
 			ID:         "event2",
 			Topic:      "topic1",
@@ -626,36 +632,36 @@ func TestIndexIterReversed(t *testing.T) {
 		}
 	}
 
-	expected := []Event{
+	expected := []deq.Event{
 		{
 			ID:           "event2",
 			Topic:        "topic1",
 			Indexes:      []string{"index3"},
 			CreateTime:   createTime,
-			DefaultState: EventStateQueued,
-			State:        EventStateQueued,
+			DefaultState: deq.EventStateQueued,
+			State:        deq.EventStateQueued,
 		},
 		{
 			ID:           "event4",
 			Topic:        "topic1",
 			Indexes:      []string{"index1"},
 			CreateTime:   createTime,
-			DefaultState: EventStateQueued,
-			State:        EventStateQueued,
+			DefaultState: deq.EventStateQueued,
+			State:        deq.EventStateQueued,
 		},
 	}
 
-	var actual []Event
+	var actual []deq.Event
 
 	channel := db.Channel("channel1", "topic1")
 	defer channel.Close()
 
-	opts := DefaultIterOptions
-	opts.Reversed = true
-	iter := channel.NewIndexIter(opts)
+	iter := channel.NewIndexIter(&deq.IterOptions{
+		Reversed: true,
+	})
 	defer iter.Close()
 
-	for iter.Next() {
+	for iter.Next(ctx) {
 		actual = append(actual, iter.Event())
 	}
 	if iter.Err() != nil {
@@ -677,7 +683,7 @@ func TestIndexIterLimits(t *testing.T) {
 
 	createTime := time.Now()
 
-	created := []Event{
+	created := []deq.Event{
 		{
 			ID:         "event2",
 			Topic:      "topic1",
@@ -717,29 +723,29 @@ func TestIndexIterLimits(t *testing.T) {
 		}
 	}
 
-	expected := []Event{
+	expected := []deq.Event{
 		{
 			ID:           "event2",
 			Topic:        "topic1",
 			Indexes:      []string{"index3"},
 			CreateTime:   createTime,
-			DefaultState: EventStateQueued,
-			State:        EventStateQueued,
+			DefaultState: deq.EventStateQueued,
+			State:        deq.EventStateQueued,
 		},
 	}
 
-	var actual []Event
+	var actual []deq.Event
 
 	channel := db.Channel("channel1", "topic1")
 	defer channel.Close()
 
-	opts := DefaultIterOptions
-	opts.Min = "index10"
-	opts.Max = "index50"
-	iter := channel.NewIndexIter(opts)
+	iter := channel.NewIndexIter(&deq.IterOptions{
+		Min: "index10",
+		Max: "index50",
+	})
 	defer iter.Close()
 
-	for iter.Next() {
+	for iter.Next(ctx) {
 		actual = append(actual, iter.Event())
 	}
 	if iter.Err() != nil {

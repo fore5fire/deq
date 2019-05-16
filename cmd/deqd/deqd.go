@@ -16,7 +16,7 @@ import (
 
 	pb "gitlab.com/katcheCode/deq/api/v1/deq"
 	"gitlab.com/katcheCode/deq/deqdb"
-	eventserver "gitlab.com/katcheCode/deq/internal/handlers"
+	"gitlab.com/katcheCode/deq/internal/handler"
 	"google.golang.org/grpc"
 	"google.golang.org/grpc/credentials"
 )
@@ -130,7 +130,7 @@ func run(dbDir, address, statsAddress, certFile, keyFile string, insecure bool) 
 	}
 	defer store.Close()
 
-	server := eventserver.NewServer(store)
+	server := handler.New(store)
 
 	var opts []grpc.ServerOption
 
