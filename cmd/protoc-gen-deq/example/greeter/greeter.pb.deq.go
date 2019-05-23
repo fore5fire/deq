@@ -1,6 +1,6 @@
 ///
 //  Generated code. Do not modify.
-//  source: greeter.proto
+//  source: example/greeter/greeter.proto
 ///
 package greeter
 
@@ -13,6 +13,8 @@ import (
 
 	"gitlab.com/katcheCode/deq"
 	"gitlab.com/katcheCode/deq/ack"
+	
+	
 )
 
 type HelloRequestEvent struct {
@@ -36,25 +38,25 @@ type HelloRequestEventIter interface {
 	Close()
 }
 
-type _HelloRequestEventIter struct {
-	iter   deq.EventIter
-	config _HelloRequestTopicConfig
+type XXX_HelloRequestEventIter struct {
+	Iter   deq.EventIter
+	Config _HelloRequestTopicConfig
 }
 
 // Next returns the next HelloRequestEvent, deq.ErrIterationComplete if iteration completed, or an error,
 // if one occured. See deq.EventIter.Next for more information.
-func (it *_HelloRequestEventIter) Next(ctx context.Context) (*HelloRequestEvent, error) {
+func (it *XXX_HelloRequestEventIter) Next(ctx context.Context) (*HelloRequestEvent, error) {
 
-	if !it.iter.Next(ctx) {
-		if it.iter.Err() != nil {
-			return nil, it.iter.Err()
+	if !it.Iter.Next(ctx) {
+		if it.Iter.Err() != nil {
+			return nil, it.Iter.Err()
 		}
 		return nil, deq.ErrIterationComplete
 	}
 	
-	deqEvent := it.iter.Event()
+	deqEvent := it.Iter.Event()
 
-	e, err := it.config.EventToHelloRequestEvent(deqEvent)
+	e, err := it.Config.EventToHelloRequestEvent(deqEvent)
 	if err != nil {
 		return nil, fmt.Errorf("convert deq.Event to HelloRequestEvent: %v", err)
 	}
@@ -62,8 +64,8 @@ func (it *_HelloRequestEventIter) Next(ctx context.Context) (*HelloRequestEvent,
 	return e, nil
 }
 
-func (it *_HelloRequestEventIter) Close() {
-	it.iter.Close()
+func (it *XXX_HelloRequestEventIter) Close() {
+	it.Iter.Close()
 }
 
 
@@ -88,25 +90,25 @@ type HelloReplyEventIter interface {
 	Close()
 }
 
-type _HelloReplyEventIter struct {
-	iter   deq.EventIter
-	config _HelloReplyTopicConfig
+type XXX_HelloReplyEventIter struct {
+	Iter   deq.EventIter
+	Config _HelloReplyTopicConfig
 }
 
 // Next returns the next HelloReplyEvent, deq.ErrIterationComplete if iteration completed, or an error,
 // if one occured. See deq.EventIter.Next for more information.
-func (it *_HelloReplyEventIter) Next(ctx context.Context) (*HelloReplyEvent, error) {
+func (it *XXX_HelloReplyEventIter) Next(ctx context.Context) (*HelloReplyEvent, error) {
 
-	if !it.iter.Next(ctx) {
-		if it.iter.Err() != nil {
-			return nil, it.iter.Err()
+	if !it.Iter.Next(ctx) {
+		if it.Iter.Err() != nil {
+			return nil, it.Iter.Err()
 		}
 		return nil, deq.ErrIterationComplete
 	}
 	
-	deqEvent := it.iter.Event()
+	deqEvent := it.Iter.Event()
 
-	e, err := it.config.EventToHelloReplyEvent(deqEvent)
+	e, err := it.Config.EventToHelloReplyEvent(deqEvent)
 	if err != nil {
 		return nil, fmt.Errorf("convert deq.Event to HelloReplyEvent: %v", err)
 	}
@@ -114,8 +116,8 @@ func (it *_HelloReplyEventIter) Next(ctx context.Context) (*HelloReplyEvent, err
 	return e, nil
 }
 
-func (it *_HelloReplyEventIter) Close() {
-	it.iter.Close()
+func (it *XXX_HelloReplyEventIter) Close() {
+	it.Iter.Close()
 }
 
 type GreeterTopicConfig struct {
@@ -142,7 +144,7 @@ func (c *GreeterTopicConfig) EventToHelloRequestEvent(e deq.Event) (*HelloReques
 
 	return &HelloRequestEvent{
 		ID:           e.ID,
-		HelloRequest:          msg,
+		HelloRequest:  msg,
 		CreateTime:   e.CreateTime,
 		DefaultState: e.DefaultState,
 		State:        e.State,
@@ -173,7 +175,7 @@ func (c *GreeterTopicConfig) HelloRequestTopic() string {
 		return "greeter.HelloRequest"
 	}
 
-	topic, ok := c.topics["HelloRequest"]
+	topic, ok := c.topics["greeter.HelloRequest"]
 	if ok {
 		return topic
 	}
@@ -181,7 +183,7 @@ func (c *GreeterTopicConfig) HelloRequestTopic() string {
 }
 
 func (c *GreeterTopicConfig) SetHelloRequestTopic(topic string) {
-	c.topics["HelloRequest"] = topic
+	c.topics["greeter.HelloRequest"] = topic
 }
 
 func (c *GreeterTopicConfig) EventToHelloReplyEvent(e deq.Event) (*HelloReplyEvent, error) {
@@ -198,7 +200,7 @@ func (c *GreeterTopicConfig) EventToHelloReplyEvent(e deq.Event) (*HelloReplyEve
 
 	return &HelloReplyEvent{
 		ID:           e.ID,
-		HelloReply:          msg,
+		HelloReply:  msg,
 		CreateTime:   e.CreateTime,
 		DefaultState: e.DefaultState,
 		State:        e.State,
@@ -229,7 +231,7 @@ func (c *GreeterTopicConfig) HelloReplyTopic() string {
 		return "greeter.HelloReply"
 	}
 
-	topic, ok := c.topics["HelloReply"]
+	topic, ok := c.topics["greeter.HelloReply"]
 	if ok {
 		return topic
 	}
@@ -237,7 +239,7 @@ func (c *GreeterTopicConfig) HelloReplyTopic() string {
 }
 
 func (c *GreeterTopicConfig) SetHelloReplyTopic(topic string) {
-	c.topics["HelloReply"] = topic
+	c.topics["greeter.HelloReply"] = topic
 }
 
 
@@ -401,9 +403,9 @@ func (c *_GreeterClient) NewHelloRequestEventIter(opts *deq.IterOptions) HelloRe
 	channel := c.db.Channel(c.channel, c.config.HelloRequestTopic())
 	defer channel.Close()
 	
-	return &_HelloRequestEventIter{
-		iter:   channel.NewEventIter(opts),
-		config: c.config,
+	return &XXX_HelloRequestEventIter{
+		Iter:   channel.NewEventIter(opts),
+		Config: c.config,
 	}
 }
 
@@ -412,9 +414,9 @@ func (c *_GreeterClient) NewHelloRequestIndexIter(opts *deq.IterOptions) HelloRe
 	channel := c.db.Channel(c.channel, c.config.HelloRequestTopic())
 	defer channel.Close()
 	
-	return &_HelloRequestEventIter{
-		iter:   channel.NewIndexIter(opts),
-		config: c.config,
+	return &XXX_HelloRequestEventIter{
+		Iter:   channel.NewIndexIter(opts),
+		Config: c.config,
 	}
 }
 
@@ -514,9 +516,9 @@ func (c *_GreeterClient) NewHelloReplyEventIter(opts *deq.IterOptions) HelloRepl
 	channel := c.db.Channel(c.channel, c.config.HelloReplyTopic())
 	defer channel.Close()
 	
-	return &_HelloReplyEventIter{
-		iter:   channel.NewEventIter(opts),
-		config: c.config,
+	return &XXX_HelloReplyEventIter{
+		Iter:   channel.NewEventIter(opts),
+		Config: c.config,
 	}
 }
 
@@ -525,9 +527,9 @@ func (c *_GreeterClient) NewHelloReplyIndexIter(opts *deq.IterOptions) HelloRepl
 	channel := c.db.Channel(c.channel, c.config.HelloReplyTopic())
 	defer channel.Close()
 	
-	return &_HelloReplyEventIter{
-		iter:   channel.NewIndexIter(opts),
-		config: c.config,
+	return &XXX_HelloReplyEventIter{
+		Iter:   channel.NewIndexIter(opts),
+		Config: c.config,
 	}
 }
 

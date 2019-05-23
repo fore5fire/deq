@@ -3,10 +3,12 @@ syntax = "proto3";
 package greeter2;
 option go_package = "greeter";
 
-import "greeter.proto";
+import "example/greeter/greeter.proto";
+import "google/protobuf/empty.proto";
 
 // The greeter service definition.
 service Greeter2 {
   // Sends a greeting
-  rpc SayHello (greeter.HelloRequest) returns (greeter.HelloReply) {}
+  rpc SayHello   (greeter.HelloRequest) returns (greeter.HelloReply) {}
+  rpc SayNothing (greeter.HelloRequest) returns (google.protobuf.Empty) {}
 }

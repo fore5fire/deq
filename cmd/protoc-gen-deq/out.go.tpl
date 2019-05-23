@@ -17,6 +17,10 @@ import (
 	{{if .HasMethods -}}
 	"gitlab.com/katcheCode/deq/ack"
 	{{- end }}
+	
+	{{ range $pkg, $path := .Imports }}
+	{{$pkg}} "{{$path}}"
+	{{- end }}
 )
 
 {{- range .Types }}
@@ -28,7 +32,7 @@ type {{.GoName}}Event struct {
 	State        deq.EventState
 	Indexes      []string
 
-	{{.GoName}} *{{.GoName}}
+	{{.GoName}} *{{.GoRef}}
 }
 
 type _{{.GoName}}TopicConfig interface {
@@ -42,25 +46,25 @@ type {{.GoName}}EventIter interface {
 	Close()
 }
 
-type _{{.GoName}}EventIter struct {
-	iter   deq.EventIter
-	config _{{.GoName}}TopicConfig
+type XXX_{{.GoName}}EventIter struct {
+	Iter   deq.EventIter
+	Config _{{.GoName}}TopicConfig
 }
 
 // Next returns the next {{.GoName}}Event, deq.ErrIterationComplete if iteration completed, or an error,
 // if one occured. See deq.EventIter.Next for more information.
-func (it *_{{.GoName}}EventIter) Next(ctx context.Context) (*{{.GoName}}Event, error) {
+func (it *XXX_{{.GoName}}EventIter) Next(ctx context.Context) (*{{.GoName}}Event, error) {
 
-	if !it.iter.Next(ctx) {
-		if it.iter.Err() != nil {
-			return nil, it.iter.Err()
+	if !it.Iter.Next(ctx) {
+		if it.Iter.Err() != nil {
+			return nil, it.Iter.Err()
 		}
 		return nil, deq.ErrIterationComplete
 	}
 	
-	deqEvent := it.iter.Event()
+	deqEvent := it.Iter.Event()
 
-	e, err := it.config.EventTo{{.GoName}}Event(deqEvent)
+	e, err := it.Config.EventTo{{.GoName}}Event(deqEvent)
 	if err != nil {
 		return nil, fmt.Errorf("convert deq.Event to {{.GoName}}Event: %v", err)
 	}
@@ -68,8 +72,8 @@ func (it *_{{.GoName}}EventIter) Next(ctx context.Context) (*{{.GoName}}Event, e
 	return e, nil
 }
 
-func (it *_{{.GoName}}EventIter) Close() {
-	it.iter.Close()
+func (it *XXX_{{.GoName}}EventIter) Close() {
+	it.Iter.Close()
 }
 {{ end -}}
 
@@ -85,21 +89,21 @@ func New{{.Name}}TopicConfig() *{{.Name}}TopicConfig {
 }
 {{ $ServiceName := .Name -}}
 {{ range .Types }}
-func (c *{{$ServiceName}}TopicConfig) EventTo{{.GoName}}Event(e deq.Event) (*{{.GoName}}Event, error) {
+func (c *{{$ServiceName}}TopicConfig) EventTo{{.GoName}}Event(e deq.Event) (*{{.GoEventRef}}Event, error) {
 
 	if e.Topic != c.{{.GoName}}Topic() {
 		return nil, fmt.Errorf("incorrect topic %s", e.Topic)
 	}
 
-	msg := new({{ .GoName }})
+	msg := new({{ .GoRef }})
 	err := msg.Unmarshal(e.Payload)
 	if err != nil {
 		return nil, fmt.Errorf("unmarshal payload: %v", err)
 	}
 
-	return &{{.GoName}}Event{
+	return &{{.GoEventRef}}Event{
 		ID:           e.ID,
-		{{.GoName}}:          msg,
+		{{.GoName}}:  msg,
 		CreateTime:   e.CreateTime,
 		DefaultState: e.DefaultState,
 		State:        e.State,
@@ -107,7 +111,7 @@ func (c *{{$ServiceName}}TopicConfig) EventTo{{.GoName}}Event(e deq.Event) (*{{.
 	}, nil
 }
 
-func (c *{{$ServiceName}}TopicConfig) {{.GoName}}EventToEvent(e *{{.GoName}}Event) (deq.Event, error) {
+func (c *{{$ServiceName}}TopicConfig) {{.GoName}}EventToEvent(e *{{.GoEventRef}}Event) (deq.Event, error) {
 
 	buf, err := e.{{.GoName}}.Marshal()
 	if err != nil {
@@ -130,7 +134,7 @@ func (c *{{$ServiceName}}TopicConfig) {{.GoName}}Topic() string {
 		return "{{.ProtoFullName}}"
 	}
 
-	topic, ok := c.topics["{{.GoName}}"]
+	topic, ok := c.topics["{{.ProtoFullName}}"]
 	if ok {
 		return topic
 	}
@@ -138,7 +142,7 @@ func (c *{{$ServiceName}}TopicConfig) {{.GoName}}Topic() string {
 }
 
 func (c *{{$ServiceName}}TopicConfig) Set{{.GoName}}Topic(topic string) {
-	c.topics["{{.GoName}}"] = topic
+	c.topics["{{.ProtoFullName}}"] = topic
 }
 {{ end }}
 
@@ -151,17 +155,17 @@ func (c *{{$ServiceName}}TopicConfig) Set{{.GoName}}Topic(topic string) {
 type {{ .Name }}Client interface {
 	SyncAllTo(ctx context.Context, remote deq.Client) error
 	{{- range .Types }}
-	Get{{ .GoName }}Event(ctx context.Context, id string) (*{{ .GoName }}Event, error)
-	Get{{ .GoName }}Index(ctx context.Context, index string) (*{{ .GoName }}Event, error)
-	Await{{ .GoName }}Event(ctx context.Context, id string) (*{{ .GoName }}Event, error)
-	Sub{{ .GoName }}Event(ctx context.Context, handler func(context.Context, *{{.GoName}}Event) ack.Code) error
-	New{{ .GoName }}EventIter(opts *deq.IterOptions) {{ .GoName }}EventIter
-	New{{ .GoName }}IndexIter(opts *deq.IterOptions) {{ .GoName }}EventIter
-	Pub{{.GoName}}Event(ctx context.Context, e *{{.GoName}}Event) (*{{.GoName}}Event, error)
+	Get{{ .GoName }}Event(ctx context.Context, id string) (*{{ .GoEventRef }}Event, error)
+	Get{{ .GoName }}Index(ctx context.Context, index string) (*{{ .GoEventRef }}Event, error)
+	Await{{ .GoName }}Event(ctx context.Context, id string) (*{{ .GoEventRef }}Event, error)
+	Sub{{ .GoName }}Event(ctx context.Context, handler func(context.Context, *{{.GoEventRef}}Event) ack.Code) error
+	New{{ .GoName }}EventIter(opts *deq.IterOptions) {{ .GoEventRef }}EventIter
+	New{{ .GoName }}IndexIter(opts *deq.IterOptions) {{ .GoEventRef }}EventIter
+	Pub{{.GoName}}Event(ctx context.Context, e *{{.GoEventRef}}Event) (*{{.GoEventRef}}Event, error)
 	Del{{.GoName}}Event(ctx context.Context, id string) error
 	{{ end -}}
 	{{ range .Methods }}
-	{{ .Name }}(ctx context.Context, e *{{.InType}}Event) (*{{.OutType}}Event, error)
+	{{ .Name }}(ctx context.Context, e *{{.InType.GoEventRef}}Event) (*{{.OutType.GoEventRef}}Event, error)
 	{{ end -}}
 }
 
@@ -215,7 +219,7 @@ func (c *_{{.Name}}Client) SyncAllTo(ctx context.Context, remote deq.Client) err
 } 
 
 {{- range .Types }}
-func (c *_{{ $ServiceName }}Client) Get{{ .GoName }}Event(ctx context.Context, id string) (*{{ .GoName }}Event, error) {
+func (c *_{{ $ServiceName }}Client) Get{{ .GoName }}Event(ctx context.Context, id string) (*{{ .GoEventRef }}Event, error) {
 	
 	channel := c.db.Channel(c.channel, c.config.{{.GoName}}Topic())
 	defer channel.Close()
@@ -227,13 +231,13 @@ func (c *_{{ $ServiceName }}Client) Get{{ .GoName }}Event(ctx context.Context, i
 
 	event, err := c.config.EventTo{{.GoName}}Event(deqEvent)
 	if err != nil {
-		return nil, fmt.Errorf("convert deq.Event to {{.GoName}}Event: %v", err)
+		return nil, fmt.Errorf("convert deq.Event to {{.GoEventRef}}Event: %v", err)
 	}
 
 	return event, nil
 }
 
-func (c *_{{ $ServiceName }}Client) Get{{ .GoName }}Index(ctx context.Context, index string) (*{{ .GoName }}Event, error) {
+func (c *_{{ $ServiceName }}Client) Get{{ .GoName }}Index(ctx context.Context, index string) (*{{ .GoEventRef }}Event, error) {
 	
 	channel := c.db.Channel(c.channel, c.config.{{.GoName}}Topic())
 	defer channel.Close()
@@ -245,13 +249,13 @@ func (c *_{{ $ServiceName }}Client) Get{{ .GoName }}Index(ctx context.Context, i
 
 	event, err := c.config.EventTo{{.GoName}}Event(deqEvent)
 	if err != nil {
-		return nil, fmt.Errorf("convert deq.Event to {{.GoName}}Event: %v", err)
+		return nil, fmt.Errorf("convert deq.Event to {{.GoEventRef}}Event: %v", err)
 	}
 
 	return event, nil
 }
 
-func (c *_{{ $ServiceName }}Client) Await{{ .GoName }}Event(ctx context.Context, id string) (*{{ .GoName }}Event, error) {
+func (c *_{{ $ServiceName }}Client) Await{{ .GoName }}Event(ctx context.Context, id string) (*{{ .GoEventRef }}Event, error) {
 	
 	channel := c.db.Channel(c.channel, c.config.{{.GoName}}Topic())
 	defer channel.Close()
@@ -263,52 +267,52 @@ func (c *_{{ $ServiceName }}Client) Await{{ .GoName }}Event(ctx context.Context,
 
 	event, err := c.config.EventTo{{.GoName}}Event(deqEvent)
 	if err != nil {
-		return nil, fmt.Errorf("convert deq.Event to {{.GoName}}Event: %v", err)
+		return nil, fmt.Errorf("convert deq.Event to {{.GoEventRef}}Event: %v", err)
 	}
 
 	return event, nil
 }
 
-func (c *_{{ $ServiceName }}Client) Sub{{ .GoName }}Event(ctx context.Context, handler func(context.Context, *{{.GoName}}Event) ack.Code) error {
+func (c *_{{ $ServiceName }}Client) Sub{{ .GoName }}Event(ctx context.Context, handler func(context.Context, *{{.GoEventRef}}Event) ack.Code) error {
 	channel := c.db.Channel(c.channel, c.config.{{.GoName}}Topic())
 	defer channel.Close()
 
 	return channel.Sub(ctx, func(ctx context.Context, e deq.Event) (*deq.Event, ack.Code) {
 			event, err := c.config.EventTo{{.GoName}}Event(e)
 			if err != nil {
-				panic("convert deq.Event to {{.GoName}}Event: " + err.Error())
+				panic("convert deq.Event to {{.GoEventRef}}Event: " + err.Error())
 			}
 
 			return nil, handler(ctx, event)
 	})
 }
 
-func (c *_{{ $ServiceName }}Client) New{{ .GoName }}EventIter(opts *deq.IterOptions) {{ .GoName }}EventIter {
+func (c *_{{ $ServiceName }}Client) New{{ .GoName }}EventIter(opts *deq.IterOptions) {{ .GoEventRef }}EventIter {
 	
 	channel := c.db.Channel(c.channel, c.config.{{.GoName}}Topic())
 	defer channel.Close()
 	
-	return &_{{.GoName}}EventIter{
-		iter:   channel.NewEventIter(opts),
-		config: c.config,
+	return &{{.GoEventPkg}}XXX_{{.GoName}}EventIter{
+		Iter:   channel.NewEventIter(opts),
+		Config: c.config,
 	}
 }
 
-func (c *_{{ $ServiceName }}Client) New{{ .GoName }}IndexIter(opts *deq.IterOptions) {{ .GoName }}EventIter {
+func (c *_{{ $ServiceName }}Client) New{{ .GoName }}IndexIter(opts *deq.IterOptions) {{ .GoEventRef }}EventIter {
 	
 	channel := c.db.Channel(c.channel, c.config.{{.GoName}}Topic())
 	defer channel.Close()
 	
-	return &_{{.GoName}}EventIter{
-		iter:   channel.NewIndexIter(opts),
-		config: c.config,
+	return &{{.GoEventPkg}}XXX_{{.GoName}}EventIter{
+		Iter:   channel.NewIndexIter(opts),
+		Config: c.config,
 	}
 }
 
-func (c *_{{ $ServiceName }}Client) Pub{{.GoName}}Event(ctx context.Context, e *{{.GoName}}Event) (*{{.GoName}}Event, error) {
+func (c *_{{ $ServiceName }}Client) Pub{{.GoName}}Event(ctx context.Context, e *{{.GoEventRef}}Event) (*{{.GoEventRef}}Event, error) {
 	deqEvent, err := c.config.{{.GoName}}EventToEvent(e)
 	if err != nil {
-		return nil, fmt.Errorf("convert {{.GoName}}Event to deq.Event: %v", err)
+		return nil, fmt.Errorf("convert {{.GoEventRef}}Event to deq.Event: %v", err)
 	}
 
 	deqEvent, err = c.db.Pub(ctx, deqEvent)
@@ -318,7 +322,7 @@ func (c *_{{ $ServiceName }}Client) Pub{{.GoName}}Event(ctx context.Context, e *
 
 	e, err = c.config.EventTo{{.GoName}}Event(deqEvent)
 	if err != nil {
-		return nil, fmt.Errorf("convert deq.Event to {{.GoName}}Event: %v", err)
+		return nil, fmt.Errorf("convert deq.Event to {{.GoEventRef}}Event: %v", err)
 	}
 
 	return e, nil
@@ -331,7 +335,7 @@ func (c *_{{ $ServiceName }}Client) Del{{.GoName}}Event(ctx context.Context, id 
 
 {{- range .Methods }}
 
-func (c *_{{ $ServiceName }}Client) {{ .Name }}(ctx context.Context, e *{{.InType}}Event) (*{{.OutType}}Event, error) {
+func (c *_{{ $ServiceName }}Client) {{ .Name }}(ctx context.Context, e *{{.InType.GoEventRef}}Event) (*{{.OutType.GoEventRef}}Event, error) {
 
 	_, err := c.Pub{{.InType}}Event(ctx, e)
 	if err != nil {
@@ -351,7 +355,7 @@ func (c *_{{ $ServiceName }}Client) {{ .Name }}(ctx context.Context, e *{{.InTyp
 {{ define "service" }}
 type {{ .Name }}Handlers interface {
 {{- range .Methods }}
-	{{ .Name }}(ctx context.Context, req *{{ .InType }}Event) (*{{ .OutType }}Event, ack.Code)
+	{{ .Name }}(ctx context.Context, req *{{ .InType.GoEventRef }}Event) (*{{ .OutType.GoEventRef }}Event, ack.Code)
 {{- end }}
 }
 

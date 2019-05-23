@@ -1,6 +1,6 @@
 ///
 //  Generated code. Do not modify.
-//  source: greeter2.proto
+//  source: example/greeter/greeter2.proto
 ///
 package greeter
 
@@ -13,6 +13,10 @@ import (
 
 	"gitlab.com/katcheCode/deq"
 	"gitlab.com/katcheCode/deq/ack"
+	
+	
+	empty "github.com/gogo/protobuf/types"
+	empty__deq "gitlab.com/katcheCode/deq/dtypes/empty"
 )
 type Greeter2TopicConfig struct {
 	topics map[string]string
@@ -38,7 +42,7 @@ func (c *Greeter2TopicConfig) EventToHelloRequestEvent(e deq.Event) (*HelloReque
 
 	return &HelloRequestEvent{
 		ID:           e.ID,
-		HelloRequest:          msg,
+		HelloRequest:  msg,
 		CreateTime:   e.CreateTime,
 		DefaultState: e.DefaultState,
 		State:        e.State,
@@ -69,7 +73,7 @@ func (c *Greeter2TopicConfig) HelloRequestTopic() string {
 		return "greeter.HelloRequest"
 	}
 
-	topic, ok := c.topics["HelloRequest"]
+	topic, ok := c.topics["greeter.HelloRequest"]
 	if ok {
 		return topic
 	}
@@ -77,7 +81,7 @@ func (c *Greeter2TopicConfig) HelloRequestTopic() string {
 }
 
 func (c *Greeter2TopicConfig) SetHelloRequestTopic(topic string) {
-	c.topics["HelloRequest"] = topic
+	c.topics["greeter.HelloRequest"] = topic
 }
 
 func (c *Greeter2TopicConfig) EventToHelloReplyEvent(e deq.Event) (*HelloReplyEvent, error) {
@@ -94,7 +98,7 @@ func (c *Greeter2TopicConfig) EventToHelloReplyEvent(e deq.Event) (*HelloReplyEv
 
 	return &HelloReplyEvent{
 		ID:           e.ID,
-		HelloReply:          msg,
+		HelloReply:  msg,
 		CreateTime:   e.CreateTime,
 		DefaultState: e.DefaultState,
 		State:        e.State,
@@ -125,7 +129,7 @@ func (c *Greeter2TopicConfig) HelloReplyTopic() string {
 		return "greeter.HelloReply"
 	}
 
-	topic, ok := c.topics["HelloReply"]
+	topic, ok := c.topics["greeter.HelloReply"]
 	if ok {
 		return topic
 	}
@@ -133,7 +137,63 @@ func (c *Greeter2TopicConfig) HelloReplyTopic() string {
 }
 
 func (c *Greeter2TopicConfig) SetHelloReplyTopic(topic string) {
-	c.topics["HelloReply"] = topic
+	c.topics["greeter.HelloReply"] = topic
+}
+
+func (c *Greeter2TopicConfig) EventToEmptyEvent(e deq.Event) (*empty__deq.EmptyEvent, error) {
+
+	if e.Topic != c.EmptyTopic() {
+		return nil, fmt.Errorf("incorrect topic %s", e.Topic)
+	}
+
+	msg := new(empty.Empty)
+	err := msg.Unmarshal(e.Payload)
+	if err != nil {
+		return nil, fmt.Errorf("unmarshal payload: %v", err)
+	}
+
+	return &empty__deq.EmptyEvent{
+		ID:           e.ID,
+		Empty:  msg,
+		CreateTime:   e.CreateTime,
+		DefaultState: e.DefaultState,
+		State:        e.State,
+		Indexes:      e.Indexes,
+	}, nil
+}
+
+func (c *Greeter2TopicConfig) EmptyEventToEvent(e *empty__deq.EmptyEvent) (deq.Event, error) {
+
+	buf, err := e.Empty.Marshal()
+	if err != nil {
+		return deq.Event{}, err
+	}
+
+	return deq.Event{
+		ID:           e.ID,
+		Payload:      buf,
+		CreateTime:   e.CreateTime,
+		DefaultState: e.DefaultState,
+		State:        e.State,
+		Topic:        c.EmptyTopic(),
+		Indexes:      e.Indexes,
+	}, nil
+}
+
+func (c *Greeter2TopicConfig) EmptyTopic() string {
+	if c == nil {
+		return "google.protobuf.Empty"
+	}
+
+	topic, ok := c.topics["google.protobuf.Empty"]
+	if ok {
+		return topic
+	}
+	return "google.protobuf.Empty"
+}
+
+func (c *Greeter2TopicConfig) SetEmptyTopic(topic string) {
+	c.topics["google.protobuf.Empty"] = topic
 }
 
 
@@ -157,7 +217,18 @@ type Greeter2Client interface {
 	PubHelloReplyEvent(ctx context.Context, e *HelloReplyEvent) (*HelloReplyEvent, error)
 	DelHelloReplyEvent(ctx context.Context, id string) error
 	
+	GetEmptyEvent(ctx context.Context, id string) (*empty__deq.EmptyEvent, error)
+	GetEmptyIndex(ctx context.Context, index string) (*empty__deq.EmptyEvent, error)
+	AwaitEmptyEvent(ctx context.Context, id string) (*empty__deq.EmptyEvent, error)
+	SubEmptyEvent(ctx context.Context, handler func(context.Context, *empty__deq.EmptyEvent) ack.Code) error
+	NewEmptyEventIter(opts *deq.IterOptions) empty__deq.EmptyEventIter
+	NewEmptyIndexIter(opts *deq.IterOptions) empty__deq.EmptyEventIter
+	PubEmptyEvent(ctx context.Context, e *empty__deq.EmptyEvent) (*empty__deq.EmptyEvent, error)
+	DelEmptyEvent(ctx context.Context, id string) error
+	
 	SayHello(ctx context.Context, e *HelloRequestEvent) (*HelloReplyEvent, error)
+	
+	SayNothing(ctx context.Context, e *HelloRequestEvent) (*empty__deq.EmptyEvent, error)
 	}
 
 type _Greeter2Client struct {
@@ -201,6 +272,22 @@ func (c *_Greeter2Client) SyncAllTo(ctx context.Context, remote deq.Client) erro
 		defer wg.Done()
 
 		channel := c.db.Channel(c.channel, c.config.HelloReplyTopic())
+		defer channel.Close()
+
+		err := deq.SyncTo(ctx, remote, channel)
+		if err != nil {
+			select {
+			default:
+			case errc <- err:
+			}
+		}
+	}()
+	
+	wg.Add(1)
+	go func() {
+		defer wg.Done()
+
+		channel := c.db.Channel(c.channel, c.config.EmptyTopic())
 		defer channel.Close()
 
 		err := deq.SyncTo(ctx, remote, channel)
@@ -297,9 +384,9 @@ func (c *_Greeter2Client) NewHelloRequestEventIter(opts *deq.IterOptions) HelloR
 	channel := c.db.Channel(c.channel, c.config.HelloRequestTopic())
 	defer channel.Close()
 	
-	return &_HelloRequestEventIter{
-		iter:   channel.NewEventIter(opts),
-		config: c.config,
+	return &XXX_HelloRequestEventIter{
+		Iter:   channel.NewEventIter(opts),
+		Config: c.config,
 	}
 }
 
@@ -308,9 +395,9 @@ func (c *_Greeter2Client) NewHelloRequestIndexIter(opts *deq.IterOptions) HelloR
 	channel := c.db.Channel(c.channel, c.config.HelloRequestTopic())
 	defer channel.Close()
 	
-	return &_HelloRequestEventIter{
-		iter:   channel.NewIndexIter(opts),
-		config: c.config,
+	return &XXX_HelloRequestEventIter{
+		Iter:   channel.NewIndexIter(opts),
+		Config: c.config,
 	}
 }
 
@@ -410,9 +497,9 @@ func (c *_Greeter2Client) NewHelloReplyEventIter(opts *deq.IterOptions) HelloRep
 	channel := c.db.Channel(c.channel, c.config.HelloReplyTopic())
 	defer channel.Close()
 	
-	return &_HelloReplyEventIter{
-		iter:   channel.NewEventIter(opts),
-		config: c.config,
+	return &XXX_HelloReplyEventIter{
+		Iter:   channel.NewEventIter(opts),
+		Config: c.config,
 	}
 }
 
@@ -421,9 +508,9 @@ func (c *_Greeter2Client) NewHelloReplyIndexIter(opts *deq.IterOptions) HelloRep
 	channel := c.db.Channel(c.channel, c.config.HelloReplyTopic())
 	defer channel.Close()
 	
-	return &_HelloReplyEventIter{
-		iter:   channel.NewIndexIter(opts),
-		config: c.config,
+	return &XXX_HelloReplyEventIter{
+		Iter:   channel.NewIndexIter(opts),
+		Config: c.config,
 	}
 }
 
@@ -450,6 +537,119 @@ func (c *_Greeter2Client) DelHelloReplyEvent(ctx context.Context, id string) err
 	return c.db.Del(ctx, c.config.HelloReplyTopic(), id)
 }
 
+func (c *_Greeter2Client) GetEmptyEvent(ctx context.Context, id string) (*empty__deq.EmptyEvent, error) {
+	
+	channel := c.db.Channel(c.channel, c.config.EmptyTopic())
+	defer channel.Close()
+
+	deqEvent, err := channel.Get(ctx, id)
+	if err != nil {
+		return nil, err
+	}
+
+	event, err := c.config.EventToEmptyEvent(deqEvent)
+	if err != nil {
+		return nil, fmt.Errorf("convert deq.Event to empty__deq.EmptyEvent: %v", err)
+	}
+
+	return event, nil
+}
+
+func (c *_Greeter2Client) GetEmptyIndex(ctx context.Context, index string) (*empty__deq.EmptyEvent, error) {
+	
+	channel := c.db.Channel(c.channel, c.config.EmptyTopic())
+	defer channel.Close()
+
+	deqEvent, err := channel.GetIndex(ctx, index)
+	if err != nil {
+		return nil, err
+	}
+
+	event, err := c.config.EventToEmptyEvent(deqEvent)
+	if err != nil {
+		return nil, fmt.Errorf("convert deq.Event to empty__deq.EmptyEvent: %v", err)
+	}
+
+	return event, nil
+}
+
+func (c *_Greeter2Client) AwaitEmptyEvent(ctx context.Context, id string) (*empty__deq.EmptyEvent, error) {
+	
+	channel := c.db.Channel(c.channel, c.config.EmptyTopic())
+	defer channel.Close()
+
+	deqEvent, err := channel.Await(ctx, id)
+	if err != nil {
+		return nil, err
+	}
+
+	event, err := c.config.EventToEmptyEvent(deqEvent)
+	if err != nil {
+		return nil, fmt.Errorf("convert deq.Event to empty__deq.EmptyEvent: %v", err)
+	}
+
+	return event, nil
+}
+
+func (c *_Greeter2Client) SubEmptyEvent(ctx context.Context, handler func(context.Context, *empty__deq.EmptyEvent) ack.Code) error {
+	channel := c.db.Channel(c.channel, c.config.EmptyTopic())
+	defer channel.Close()
+
+	return channel.Sub(ctx, func(ctx context.Context, e deq.Event) (*deq.Event, ack.Code) {
+			event, err := c.config.EventToEmptyEvent(e)
+			if err != nil {
+				panic("convert deq.Event to empty__deq.EmptyEvent: " + err.Error())
+			}
+
+			return nil, handler(ctx, event)
+	})
+}
+
+func (c *_Greeter2Client) NewEmptyEventIter(opts *deq.IterOptions) empty__deq.EmptyEventIter {
+	
+	channel := c.db.Channel(c.channel, c.config.EmptyTopic())
+	defer channel.Close()
+	
+	return &empty__deq.XXX_EmptyEventIter{
+		Iter:   channel.NewEventIter(opts),
+		Config: c.config,
+	}
+}
+
+func (c *_Greeter2Client) NewEmptyIndexIter(opts *deq.IterOptions) empty__deq.EmptyEventIter {
+	
+	channel := c.db.Channel(c.channel, c.config.EmptyTopic())
+	defer channel.Close()
+	
+	return &empty__deq.XXX_EmptyEventIter{
+		Iter:   channel.NewIndexIter(opts),
+		Config: c.config,
+	}
+}
+
+func (c *_Greeter2Client) PubEmptyEvent(ctx context.Context, e *empty__deq.EmptyEvent) (*empty__deq.EmptyEvent, error) {
+	deqEvent, err := c.config.EmptyEventToEvent(e)
+	if err != nil {
+		return nil, fmt.Errorf("convert empty__deq.EmptyEvent to deq.Event: %v", err)
+	}
+
+	deqEvent, err = c.db.Pub(ctx, deqEvent)
+	if err != nil {
+		return nil, fmt.Errorf("pub: %v", err)
+	}
+
+	e, err = c.config.EventToEmptyEvent(deqEvent)
+	if err != nil {
+		return nil, fmt.Errorf("convert deq.Event to empty__deq.EmptyEvent: %v", err)
+	}
+
+	return e, nil
+}
+
+func (c *_Greeter2Client) DelEmptyEvent(ctx context.Context, id string) error {
+	return c.db.Del(ctx, c.config.EmptyTopic(), id)
+}
+
 
 func (c *_Greeter2Client) SayHello(ctx context.Context, e *HelloRequestEvent) (*HelloReplyEvent, error) {
 
@@ -466,8 +666,24 @@ func (c *_Greeter2Client) SayHello(ctx context.Context, e *HelloRequestEvent) (*
 	return result, nil
 }
 
+func (c *_Greeter2Client) SayNothing(ctx context.Context, e *HelloRequestEvent) (*empty__deq.EmptyEvent, error) {
+
+	_, err := c.PubHelloRequestEvent(ctx, e)
+	if err != nil {
+		return nil, fmt.Errorf("pub: %v", err)
+	}
+
+	result, err := c.AwaitEmptyEvent(ctx, e.ID)
+	if err != nil {
+		return nil, fmt.Errorf("get response: %v", err)
+	}
+
+	return result, nil
+}
+
 type Greeter2Handlers interface {
 	SayHello(ctx context.Context, req *HelloRequestEvent) (*HelloReplyEvent, ack.Code)
+	SayNothing(ctx context.Context, req *HelloRequestEvent) (*empty__deq.EmptyEvent, ack.Code)
 }
 
 type Greeter2Server interface {
@@ -526,6 +742,41 @@ func (s *_Greeter2Server) Listen(ctx context.Context) error {
 		if err != nil {
 			if err != ctx.Err() {
 				err = fmt.Errorf("SayHello: %v", err)
+			}
+			// If no one is recieving then the outer function already has returned
+			select {
+			case errc <- err:
+			default:
+			}
+		}
+	}()
+	wg.Add(1)
+  go func() {
+		defer wg.Done()
+		
+		channel := s.db.Channel(strings.TrimSuffix(s.channel, ".") + ".SayNothing", s.config.HelloRequestTopic())
+		defer channel.Close()
+		
+		err := channel.Sub(ctx, func(ctx context.Context, e deq.Event) (*deq.Event, ack.Code) {
+			event, err := s.config.EventToHelloRequestEvent(e)
+			if err != nil {
+				panic("convert deq.Event to HelloRequestEvent: " + err.Error())
+			}
+
+			response, code := s.handlers.SayNothing(ctx, event)
+			if response == nil {
+				return nil, code
+			}
+
+			deqResponse, err := s.config.EmptyEventToEvent(response)
+			if err != nil {
+				panic("convert response of type EmptyEvent to deq.Event: " + err.Error())
+			}
+			return &deqResponse, code
+		})
+		if err != nil {
+			if err != ctx.Err() {
+				err = fmt.Errorf("SayNothing: %v", err)
 			}
 			// If no one is recieving then the outer function already has returned
 			select {

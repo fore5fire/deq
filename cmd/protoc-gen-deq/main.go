@@ -1,5 +1,6 @@
 //go:generate go-bindata -pkg main -o out.go out.go.tpl
-//go:generate go generate ./example/greeter
+//go:generate protoc --gogofaster_out=. example/greeter/greeter.proto example/greeter/greeter2.proto
+//go:generate protoc --plugin=protoc-gen-deq=./run.sh --deq_out=. example/greeter/greeter.proto example/greeter/greeter2.proto
 
 package main
 
@@ -9,14 +10,26 @@ import (
 	"io/ioutil"
 	"log"
 	"os"
-	"path/filepath"
+	path "path/filepath"
 	"strings"
 	"text/template"
 
-	// "github.com/gogo/protobuf/protoc-gen-gogo/descriptor"
 	proto "github.com/gogo/protobuf/proto"
+	"github.com/gogo/protobuf/protoc-gen-gogo/descriptor"
 	plugin "github.com/gogo/protobuf/protoc-gen-gogo/plugin"
 )
+
+var wellKnownTypes = []string{
+	"google/protobuf/any.proto",
+	"google/protobuf/api.proto",
+	"google/protobuf/duration.proto",
+	"google/protobuf/empty.proto",
+	"google/protobuf/field_mask.proto",
+	"google/protobuf/source_context.proto",
+	"google/protobuf/timestamp.proto",
+	"google/protobuf/type.proto",
+	"google/protobuf/wrappers.proto",
+}
 
 type File struct {
 	Name       string
@@ -25,17 +38,33 @@ type File struct {
 	Services   []Service
 	Types      []Type
 	HasMethods bool
+	Imports    map[string]string
 }
 
 type Type struct {
 	GoName        string
+	GoRef         string
+	GoEventRef    string
+	GoPkg         string
+	GoEventPkg    string
 	ProtoFullName string
 }
 
-func NewType(protoName string) Type {
+func NewType(name Name, current Name) Type {
+	var pkg, eventPkg string
+	if name.GoPkg() != current.GoPkg() || name.PkgOverride != "" {
+		pkg = name.GoPkg() + "."
+	}
+	if name.GoEventPkg() != current.GoEventPkg() {
+		eventPkg = name.GoEventPkg() + "."
+	}
 	return Type{
-		GoName:        goName(protoName),
-		ProtoFullName: protoFullName(protoName),
+		GoName:        name.GoName(),
+		GoRef:         pkg + name.GoName(),
+		GoEventRef:    eventPkg + name.GoName(),
+		GoPkg:         pkg,
+		GoEventPkg:    eventPkg,
+		ProtoFullName: name.ProtoName(),
 	}
 }
 
@@ -56,6 +85,8 @@ type Method struct {
 	OutType Type
 	Service Service
 }
+
+var EventPackageSuffix = "__deq"
 
 func main() {
 
@@ -107,52 +138,123 @@ func containsString(target string, candidates []string) bool {
 
 func generate(input *plugin.CodeGeneratorRequest) ([]*plugin.CodeGeneratorResponse_File, error) {
 
+	// Parse parameter
+	params, err := ParseParams(input.GetParameter())
+	if err != nil {
+		return nil, fmt.Errorf("parse parameters: %v", err)
+	}
+
+	fileNames := make(map[string]*descriptor.FileDescriptorProto, len(input.GetProtoFile())+len(wellKnownTypes))
+	filePackages := make(map[string]*descriptor.FileDescriptorProto, len(input.GetProtoFile())+len(wellKnownTypes))
+	for _, protofile := range input.GetProtoFile() {
+		fileNames[protofile.GetName()] = protofile
+		filePackages[protofile.GetPackage()] = protofile
+	}
+
 	outfiles := make([]*plugin.CodeGeneratorResponse_File, 0, len(input.GetFileToGenerate()))
 
-	for _, descriptor := range input.GetProtoFile() {
-
-		if !containsString(descriptor.GetName(), input.GetFileToGenerate()) {
-			continue
+	for _, filepath := range input.GetFileToGenerate() {
+		protofile := fileNames[filepath]
+		if protofile == nil {
+			return nil, fmt.Errorf("file %s in file_to_generate not found in proto_file", filepath)
 		}
 
-		dir := filepath.Dir(descriptor.GetName())
-		baseFileName := filepath.Base(descriptor.GetName())
-		baseName := strings.TrimSuffix(baseFileName, filepath.Ext(baseFileName))
+		dir := path.Dir(protofile.GetName())
+		baseFileName := path.Base(protofile.GetName())
+		baseName := strings.TrimSuffix(baseFileName, path.Ext(baseFileName))
 
-		pkg := descriptor.GetOptions().GetGoPackage()
-		if pkg == "" {
-			pkg = strings.ReplaceAll(descriptor.GetPackage(), ".", "_")
+		override := params.ImportOverrides[protofile.GetName()]
+		eventOverride := params.DEQImportOverrides[protofile.GetName()]
+
+		fName := Name{
+			FileDescriptor:   protofile,
+			PkgOverride:      override,
+			EventPkgOverride: eventOverride != "",
 		}
 
 		file := File{
-			Name:     filepath.Join(input.GetParameter(), dir, baseName+".pb.deq.go"),
-			Source:   descriptor.GetName(),
-			Package:  pkg,
-			Services: make([]Service, len(descriptor.Service)),
-			Types:    make([]Type, len(descriptor.MessageType)),
+			Name:     path.Join(dir, baseName+".pb.deq.go"),
+			Source:   protofile.GetName(),
+			Package:  fName.GoPkg(),
+			Services: make([]Service, len(protofile.Service)),
+			Types:    make([]Type, len(protofile.MessageType)),
+			Imports:  make(map[string]string),
 		}
 
-		for j, mType := range descriptor.GetMessageType() {
-			file.Types[j] = NewType(descriptor.GetPackage() + "." + mType.GetName())
+		// Add an import for this file if there's an override
+		if override != "" {
+			file.Imports[fName.GoPkg()] = override
 		}
 
-		for j, svc := range descriptor.GetService() {
+		// Add imports for dependencies that need a package to be imported
+		for _, dep := range protofile.GetDependency() {
+			otherfile := fileNames[dep]
+			if otherfile == nil {
+				return nil, fmt.Errorf("dependency %q not found in input files", dep)
+			}
+
+			pkgName := Name{FileDescriptor: otherfile}.GoPkg()
+
+			eventOverride := params.DEQImportOverrides[otherfile.GetName()]
+			if eventOverride != "" {
+				file.Imports[pkgName+EventPackageSuffix] = eventOverride
+			}
+
+			override := params.ImportOverrides[otherfile.GetName()]
+			if override != "" {
+				file.Imports[pkgName] = override
+				continue
+			}
+			// Don't import files in the same directory if there's no package override
+			if path.Dir(otherfile.GetName()) == path.Dir(protofile.GetName()) {
+				continue
+			}
+
+			file.Imports[pkgName] = path.Dir(otherfile.GetName())
+		}
+
+		for j, mType := range protofile.GetMessageType() {
+			name := Name{
+				FileDescriptor:   protofile,
+				Descriptor:       mType,
+				PkgOverride:      fName.PkgOverride,
+				EventPkgOverride: fName.EventPkgOverride,
+			}
+			file.Types[j] = NewType(name, fName)
+		}
+
+		for j, svc := range protofile.GetService() {
 
 			methods := make([]Method, len(svc.GetMethod()))
 			typeSet := make(map[Type]struct{})
 
 			for k, method := range svc.GetMethod() {
 				file.HasMethods = true
-
+				inFileDescriptor := filePackages[protoPkg(method.GetInputType())]
+				inProtoName := protoName(method.GetInputType())
+				inName := Name{
+					FileDescriptor:   inFileDescriptor,
+					Descriptor:       findDescriptor(inProtoName, inFileDescriptor),
+					PkgOverride:      params.ImportOverrides[inFileDescriptor.GetName()],
+					EventPkgOverride: params.DEQImportOverrides[inFileDescriptor.GetName()] != "",
+				}
+				outFileDescriptor := filePackages[protoPkg(method.GetOutputType())]
+				outProtoName := protoName(method.GetOutputType())
+				outName := Name{
+					FileDescriptor:   outFileDescriptor,
+					Descriptor:       findDescriptor(outProtoName, outFileDescriptor),
+					PkgOverride:      params.ImportOverrides[outFileDescriptor.GetName()],
+					EventPkgOverride: params.DEQImportOverrides[outFileDescriptor.GetName()] != "",
+				}
 				methods[k] = Method{
 					Name:    method.GetName(),
-					InType:  NewType(method.GetInputType()),
-					OutType: NewType(method.GetOutputType()),
+					InType:  NewType(inName, fName),
+					OutType: NewType(outName, fName),
 					Service: file.Services[j],
 				}
 
-				typeSet[NewType(method.GetInputType())] = struct{}{}
-				typeSet[NewType(method.GetOutputType())] = struct{}{}
+				typeSet[methods[k].InType] = struct{}{}
+				typeSet[methods[k].OutType] = struct{}{}
 			}
 
 			// Create set of all types referenced by this service only
@@ -258,10 +360,76 @@ func LastComponent(s, sep string) string {
 	return parsed[len(parsed)-1]
 }
 
-func goName(name string) string {
-	return CamelCase(LastComponent(name, "."))
+func findDescriptor(name string, protofile *descriptor.FileDescriptorProto) *descriptor.DescriptorProto {
+	for _, d := range protofile.GetMessageType() {
+		if d.GetName() == LastComponent(name, ".") {
+			return d
+		}
+	}
+	return nil
 }
 
-func protoFullName(name string) string {
+func protoPkg(name string) string {
+	name = strings.TrimPrefix(name, ".")
+	split := strings.LastIndex(name, ".")
+	if split == -1 {
+		return ""
+	}
+	return name[:split]
+}
+
+func protoName(name string) string {
 	return strings.TrimPrefix(name, ".")
+}
+
+type Name struct {
+	FileDescriptor   *descriptor.FileDescriptorProto
+	Descriptor       *descriptor.DescriptorProto
+	PkgOverride      string
+	EventPkgOverride bool
+}
+
+func (n Name) RawName() string {
+	return strings.Join([]string{n.FileDescriptor.GetPackage(), n.Descriptor.GetName()}, ".")
+}
+
+func (n Name) GoName() string {
+	return CamelCase(LastComponent(n.RawName(), "."))
+}
+
+func (n Name) ProtoName() string {
+	return protoName(n.RawName())
+}
+
+func (n Name) ProtoPkg() string {
+	return protoPkg(n.RawName())
+}
+
+func (n Name) GoFullPkg() string {
+	pkg := n.FileDescriptor.GetOptions().GetGoPackage()
+	if pkg != "" {
+		split := strings.SplitN(pkg, ";", 2)
+		if len(split) > 0 {
+			return split[0]
+		}
+	}
+
+	return strings.ReplaceAll(n.FileDescriptor.GetPackage(), ".", "_")
+}
+
+func (n Name) GoPkg() string {
+	pkg := strings.SplitN(n.FileDescriptor.GetOptions().GetGoPackage(), ";", 2)
+	if len(pkg) == 2 {
+		return pkg[1]
+	}
+
+	split := strings.Split(n.GoFullPkg(), "/")
+	return split[len(split)-1]
+}
+
+func (n Name) GoEventPkg() string {
+	if n.EventPkgOverride {
+		return n.GoPkg() + EventPackageSuffix
+	}
+	return n.GoPkg()
 }
