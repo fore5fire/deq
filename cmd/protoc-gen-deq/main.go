@@ -52,11 +52,11 @@ type Type struct {
 
 func NewType(name Name, current Name) Type {
 	var pkg, eventPkg string
-	if name.GoPkg() != current.GoPkg() || name.PkgOverride != "" {
-		pkg = name.GoPkg() + "."
+	if name.GoPkgName() != current.GoPkgName() || name.PkgOverride != "" {
+		pkg = name.GoPkgName() + "."
 	}
-	if name.GoEventPkg() != current.GoEventPkg() {
-		eventPkg = name.GoEventPkg() + "."
+	if name.GoEventPkgName() != current.GoEventPkgName() {
+		eventPkg = name.GoEventPkgName() + "."
 	}
 	return Type{
 		GoName:        name.GoName(),
@@ -137,7 +137,6 @@ func containsString(target string, candidates []string) bool {
 }
 
 func generate(input *plugin.CodeGeneratorRequest) ([]*plugin.CodeGeneratorResponse_File, error) {
-
 	// Parse parameter
 	params, err := ParseParams(input.GetParameter())
 	if err != nil {
@@ -163,27 +162,24 @@ func generate(input *plugin.CodeGeneratorRequest) ([]*plugin.CodeGeneratorRespon
 		baseFileName := path.Base(protofile.GetName())
 		baseName := strings.TrimSuffix(baseFileName, path.Ext(baseFileName))
 
-		override := params.ImportOverrides[protofile.GetName()]
-		eventOverride := params.DEQImportOverrides[protofile.GetName()]
-
 		fName := Name{
 			FileDescriptor:   protofile,
-			PkgOverride:      override,
-			EventPkgOverride: eventOverride != "",
+			PkgOverride:      params.ImportOverrides[protofile.GetName()],
+			EventPkgOverride: params.DEQImportOverrides[protofile.GetName()],
 		}
 
 		file := File{
 			Name:     path.Join(dir, baseName+".pb.deq.go"),
 			Source:   protofile.GetName(),
-			Package:  fName.GoPkg(),
+			Package:  fName.GoPkgName(),
 			Services: make([]Service, len(protofile.Service)),
 			Types:    make([]Type, len(protofile.MessageType)),
 			Imports:  make(map[string]string),
 		}
 
 		// Add an import for this file if there's an override
-		if override != "" {
-			file.Imports[fName.GoPkg()] = override
+		if fName.PkgOverride != "" {
+			file.Imports[fName.GoPkgName()] = fName.GoPkgPath()
 		}
 
 		// Add imports for dependencies that need a package to be imported
@@ -193,16 +189,18 @@ func generate(input *plugin.CodeGeneratorRequest) ([]*plugin.CodeGeneratorRespon
 				return nil, fmt.Errorf("dependency %q not found in input files", dep)
 			}
 
-			pkgName := Name{FileDescriptor: otherfile}.GoPkg()
-
-			eventOverride := params.DEQImportOverrides[otherfile.GetName()]
-			if eventOverride != "" {
-				file.Imports[pkgName+EventPackageSuffix] = eventOverride
+			pkgName := Name{
+				FileDescriptor:   otherfile,
+				PkgOverride:      params.ImportOverrides[otherfile.GetName()],
+				EventPkgOverride: params.DEQImportOverrides[otherfile.GetName()],
 			}
 
-			override := params.ImportOverrides[otherfile.GetName()]
-			if override != "" {
-				file.Imports[pkgName] = override
+			if pkgName.EventPkgOverride != "" {
+				file.Imports[pkgName.GoEventPkgName()] = pkgName.GoEventPkgPath()
+			}
+
+			if pkgName.PkgOverride != "" {
+				file.Imports[pkgName.GoPkgName()] = pkgName.GoPkgPath()
 				continue
 			}
 			// Don't import files in the same directory if there's no package override
@@ -210,7 +208,7 @@ func generate(input *plugin.CodeGeneratorRequest) ([]*plugin.CodeGeneratorRespon
 				continue
 			}
 
-			file.Imports[pkgName] = path.Dir(otherfile.GetName())
+			file.Imports[pkgName.GoPkgName()] = path.Dir(otherfile.GetName())
 		}
 
 		for j, mType := range protofile.GetMessageType() {
@@ -236,7 +234,7 @@ func generate(input *plugin.CodeGeneratorRequest) ([]*plugin.CodeGeneratorRespon
 					FileDescriptor:   inFileDescriptor,
 					Descriptor:       findDescriptor(inProtoName, inFileDescriptor),
 					PkgOverride:      params.ImportOverrides[inFileDescriptor.GetName()],
-					EventPkgOverride: params.DEQImportOverrides[inFileDescriptor.GetName()] != "",
+					EventPkgOverride: params.DEQImportOverrides[inFileDescriptor.GetName()],
 				}
 				outFileDescriptor := filePackages[protoPkg(method.GetOutputType())]
 				outProtoName := protoName(method.GetOutputType())
@@ -244,7 +242,7 @@ func generate(input *plugin.CodeGeneratorRequest) ([]*plugin.CodeGeneratorRespon
 					FileDescriptor:   outFileDescriptor,
 					Descriptor:       findDescriptor(outProtoName, outFileDescriptor),
 					PkgOverride:      params.ImportOverrides[outFileDescriptor.GetName()],
-					EventPkgOverride: params.DEQImportOverrides[outFileDescriptor.GetName()] != "",
+					EventPkgOverride: params.DEQImportOverrides[outFileDescriptor.GetName()],
 				}
 				methods[k] = Method{
 					Name:    method.GetName(),
@@ -386,7 +384,7 @@ type Name struct {
 	FileDescriptor   *descriptor.FileDescriptorProto
 	Descriptor       *descriptor.DescriptorProto
 	PkgOverride      string
-	EventPkgOverride bool
+	EventPkgOverride string
 }
 
 func (n Name) RawName() string {
@@ -405,31 +403,57 @@ func (n Name) ProtoPkg() string {
 	return protoPkg(n.RawName())
 }
 
-func (n Name) GoFullPkg() string {
-	pkg := n.FileDescriptor.GetOptions().GetGoPackage()
-	if pkg != "" {
-		split := strings.SplitN(pkg, ";", 2)
-		if len(split) > 0 {
-			return split[0]
-		}
+func (n Name) GoPkg() (string, string) {
+	var pkg string
+	if n.PkgOverride != "" {
+		pkg = n.PkgOverride
+	} else if n.FileDescriptor.GetOptions().GetGoPackage() != "" {
+		pkg = n.FileDescriptor.GetOptions().GetGoPackage()
+	} else {
+		pkg = strings.ReplaceAll(n.FileDescriptor.GetPackage(), ".", "_")
 	}
 
-	return strings.ReplaceAll(n.FileDescriptor.GetPackage(), ".", "_")
+	split := strings.SplitN(pkg, ";", 2)
+	if len(split) == 2 {
+		return split[1], split[0]
+	}
+
+	pkg = split[0]
+	split = strings.Split(pkg, "/")
+	return split[len(split)-1], pkg
 }
 
-func (n Name) GoPkg() string {
-	pkg := strings.SplitN(n.FileDescriptor.GetOptions().GetGoPackage(), ";", 2)
-	if len(pkg) == 2 {
-		return pkg[1]
-	}
-
-	split := strings.Split(n.GoFullPkg(), "/")
-	return split[len(split)-1]
+func (n Name) GoPkgPath() string {
+	_, path := n.GoPkg()
+	return path
 }
 
-func (n Name) GoEventPkg() string {
-	if n.EventPkgOverride {
-		return n.GoPkg() + EventPackageSuffix
+func (n Name) GoPkgName() string {
+	pkg, _ := n.GoPkg()
+	return pkg
+}
+
+func (n Name) GoEventPkg() (string, string) {
+	if n.EventPkgOverride == "" {
+		return n.GoPkg()
 	}
-	return n.GoPkg()
+
+	split := strings.SplitN(n.EventPkgOverride, ";", 2)
+	if len(split) == 2 {
+		return split[1], split[0]
+	}
+
+	pkg := split[0]
+	split = strings.Split(pkg, "/")
+	return split[len(split)-1], pkg
+}
+
+func (n Name) GoEventPkgPath() string {
+	_, path := n.GoEventPkg()
+	return path
+}
+
+func (n Name) GoEventPkgName() string {
+	pkg, _ := n.GoEventPkg()
+	return pkg
 }
