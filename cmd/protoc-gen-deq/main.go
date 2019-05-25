@@ -144,10 +144,10 @@ func generate(input *plugin.CodeGeneratorRequest) ([]*plugin.CodeGeneratorRespon
 	}
 
 	fileNames := make(map[string]*descriptor.FileDescriptorProto, len(input.GetProtoFile())+len(wellKnownTypes))
-	filePackages := make(map[string]*descriptor.FileDescriptorProto, len(input.GetProtoFile())+len(wellKnownTypes))
+	filePackages := make(map[string][]*descriptor.FileDescriptorProto)
 	for _, protofile := range input.GetProtoFile() {
 		fileNames[protofile.GetName()] = protofile
-		filePackages[protofile.GetPackage()] = protofile
+		filePackages[protofile.GetPackage()] = append(filePackages[protofile.GetPackage()], protofile)
 	}
 
 	outfiles := make([]*plugin.CodeGeneratorResponse_File, 0, len(input.GetFileToGenerate()))
@@ -182,35 +182,6 @@ func generate(input *plugin.CodeGeneratorRequest) ([]*plugin.CodeGeneratorRespon
 			file.Imports[fName.GoPkgName()] = fName.GoPkgPath()
 		}
 
-		// Add imports for dependencies that need a package to be imported
-		for _, dep := range protofile.GetDependency() {
-			otherfile := fileNames[dep]
-			if otherfile == nil {
-				return nil, fmt.Errorf("dependency %q not found in input files", dep)
-			}
-
-			pkgName := Name{
-				FileDescriptor:   otherfile,
-				PkgOverride:      params.ImportOverrides[otherfile.GetName()],
-				EventPkgOverride: params.DEQImportOverrides[otherfile.GetName()],
-			}
-
-			if pkgName.EventPkgOverride != "" {
-				file.Imports[pkgName.GoEventPkgName()] = pkgName.GoEventPkgPath()
-			}
-
-			if pkgName.PkgOverride != "" {
-				file.Imports[pkgName.GoPkgName()] = pkgName.GoPkgPath()
-				continue
-			}
-			// Don't import files in the same directory if there's no package override
-			if path.Dir(otherfile.GetName()) == path.Dir(protofile.GetName()) {
-				continue
-			}
-
-			file.Imports[pkgName.GoPkgName()] = path.Dir(otherfile.GetName())
-		}
-
 		for j, mType := range protofile.GetMessageType() {
 			name := Name{
 				FileDescriptor:   protofile,
@@ -222,30 +193,54 @@ func generate(input *plugin.CodeGeneratorRequest) ([]*plugin.CodeGeneratorRespon
 		}
 
 		for j, svc := range protofile.GetService() {
-
 			methods := make([]Method, len(svc.GetMethod()))
 			typeSet := make(map[Type]struct{})
 
-			for k, method := range svc.GetMethod() {
+			for k, rpc := range svc.GetMethod() {
 				file.HasMethods = true
-				inFileDescriptor := filePackages[protoPkg(method.GetInputType())]
-				inProtoName := protoName(method.GetInputType())
+
+				inProtoName := protoName(rpc.GetInputType())
+				outProtoName := protoName(rpc.GetOutputType())
+
+				var inFileDescriptor, outFileDescriptor *descriptor.FileDescriptorProto
+				var inDescriptor, outDescriptor *descriptor.DescriptorProto
+				for _, fd := range filePackages[protoPkg(rpc.GetInputType())] {
+					inDescriptor = findDescriptor(inProtoName, fd)
+					if inDescriptor != nil {
+						inFileDescriptor = fd
+						break
+					}
+				}
+				if inDescriptor == nil {
+					return nil, fmt.Errorf("lookup input type %s for rpc %s of service %s: not found", inProtoName, rpc.GetName(), svc.GetName())
+				}
+
+				for _, fd := range filePackages[protoPkg(rpc.GetOutputType())] {
+					outDescriptor = findDescriptor(outProtoName, fd)
+					if outDescriptor != nil {
+						outFileDescriptor = fd
+						break
+					}
+				}
+				if outDescriptor == nil {
+					return nil, fmt.Errorf("lookup output type %s for rpc %s of service %s: not found", outProtoName, rpc.GetName(), svc.GetName())
+				}
+
 				inName := Name{
 					FileDescriptor:   inFileDescriptor,
 					Descriptor:       findDescriptor(inProtoName, inFileDescriptor),
 					PkgOverride:      params.ImportOverrides[inFileDescriptor.GetName()],
 					EventPkgOverride: params.DEQImportOverrides[inFileDescriptor.GetName()],
 				}
-				outFileDescriptor := filePackages[protoPkg(method.GetOutputType())]
-				outProtoName := protoName(method.GetOutputType())
 				outName := Name{
 					FileDescriptor:   outFileDescriptor,
 					Descriptor:       findDescriptor(outProtoName, outFileDescriptor),
 					PkgOverride:      params.ImportOverrides[outFileDescriptor.GetName()],
 					EventPkgOverride: params.DEQImportOverrides[outFileDescriptor.GetName()],
 				}
+
 				methods[k] = Method{
-					Name:    method.GetName(),
+					Name:    rpc.GetName(),
 					InType:  NewType(inName, fName),
 					OutType: NewType(outName, fName),
 					Service: file.Services[j],
@@ -253,6 +248,26 @@ func generate(input *plugin.CodeGeneratorRequest) ([]*plugin.CodeGeneratorRespon
 
 				typeSet[methods[k].InType] = struct{}{}
 				typeSet[methods[k].OutType] = struct{}{}
+
+				// Add imports if needed
+				if inName.EventPkgOverride != "" {
+					file.Imports[outName.GoEventPkgName()] = inName.GoEventPkgPath()
+				}
+				if outName.EventPkgOverride != "" {
+					file.Imports[outName.GoEventPkgName()] = outName.GoEventPkgPath()
+				}
+
+				if inName.PkgOverride != "" {
+					file.Imports[inName.GoPkgName()] = inName.GoPkgPath()
+				} else if path.Dir(inFileDescriptor.GetName()) != path.Dir(protofile.GetName()) {
+					file.Imports[inName.GoPkgName()] = path.Dir(inFileDescriptor.GetName())
+				}
+				if outName.PkgOverride != "" {
+					file.Imports[outName.GoPkgName()] = outName.GoPkgPath()
+				} else if path.Dir(outFileDescriptor.GetName()) != path.Dir(protofile.GetName()) {
+					file.Imports[outName.GoPkgName()] = path.Dir(outFileDescriptor.GetName())
+				}
+
 			}
 
 			// Create set of all types referenced by this service only
