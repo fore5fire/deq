@@ -107,29 +107,37 @@ func (c *Client) Del(ctx context.Context, topic, id string) error {
 	return nil
 }
 
-func eventStateFromProto(state api.EventState) deq.EventState {
+func eventStateFromProto(state api.Event_State) deq.State {
 	switch state {
-	case api.EventState_DEQUEUED_ERROR:
-		return deq.EventStateDequeuedError
-	case api.EventState_DEQUEUED_OK:
-		return deq.EventStateDequeuedOK
-	case api.EventState_QUEUED:
-		return deq.EventStateQueued
+	case api.Event_OK:
+		return deq.StateOK
+	case api.Event_QUEUED:
+		return deq.StateQueued
+	case api.Event_INTERNAL:
+		return deq.StateInternal
+	case api.Event_INVALID:
+		return deq.StateInvalid
+	case api.Event_DEQUEUED_ERROR:
+		return deq.StateDequeuedError
 	default:
-		return deq.EventStateUnspecified
+		return deq.StateUnspecified
 	}
 }
 
-func eventStateToProto(state deq.EventState) api.EventState {
+func eventStateToProto(state deq.State) api.Event_State {
 	switch state {
-	case deq.EventStateDequeuedError:
-		return api.EventState_DEQUEUED_ERROR
-	case deq.EventStateDequeuedOK:
-		return api.EventState_DEQUEUED_OK
-	case deq.EventStateQueued:
-		return api.EventState_QUEUED
+	case deq.StateOK:
+		return api.Event_OK
+	case deq.StateQueued:
+		return api.Event_QUEUED
+	case deq.StateInternal:
+		return api.Event_INTERNAL
+	case deq.StateInvalid:
+		return api.Event_INVALID
+	case deq.StateDequeuedError:
+		return api.Event_DEQUEUED_ERROR
 	default:
-		return api.EventState_UNSPECIFIED_STATE
+		return api.Event_UNSPECIFIED_STATE
 	}
 }
 

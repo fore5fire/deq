@@ -370,7 +370,7 @@ func (s *sharedChannel) getCursor(topic string) ([]byte, error) {
 	return current, nil
 }
 
-func (s *sharedChannel) broadcastEventUpdated(id string, state deq.EventState) {
+func (s *sharedChannel) broadcastEventUpdated(id string, state deq.State) {
 	s.stateSubsMutex.RLock()
 	defer s.stateSubsMutex.RUnlock()
 

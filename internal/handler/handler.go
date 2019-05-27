@@ -35,8 +35,8 @@ func (s *Handler) Pub(ctx context.Context, in *pb.PubRequest) (*pb.Event, error)
 	if in.Event.Topic == "" {
 		return nil, status.Error(codes.InvalidArgument, "Missing required argument event.topic")
 	}
-	if in.Event.DefaultState == pb.EventState_UNSPECIFIED_STATE {
-		in.Event.DefaultState = pb.EventState_QUEUED
+	if in.Event.DefaultState == pb.Event_UNSPECIFIED_STATE {
+		in.Event.DefaultState = pb.Event_QUEUED
 	}
 	if in.Event.CreateTime <= 0 {
 		in.Event.CreateTime = time.Now().UnixNano()
@@ -61,7 +61,7 @@ func (s *Handler) Pub(ctx context.Context, in *pb.PubRequest) (*pb.Event, error)
 	}
 
 	if sub != nil {
-		for e.State == deq.EventStateQueued {
+		for e.State == deq.StateQueued {
 			e.State, err = sub.Next(ctx)
 			if err == context.DeadlineExceeded || err == context.Canceled {
 				return nil, status.FromContextError(ctx.Err()).Err()
@@ -145,14 +145,18 @@ func (s *Handler) Ack(ctx context.Context, in *pb.AckRequest) (*pb.AckResponse, 
 		return nil, status.Error(codes.InvalidArgument, "Missing required argument 'event_id'")
 	}
 
-	var eventState deq.EventState
+	var eventState deq.State
 	switch in.Code {
-	case pb.AckCode_DEQUEUE_OK:
-		eventState = deq.EventStateDequeuedOK
+	case pb.AckCode_OK:
+		eventState = deq.StateOK
+	case pb.AckCode_INVALID:
+		eventState = deq.StateInvalid
+	case pb.AckCode_INTERNAL:
+		eventState = deq.StateInternal
 	case pb.AckCode_DEQUEUE_ERROR:
-		eventState = deq.EventStateDequeuedError
-	case pb.AckCode_REQUEUE_CONSTANT, pb.AckCode_REQUEUE_LINEAR, pb.AckCode_REQUEUE_EXPONENTIAL:
-		eventState = deq.EventStateQueued
+		eventState = deq.StateDequeuedError
+	case pb.AckCode_REQUEUE_CONSTANT, pb.AckCode_REQUEUE_LINEAR, pb.AckCode_REQUEUE:
+		eventState = deq.StateQueued
 	case pb.AckCode_RESET_TIMEOUT:
 
 	case pb.AckCode_UNSPECIFIED:
@@ -182,18 +186,18 @@ func (s *Handler) Ack(ctx context.Context, in *pb.AckRequest) (*pb.AckResponse, 
 		return nil, status.Error(codes.Internal, "")
 	}
 
-	if eventState == deq.EventStateQueued {
+	if eventState == deq.StateQueued {
 
 		baseTime := time.Second
 		var delay time.Duration
 		switch in.Code {
-		case pb.AckCode_REQUEUE_CONSTANT:
-			delay = baseTime
-		case pb.AckCode_REQUEUE_LINEAR:
-			delay = baseTime * time.Duration(e.RequeueCount+1)
-		case pb.AckCode_REQUEUE_EXPONENTIAL:
+		case pb.AckCode_REQUEUE:
 			cappedRequeue := math.Min(float64(e.RequeueCount), 12)
 			delay = time.Duration(math.Pow(2, cappedRequeue)) * baseTime
+		case pb.AckCode_REQUEUE_LINEAR:
+			delay = baseTime * time.Duration(e.RequeueCount+1)
+		case pb.AckCode_REQUEUE_CONSTANT:
+			delay = baseTime
 		}
 
 		if delay < 0 || delay > time.Hour {
@@ -386,31 +390,39 @@ func protoToEvent(e *pb.Event) deq.Event {
 	}
 }
 
-func protoToState(s pb.EventState) deq.EventState {
+func protoToState(s pb.Event_State) deq.State {
 	switch s {
-	case pb.EventState_UNSPECIFIED_STATE:
-		return deq.EventStateUnspecified
-	case pb.EventState_QUEUED:
-		return deq.EventStateQueued
-	case pb.EventState_DEQUEUED_OK:
-		return deq.EventStateDequeuedOK
-	case pb.EventState_DEQUEUED_ERROR:
-		return deq.EventStateDequeuedError
+	case pb.Event_UNSPECIFIED_STATE:
+		return deq.StateUnspecified
+	case pb.Event_QUEUED:
+		return deq.StateQueued
+	case pb.Event_OK:
+		return deq.StateOK
+	case pb.Event_INTERNAL:
+		return deq.StateInternal
+	case pb.Event_INVALID:
+		return deq.StateInvalid
+	case pb.Event_DEQUEUED_ERROR:
+		return deq.StateDequeuedError
 	default:
 		panic("unrecognized EventState")
 	}
 }
 
-func stateToProto(s deq.EventState) pb.EventState {
+func stateToProto(s deq.State) pb.Event_State {
 	switch s {
-	case deq.EventStateUnspecified:
-		return pb.EventState_UNSPECIFIED_STATE
-	case deq.EventStateQueued:
-		return pb.EventState_QUEUED
-	case deq.EventStateDequeuedOK:
-		return pb.EventState_DEQUEUED_OK
-	case deq.EventStateDequeuedError:
-		return pb.EventState_DEQUEUED_ERROR
+	case deq.StateUnspecified:
+		return pb.Event_UNSPECIFIED_STATE
+	case deq.StateQueued:
+		return pb.Event_QUEUED
+	case deq.StateOK:
+		return pb.Event_OK
+	case deq.StateInternal:
+		return pb.Event_INTERNAL
+	case deq.StateInvalid:
+		return pb.Event_INVALID
+	case deq.StateDequeuedError:
+		return pb.Event_DEQUEUED_ERROR
 	default:
 		panic("unrecognized EventState")
 	}

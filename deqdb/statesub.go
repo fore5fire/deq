@@ -9,13 +9,13 @@ import (
 
 // EventStateSubscription allows you to get updates when a particular event's state is updated.
 type EventStateSubscription struct {
-	C <-chan deq.EventState
-	c chan deq.EventState
+	C <-chan deq.State
+	c chan deq.State
 
 	eventID string
 	channel *Channel
 	missed  bool
-	latest  deq.EventState
+	latest  deq.State
 }
 
 var (
@@ -45,7 +45,7 @@ func (c *Channel) NewEventStateSubscription(id string) *EventStateSubscription {
 	sub := &EventStateSubscription{
 		eventID: id,
 		channel: c,
-		c:       make(chan deq.EventState, 3),
+		c:       make(chan deq.State, 3),
 	}
 	sub.C = sub.c
 
@@ -67,13 +67,13 @@ func (c *Channel) NewEventStateSubscription(id string) *EventStateSubscription {
 // It's possible for a subscription to miss updates if its internal buffer is full. In this case,
 // it will skip earlier updates while preserving update order, such that the current state is always
 // at the end of a full buffer.
-func (sub *EventStateSubscription) Next(ctx context.Context) (deq.EventState, error) {
+func (sub *EventStateSubscription) Next(ctx context.Context) (deq.State, error) {
 	select {
 	case <-ctx.Done():
-		return deq.EventStateUnspecified, ctx.Err()
+		return deq.StateUnspecified, ctx.Err()
 	case state, ok := <-sub.C:
 		if !ok {
-			return deq.EventStateUnspecified, ErrSubscriptionClosed
+			return deq.StateUnspecified, ErrSubscriptionClosed
 		}
 		return state, nil
 	}
@@ -101,7 +101,7 @@ func (sub *EventStateSubscription) Close() {
 }
 
 // add adds an event to this subscription. It is not safe for concurrent use.
-func (sub *EventStateSubscription) add(state deq.EventState) {
+func (sub *EventStateSubscription) add(state deq.State) {
 	// If our buffer is full, drop the least recent update
 	if len(sub.c) == cap(sub.c) {
 		<-sub.c

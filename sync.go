@@ -3,8 +3,6 @@ package deq
 import (
 	"context"
 	"sync"
-
-	"gitlab.com/katcheCode/deq/ack"
 )
 
 // SyncTo copies the events in c's queue to the database that client is connected to.
@@ -38,9 +36,9 @@ func SyncTo(ctx context.Context, dst Client, src Channel) error {
 		}()
 	}
 
-	err := src.Sub(ctx, func(ctx context.Context, e Event) (*Event, ack.Code) {
+	err := src.Sub(ctx, func(ctx context.Context, e Event) (*Event, error) {
 		queue <- e
-		return nil, ack.DequeueOK
+		return nil, nil
 	})
 	select {
 	// Try to send the error back to the original goroutine

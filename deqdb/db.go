@@ -84,8 +84,8 @@ func printKeys(txn *badger.Txn) {
 
 func writeEvent(txn *badger.Txn, e *deq.Event) error {
 
-	if e.DefaultState == deq.EventStateUnspecified {
-		e.DefaultState = deq.EventStateQueued
+	if e.DefaultState == deq.StateUnspecified {
+		e.DefaultState = deq.StateQueued
 	}
 
 	key, err := data.EventTimeKey{
@@ -165,7 +165,7 @@ func writeEvent(txn *badger.Txn, e *deq.Event) error {
 		}
 	}
 
-	// if e.DefaultState != deq.EventStateQueued {
+	// if e.DefaultState != deq.StateQueued {
 
 	// 	it := txn.NewIterator(badger.DefaultIteratorOptions)
 	// 	defer it.Close()
@@ -361,31 +361,39 @@ func getChannelEvent(txn *badger.Txn, key data.ChannelKey, defaultState data.Eve
 	return channelState, nil
 }
 
-func eventStateToProto(e deq.EventState) data.EventState {
+func eventStateToProto(e deq.State) data.EventState {
 	switch e {
-	case deq.EventStateUnspecified:
+	case deq.StateUnspecified:
 		return data.EventState_UNSPECIFIED_STATE
-	case deq.EventStateQueued:
+	case deq.StateQueued:
 		return data.EventState_QUEUED
-	case deq.EventStateDequeuedOK:
-		return data.EventState_DEQUEUED_OK
-	case deq.EventStateDequeuedError:
+	case deq.StateOK:
+		return data.EventState_OK
+	case deq.StateInternal:
+		return data.EventState_INTERNAL
+	case deq.StateInvalid:
+		return data.EventState_INVALID
+	case deq.StateDequeuedError:
 		return data.EventState_DEQUEUED_ERROR
 	default:
 		panic("unrecognized EventState")
 	}
 }
 
-func protoToEventState(e data.EventState) deq.EventState {
+func protoToEventState(e data.EventState) deq.State {
 	switch e {
 	case data.EventState_UNSPECIFIED_STATE:
-		return deq.EventStateUnspecified
+		return deq.StateUnspecified
 	case data.EventState_QUEUED:
-		return deq.EventStateQueued
-	case data.EventState_DEQUEUED_OK:
-		return deq.EventStateDequeuedOK
+		return deq.StateQueued
+	case data.EventState_OK:
+		return deq.StateOK
+	case data.EventState_INVALID:
+		return deq.StateInvalid
+	case data.EventState_INTERNAL:
+		return deq.StateInternal
 	case data.EventState_DEQUEUED_ERROR:
-		return deq.EventStateDequeuedError
+		return deq.StateDequeuedError
 	default:
 		panic("unrecognized EventState")
 	}

@@ -233,8 +233,8 @@ func (s *Store) Pub(ctx context.Context, e deq.Event) (deq.Event, error) {
 	if e.CreateTime.IsZero() {
 		e.CreateTime = time.Now()
 	}
-	if e.DefaultState == deq.EventStateUnspecified {
-		e.DefaultState = deq.EventStateQueued
+	if e.DefaultState == deq.StateUnspecified {
+		e.DefaultState = deq.StateQueued
 	}
 
 	txn := s.db.NewTransaction(true)
@@ -275,7 +275,7 @@ func (s *Store) Pub(ctx context.Context, e deq.Event) (deq.Event, error) {
 
 	e.State = e.DefaultState
 
-	if e.DefaultState == deq.EventStateQueued {
+	if e.DefaultState == deq.StateQueued {
 		s.out <- &e
 	}
 

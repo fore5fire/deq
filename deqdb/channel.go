@@ -3,6 +3,7 @@ package deqdb
 import (
 	"context"
 	"fmt"
+	"log"
 	"sync"
 	"time"
 
@@ -132,7 +133,7 @@ func (c *Channel) Sub(ctx context.Context, handler deq.SubHandler) error {
 	type Result struct {
 		req  deq.Event
 		resp *deq.Event
-		code ack.Code
+		err  error
 	}
 
 	// Wait for background goroutines to cleanup before returning
@@ -166,15 +167,31 @@ func (c *Channel) Sub(ctx context.Context, handler deq.SubHandler) error {
 					}
 				}
 
+				if result.err != nil {
+					// TODO: post error value back to DEQ.
+					log.Printf("handle channel %q topic %q event %q: %v", c.name, c.topic, result.req.ID, result.err)
+				}
+
+				code := ack.ErrorCode(result.err)
 				var err error
-				switch result.code {
+				switch code {
 				case ack.DequeueOK:
-					err = c.SetEventState(ctx, result.req.ID, deq.EventStateDequeuedOK)
+					err = c.SetEventState(ctx, result.req.ID, deq.StateOK)
+					if err != nil {
+						err = fmt.Errorf("set event state: %v", err)
+					}
+				case ack.Invalid:
+					err = c.SetEventState(ctx, result.req.ID, deq.StateInvalid)
+					if err != nil {
+						err = fmt.Errorf("set event state: %v", err)
+					}
+				case ack.Internal:
+					err = c.SetEventState(ctx, result.req.ID, deq.StateInternal)
 					if err != nil {
 						err = fmt.Errorf("set event state: %v", err)
 					}
 				case ack.DequeueError:
-					err = c.SetEventState(ctx, result.req.ID, deq.EventStateDequeuedError)
+					err = c.SetEventState(ctx, result.req.ID, deq.StateDequeuedError)
 					if err != nil {
 						err = fmt.Errorf("set event state: %v", err)
 					}
@@ -212,9 +229,9 @@ func (c *Channel) Sub(ctx context.Context, handler deq.SubHandler) error {
 			return err
 		}
 
-		response, code := handler(ctx, e)
+		response, err := handler(ctx, e)
 		select {
-		case results <- Result{e, response, code}:
+		case results <- Result{e, response, err}:
 		case err := <-errc:
 			return err
 		}
@@ -334,7 +351,7 @@ func (c *Channel) Await(ctx context.Context, eventID string) (deq.Event, error) 
 }
 
 // SetEventState sets the state of an event for this channel.
-func (c *Channel) SetEventState(ctx context.Context, id string, state deq.EventState) error {
+func (c *Channel) SetEventState(ctx context.Context, id string, state deq.State) error {
 
 	// Retry for up to 10 conflicts
 	for i := 0; i < 10; i++ {

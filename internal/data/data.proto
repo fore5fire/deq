@@ -23,6 +23,8 @@ message EventPayload {
 enum EventState {
   UNSPECIFIED_STATE = 0;
   QUEUED = 1;
-  DEQUEUED_OK = 2;
+  OK = 2;
+  INVALID = 4;
+  INTERNAL = 5;
   DEQUEUED_ERROR = 3;
 }

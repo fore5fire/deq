@@ -28,8 +28,8 @@ import (
 type {{.GoName}}Event struct {
 	ID 				   string
 	CreateTime   time.Time
-	DefaultState deq.EventState
-	State        deq.EventState
+	DefaultState deq.State
+	State        deq.State
 	Indexes      []string
 
 	{{.GoName}} *{{.GoRef}}

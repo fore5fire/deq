@@ -33,22 +33,22 @@ func TestList(t *testing.T) {
 			Id:           "1",
 			Topic:        "test-topic",
 			CreateTime:   now,
-			DefaultState: api.EventState_QUEUED,
-			State:        api.EventState_QUEUED,
+			DefaultState: api.Event_QUEUED,
+			State:        api.Event_QUEUED,
 		},
 		{
 			Id:           "2",
 			Topic:        "test-topic",
 			CreateTime:   now,
-			DefaultState: api.EventState_QUEUED,
-			State:        api.EventState_QUEUED,
+			DefaultState: api.Event_QUEUED,
+			State:        api.Event_QUEUED,
 		},
 		{
 			Id:           "3",
 			Topic:        "test-topic",
 			CreateTime:   now,
-			DefaultState: api.EventState_QUEUED,
-			State:        api.EventState_QUEUED,
+			DefaultState: api.Event_QUEUED,
+			State:        api.Event_QUEUED,
 		},
 	}
 

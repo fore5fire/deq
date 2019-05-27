@@ -12,7 +12,7 @@ type Event struct {
 	ID           string
 	Msg          Message
 	CreateTime   time.Time
-	State        deq.EventState
+	State        deq.State
 	RequeueCount int
 }
 

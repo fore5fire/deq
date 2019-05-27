@@ -20,8 +20,8 @@ import (
 type HelloRequestEvent struct {
 	ID 				   string
 	CreateTime   time.Time
-	DefaultState deq.EventState
-	State        deq.EventState
+	DefaultState deq.State
+	State        deq.State
 	Indexes      []string
 
 	HelloRequest *HelloRequest
@@ -72,8 +72,8 @@ func (it *XXX_HelloRequestEventIter) Close() {
 type HelloReplyEvent struct {
 	ID 				   string
 	CreateTime   time.Time
-	DefaultState deq.EventState
-	State        deq.EventState
+	DefaultState deq.State
+	State        deq.State
 	Indexes      []string
 
 	HelloReply *HelloReply

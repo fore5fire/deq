@@ -66,15 +66,15 @@ func TestSub(t *testing.T) {
 				ID:           "before-event1",
 				Topic:        "TopicA",
 				CreateTime:   createTime,
-				DefaultState: deq.EventStateQueued,
-				State:        deq.EventStateQueued,
+				DefaultState: deq.StateQueued,
+				State:        deq.StateQueued,
 			},
 			{
 				ID:           "before-event2",
 				Topic:        "TopicA",
 				CreateTime:   createTime,
-				DefaultState: deq.EventStateQueued,
-				State:        deq.EventStateQueued,
+				DefaultState: deq.StateQueued,
+				State:        deq.StateQueued,
 			},
 		},
 		After: []deq.Event{
@@ -99,15 +99,15 @@ func TestSub(t *testing.T) {
 				ID:           "~after-event1",
 				Topic:        "TopicA",
 				CreateTime:   createTime,
-				DefaultState: deq.EventStateQueued,
-				State:        deq.EventStateQueued,
+				DefaultState: deq.StateQueued,
+				State:        deq.StateQueued,
 			},
 			{
 				ID:           "~after-event2",
 				Topic:        "TopicA",
 				CreateTime:   createTime,
-				DefaultState: deq.EventStateQueued,
-				State:        deq.EventStateQueued,
+				DefaultState: deq.StateQueued,
+				State:        deq.StateQueued,
 			},
 		},
 		ExpectedResponses: []deq.Event{
@@ -115,29 +115,29 @@ func TestSub(t *testing.T) {
 				ID:           "before-event1",
 				Topic:        "Response-TopicA",
 				CreateTime:   createTime,
-				DefaultState: deq.EventStateQueued,
-				State:        deq.EventStateQueued,
+				DefaultState: deq.StateQueued,
+				State:        deq.StateQueued,
 			},
 			{
 				ID:           "before-event2",
 				Topic:        "Response-TopicA",
 				CreateTime:   createTime,
-				DefaultState: deq.EventStateQueued,
-				State:        deq.EventStateQueued,
+				DefaultState: deq.StateQueued,
+				State:        deq.StateQueued,
 			},
 			{
 				ID:           "~after-event1",
 				Topic:        "Response-TopicA",
 				CreateTime:   createTime,
-				DefaultState: deq.EventStateQueued,
-				State:        deq.EventStateQueued,
+				DefaultState: deq.StateQueued,
+				State:        deq.StateQueued,
 			},
 			{
 				ID:           "~after-event2",
 				Topic:        "Response-TopicA",
 				CreateTime:   createTime,
-				DefaultState: deq.EventStateQueued,
-				State:        deq.EventStateQueued,
+				DefaultState: deq.StateQueued,
+				State:        deq.StateQueued,
 			},
 		},
 	}
@@ -231,8 +231,8 @@ func TestAwait(t *testing.T) {
 		ID:           "event1",
 		Topic:        "test-topic",
 		CreateTime:   time.Now(),
-		DefaultState: deq.EventStateQueued,
-		State:        deq.EventStateQueued,
+		DefaultState: deq.StateQueued,
+		State:        deq.StateQueued,
 	}
 
 	ctx, cancel := context.WithCancel(context.Background())
@@ -370,7 +370,7 @@ func TestAwaitChannel(t *testing.T) {
 		channel := db.Channel("channel", "topic")
 		defer channel.Close()
 
-		err := channel.SetEventState(ctx, "event1", deq.EventStateDequeuedOK)
+		err := channel.SetEventState(ctx, "event1", deq.StateDequeuedOK)
 		if err != nil {
 			log.Printf("set event state: %v", err)
 		}
@@ -386,7 +386,7 @@ func TestAwaitChannel(t *testing.T) {
 	if err != nil {
 		t.Fatalf("await dequeue: %v", err)
 	}
-	if state != deq.EventStateDequeuedOK {
+	if state != deq.StateDequeuedOK {
 		t.Fatalf("returned incorrect state: %v", state)
 	}
 }
@@ -410,8 +410,8 @@ func TestGet(t *testing.T) {
 		t.Fatalf("pub: %v", err)
 	}
 
-	expected.DefaultState = deq.EventStateQueued
-	expected.State = deq.EventStateQueued
+	expected.DefaultState = deq.StateQueued
+	expected.State = deq.StateQueued
 
 	channel := db.Channel("channel", expected.Topic)
 	defer channel.Close()
@@ -424,12 +424,12 @@ func TestGet(t *testing.T) {
 		t.Errorf("\n%s", cmp.Diff(expected, actual))
 	}
 
-	err = channel.SetEventState(ctx, expected.ID, deq.EventStateDequeuedOK)
+	err = channel.SetEventState(ctx, expected.ID, deq.StateDequeuedOK)
 	if err != nil {
 		t.Fatalf("set event state: %v", err)
 	}
 
-	expected.State = deq.EventStateDequeuedOK
+	expected.State = deq.StateDequeuedOK
 
 	actual, err = channel.Get(ctx, expected.ID)
 	if err != nil {
@@ -455,7 +455,7 @@ func TestDequeue(t *testing.T) {
 		ID:         "event1",
 		Topic:      "topic",
 		CreateTime: time.Now(),
-		State:      deq.EventStateQueued,
+		State:      deq.StateQueued,
 	}
 
 	func() {
@@ -476,7 +476,7 @@ func TestDequeue(t *testing.T) {
 		channel := db.Channel("channel", expected.Topic)
 		defer channel.Close()
 
-		err = channel.SetEventState(ctx, expected.ID, deq.EventStateDequeuedError)
+		err = channel.SetEventState(ctx, expected.ID, deq.StateInternal)
 		if err != nil {
 			t.Fatalf("set event state: %v", err)
 		}

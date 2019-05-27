@@ -44,8 +44,8 @@ func TestDel(t *testing.T) {
 		ID:           "event1",
 		Topic:        "topic",
 		CreateTime:   time.Now(),
-		DefaultState: deq.EventStateQueued,
-		State:        deq.EventStateQueued,
+		DefaultState: deq.StateQueued,
+		State:        deq.StateQueued,
 	}
 
 	_, err := db.Pub(ctx, expected)
@@ -82,8 +82,8 @@ func TestPub(t *testing.T) {
 		ID:           "event1",
 		Topic:        "topic",
 		CreateTime:   time.Now(),
-		DefaultState: deq.EventStateQueued,
-		State:        deq.EventStateQueued,
+		DefaultState: deq.StateQueued,
+		State:        deq.StateQueued,
 	}
 
 	channel := db.Channel("channel", expected.Topic)
@@ -102,7 +102,7 @@ func TestPub(t *testing.T) {
 		t.Errorf("get next:\n%s", cmp.Diff(expected, event))
 	}
 
-	expected.State = deq.EventStateQueued
+	expected.State = deq.StateQueued
 
 	event, err = channel.Get(ctx, expected.ID)
 	if err != nil {
@@ -131,8 +131,8 @@ func TestMassPub(t *testing.T) {
 			ID:           fmt.Sprintf("event%03d", i),
 			Topic:        topic,
 			CreateTime:   createTime,
-			DefaultState: deq.EventStateQueued,
-			State:        deq.EventStateQueued,
+			DefaultState: deq.StateQueued,
+			State:        deq.StateQueued,
 		}
 	}
 
@@ -171,8 +171,8 @@ func TestPubDuplicate(t *testing.T) {
 		ID:           "event1",
 		Topic:        "topic",
 		CreateTime:   time.Now(),
-		DefaultState: deq.EventStateQueued,
-		State:        deq.EventStateQueued,
+		DefaultState: deq.StateQueued,
+		State:        deq.StateQueued,
 	}
 
 	channel := db.Channel("channel", expected.Topic)
@@ -206,7 +206,7 @@ func TestPubDuplicate(t *testing.T) {
 		t.Errorf("get next:\n%s", cmp.Diff(expected, event))
 	}
 
-	expected.State = deq.EventStateQueued
+	expected.State = deq.StateQueued
 
 	event, err = channel.Get(ctx, expected.ID)
 	if err != nil {

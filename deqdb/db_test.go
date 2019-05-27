@@ -54,7 +54,7 @@ func TestWriteEvent(t *testing.T) {
 	}
 
 	dequeuePayload := data.ChannelPayload{
-		EventState: data.EventState_DEQUEUED_OK,
+		EventState: data.EventState_OK,
 	}
 
 	channelKey := data.ChannelKey{
@@ -83,10 +83,10 @@ func TestWriteEvent(t *testing.T) {
 		ID:         "event1",
 		CreateTime: time.Now(),
 		Payload:    []byte{1, 2, 3},
-		// Should make State start as deq.EventStateDequeuedOK
-		DefaultState: deq.EventStateDequeuedOK,
+		// Should make State start as deq.StateDequeuedOK
+		DefaultState: deq.StateOK,
 		// Should be ignored.
-		State: deq.EventStateDequeuedError,
+		State: deq.StateInvalid,
 	}
 
 	err = writeEvent(txn, expected)
@@ -94,7 +94,7 @@ func TestWriteEvent(t *testing.T) {
 		t.Fatal("write event: ", err)
 	}
 
-	expected.State = deq.EventStateDequeuedOK
+	expected.State = deq.StateOK
 
 	actual, err := getEvent(txn, expected.Topic, expected.ID, "channel")
 	if err != nil {
@@ -111,7 +111,7 @@ func TestWriteEvent(t *testing.T) {
 		t.Errorf("\n%s", cmp.Diff(expected, actual))
 	}
 
-	// expected.State = deq.EventStateQueued
+	// expected.State = deq.StateQueued
 
 	actual, err = getEvent(txn, expected.Topic, expected.ID, "newchannel")
 	if err != nil {
@@ -154,9 +154,9 @@ func BenchmarkWriteEvent(b *testing.B) {
 			ID:           "event1",
 			CreateTime:   time.Now(),
 			Payload:      []byte{1, 2, 3},
-			DefaultState: deq.EventStateDequeuedOK,
+			DefaultState: deq.StateOK,
 			// Should be ignored.
-			State: deq.EventStateDequeuedError,
+			State: deq.StateInternal,
 		}
 
 		err = writeEvent(txn, &expected)

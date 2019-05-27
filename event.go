@@ -23,44 +23,52 @@ type Event struct {
 	CreateTime time.Time
 	// DefaultState is the initial state of this event for existing channels. If not EventStateQueued,
 	// the event will be created but not sent to subscribers of topic.
-	DefaultState EventState
+	DefaultState State
 	// EventState is the state of the event in the channel it is recieved on.
 	// Output only.
-	State EventState
+	State State
 	// RequeueCount is the number of attempts to send the event to the channel it is recieved on.
 	// Output only.
 	RequeueCount int
 }
 
-// EventState is the state of an event on a specific channel.
-type EventState int
+// State is the state of an event on a specific channel.
+type State int
 
 const (
-	// EventStateUnspecified is the default value of an EventState.
-	EventStateUnspecified EventState = iota
-	// EventStateQueued indicates that the event is queued on the channel.
-	EventStateQueued
-	// EventStateDequeuedOK indicates that the event was processed successfully and is not queued on
+	// StateUnspecified is the default value of an EventState.
+	StateUnspecified State = iota
+	// StateQueued indicates that the event is queued on the channel.
+	StateQueued
+	// StateOK indicates that the event was processed successfully and is not queued on
 	// the channel.
-	EventStateDequeuedOK
-	// EventStateDequeuedError indicates that the event was not processed successfully and is not
-	// queued on the channel.
-	EventStateDequeuedError
-	// DefaultEventState is the default event state for new events if none is specified.
-	DefaultEventState = EventStateQueued
+	StateOK
+	// StateDequeuedError is a legacy option. Use StateInvalid or StateInternal instead.
+	StateDequeuedError
+	// StateInvalid indicates that the event has one or more fields has an invalid value. The
+	// event's creator should create a new event with the invalid fields corrected.
+	StateInvalid
+	// StateInternal indicates that the event encountered an internal error durring processing.
+	StateInternal
+	// DefaultState is the default event state for new events if none is specified.
+	DefaultState = StateQueued
 )
 
-func (s EventState) String() string {
+func (s State) String() string {
 	switch s {
-	case EventStateUnspecified:
+	case StateUnspecified:
 		return ""
-	case EventStateQueued:
+	case StateQueued:
 		return "Queued"
-	case EventStateDequeuedOK:
-		return "DequeuedOK"
-	case EventStateDequeuedError:
+	case StateOK:
+		return "OK"
+	case StateInvalid:
+		return "Invalid"
+	case StateInternal:
+		return "Internal"
+	case StateDequeuedError:
 		return "DequeuedError"
 	default:
-		return ""
+		return "UnrecognizedState"
 	}
 }

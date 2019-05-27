@@ -4,8 +4,6 @@ import (
 	"context"
 	"errors"
 	"time"
-
-	"gitlab.com/katcheCode/deq/ack"
 )
 
 // Client is a client for accessing the database.
@@ -31,13 +29,13 @@ type Channel interface {
 	// as passing a pointer to the zero value.
 	NewIndexIter(*IterOptions) EventIter
 	Await(ctx context.Context, eventID string) (Event, error)
-	SetEventState(ctx context.Context, id string, state EventState) error
+	SetEventState(ctx context.Context, id string, state State) error
 	RequeueEvent(ctx context.Context, e Event, delay time.Duration) error
 	Close()
 }
 
 // SubHandler is a handler for events recieved through a subscription.
-type SubHandler func(context.Context, Event) (*Event, ack.Code)
+type SubHandler func(context.Context, Event) (*Event, error)
 
 // EventIter is an iterator over events of a given topic in the database.
 type EventIter interface {

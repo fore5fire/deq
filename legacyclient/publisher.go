@@ -66,15 +66,18 @@ func (p *Publisher) Pub(ctx context.Context, e Event) (Event, error) {
 
 func protoToEvent(event *api.Event, msg Message, sub *Subscriber) Event {
 
-	var state deq.EventState
+	state := deq.StateUnspecified
 	switch event.State {
-	case api.EventState_QUEUED:
-		state = deq.EventStateQueued
-	case api.EventState_DEQUEUED_OK:
-		state = deq.EventStateDequeuedOK
-	case api.EventState_DEQUEUED_ERROR:
-	default:
-		state = deq.EventStateUnspecified
+	case api.Event_QUEUED:
+		state = deq.StateQueued
+	case api.Event_OK:
+		state = deq.StateOK
+	case api.Event_DEQUEUED_ERROR:
+		state = deq.StateDequeuedError
+	case api.Event_INTERNAL:
+		state = deq.StateInternal
+	case api.Event_INVALID:
+		state = deq.StateInvalid
 	}
 
 	return Event{

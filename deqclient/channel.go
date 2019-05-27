@@ -3,6 +3,7 @@ package deqclient
 import (
 	"context"
 	"io"
+	"log"
 	"strings"
 	"sync"
 	"time"
@@ -88,15 +89,19 @@ func (c *clientChannel) Await(ctx context.Context, id string) (deq.Event, error)
 	return eventFromProto(e), nil
 }
 
-func (c *clientChannel) SetEventState(ctx context.Context, id string, state deq.EventState) error {
+func (c *clientChannel) SetEventState(ctx context.Context, id string, state deq.State) error {
 	var code api.AckCode
 	switch state {
-	case deq.EventStateDequeuedError:
-		code = api.AckCode_DEQUEUE_ERROR
-	case deq.EventStateDequeuedOK:
-		code = api.AckCode_DEQUEUE_OK
-	case deq.EventStateQueued:
+	case deq.StateOK:
+		code = api.AckCode_OK
+	case deq.StateQueued:
 		code = api.AckCode_REQUEUE_CONSTANT
+	case deq.StateInvalid:
+		code = api.AckCode_INVALID
+	case deq.StateInternal:
+		code = api.AckCode_INTERNAL
+	case deq.StateDequeuedError:
+		code = api.AckCode_DEQUEUE_ERROR
 	}
 
 	_, err := c.deqClient.Ack(ctx, &api.AckRequest{
@@ -132,7 +137,7 @@ func (c *clientChannel) Sub(ctx context.Context, handler deq.SubHandler) error {
 	type Result struct {
 		req  deq.Event
 		resp *deq.Event
-		code ack.Code
+		err  error
 	}
 
 	// Wait for background goroutine to cleanup before returning
@@ -163,11 +168,26 @@ func (c *clientChannel) Sub(ctx context.Context, handler deq.SubHandler) error {
 					}
 				}
 
-				c.deqClient.Ack(ctx, &api.AckRequest{
+				if result.err != nil {
+					// TODO: post error value back to DEQ.
+					log.Printf("handle channel %q topic %q event %q: %v", c.name, c.topic, result.req.ID, result.err)
+				}
+
+				code := codeToProto(ack.ErrorCode(result.err))
+
+				_, err := c.deqClient.Ack(ctx, &api.AckRequest{
 					Channel: c.name,
 					Topic:   c.topic,
 					EventId: result.req.ID,
+					Code:    code,
 				})
+				if err != nil {
+					select {
+					case errc <- err:
+					default:
+					}
+					continue
+				}
 			}
 		}()
 	}
@@ -183,9 +203,9 @@ func (c *clientChannel) Sub(ctx context.Context, handler deq.SubHandler) error {
 
 		event := eventFromProto(e)
 
-		response, code := handler(ctx, event)
+		response, err := handler(ctx, event)
 		select {
-		case results <- Result{event, response, code}:
+		case results <- Result{event, response, err}:
 		case err := <-errc:
 			return err
 		case <-ctx.Done():
@@ -199,7 +219,7 @@ func (c *clientChannel) RequeueEvent(ctx context.Context, e deq.Event, delay tim
 		Channel: c.name,
 		Topic:   c.topic,
 		EventId: e.ID,
-		Code:    api.AckCode_REQUEUE_EXPONENTIAL,
+		Code:    api.AckCode_REQUEUE,
 	})
 	if status.Code(err) == codes.NotFound {
 		return deq.ErrNotFound
@@ -213,4 +233,25 @@ func (c *clientChannel) RequeueEvent(ctx context.Context, e deq.Event, delay tim
 
 func (c *clientChannel) Close() {
 
+}
+
+func codeToProto(code ack.Code) api.AckCode {
+	switch code {
+	case ack.OK:
+		return api.AckCode_OK
+	case ack.Requeue:
+		return api.AckCode_REQUEUE
+	case ack.RequeueLinear:
+		return api.AckCode_REQUEUE_LINEAR
+	case ack.RequeueConstant:
+		return api.AckCode_REQUEUE_CONSTANT
+	case ack.Invalid:
+		return api.AckCode_INVALID
+	case ack.Internal:
+		return api.AckCode_INTERNAL
+	case ack.DequeueError:
+		return api.AckCode_DEQUEUE_ERROR
+	default:
+		return api.AckCode_UNSPECIFIED
+	}
 }

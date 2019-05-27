@@ -42,20 +42,29 @@ message Event {
   repeated string indexes = 8;
   // The initial state of this event for existing channels. If not QUEUED, the event will be created
   // but not sent to subscribers of topic.
-  EventState default_state = 5;
+  State default_state = 5;
   // State of the event for the channel it is recieved on.
   // Output only.
-  EventState state = 6;
+  State state = 6;
   // Number of attempts to send the event on the channel it is recieved on.
   // Output only.
   int32 requeue_count = 7;
-}
 
-enum EventState {
-  UNSPECIFIED_STATE = 0;
-  QUEUED = 1;
-  DEQUEUED_OK = 2;
-  DEQUEUED_ERROR = 3;
+  enum State {
+    UNSPECIFIED_STATE = 0;
+    // QUEUED indicates the event is queued on the channel.
+    QUEUED = 1;
+    // OK indicates the event was processed successfully.
+    OK = 2;
+    // INTERNAL indicates the event was not processed successfully because of an internal error.
+    INTERNAL = 4;
+    // INVALID indicates the event was not processed successfully because it contains one or invalid
+    // more invalid fields.
+    INVALID = 5;
+
+    // DEQUEUED_ERROR is a legacy event state. Use INTERNAL or INVALID instead.
+    DEQUEUED_ERROR = 3;
+  }
 }
 
 message PubRequest {
@@ -105,22 +114,31 @@ message AckRequest {
 }
 
 enum AckCode {
+  // The default value for AckCode.
   UNSPECIFIED = 0;
 
-  // Dequeue the event, acknowledging that it was processed successfully.
-  DEQUEUE_OK = 1;
-  // Dequeue the event, acknowledging that it was not processed successfully.
-  DEQUEUE_ERROR = 2;
+  // Set the event's state to OK. This dequeues the event from the channel.
+  OK = 1;
+  // Set the event's state to INVALID. This dequeuess the event from the channel.
+  INVALID = 7;
+  // Set the event's state to INTERNAL. This dequeues the event from the channel.
+  INTERNAL = 8;
 
-  // Requeue the event after a constant interval.
-  REQUEUE_CONSTANT = 3;
-  // Requeue the event after an interval that grows linearly with each requeue.
+  // Sets the event's state to QUEUED and requeues the event on the channel with an
+  // exponential backoff.
+  REQUEUE = 5;
+  // Sets the event's state to QUEUED and requeues the event on the channel with a linear backoff.
   REQUEUE_LINEAR = 4;
-  // Requeue the event after an interval that grows exponentially with each requeue.
-  REQUEUE_EXPONENTIAL = 5;
+  // Sets the event's state to QUEUED and requeues the event on the channel with no backoff.
+  REQUEUE_CONSTANT = 3;
 
   // Reset the requeue timeout of the event.
   RESET_TIMEOUT = 6;
+
+  // DEQUEUE_ERROR is a legacy option. Use INTERNAL or INVALID instead.
+  //
+  // Set the event's state to DEQUEUED_ERROR. This dequeues the event from the channel.
+  DEQUEUE_ERROR = 2;
 }
 
 message AckResponse {

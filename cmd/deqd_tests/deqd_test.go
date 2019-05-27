@@ -84,7 +84,7 @@ func TestCreateAndReceive(t *testing.T) {
 	if err != nil {
 		t.Fatalf("Error Creating Event: %v", err)
 	}
-	expectedE.State = deq.EventStateQueued
+	expectedE.State = deq.StateQueued
 	expectedE.CreateTime = e.CreateTime
 	if !cmp.Equal(expectedE, e) {
 		t.Errorf("(-want +got)\n%s", cmp.Diff(expectedE, e))
@@ -143,7 +143,7 @@ func TestPubDuplicate(t *testing.T) {
 	if err != nil {
 		t.Fatalf("Error Creating Event: %v", err)
 	}
-	expectedE.State = deq.EventStateQueued
+	expectedE.State = deq.StateQueued
 	expectedE.CreateTime = e.CreateTime
 	if !cmp.Equal(expectedE, e) {
 		t.Errorf("(-want +got)\n%s", cmp.Diff(expectedE, e))
