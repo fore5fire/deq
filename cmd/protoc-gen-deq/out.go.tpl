@@ -7,18 +7,14 @@ package {{ .Package }}
 import (
 	"context"
 	"fmt"
-	{{- if .HasMethods }}
+	{{ if .HasMethods -}}
 	"sync"
 	"strings"
-	{{- end }}
+	{{ end -}}
 	{{if .Types}}"time"{{end}}
 
 	"gitlab.com/katcheCode/deq"
-	{{if .HasMethods -}}
-	"gitlab.com/katcheCode/deq/ack"
-	{{- end }}
-	
-	{{ range $pkg, $path := .Imports }}
+	{{- range $pkg, $path := .Imports }}
 	{{$pkg}} "{{$path}}"
 	{{- end }}
 )
@@ -158,7 +154,7 @@ type {{ .Name }}Client interface {
 	Get{{ .GoName }}Event(ctx context.Context, id string) (*{{ .GoEventRef }}Event, error)
 	Get{{ .GoName }}Index(ctx context.Context, index string) (*{{ .GoEventRef }}Event, error)
 	Await{{ .GoName }}Event(ctx context.Context, id string) (*{{ .GoEventRef }}Event, error)
-	Sub{{ .GoName }}Event(ctx context.Context, handler func(context.Context, *{{.GoEventRef}}Event) ack.Code) error
+	Sub{{ .GoName }}Event(ctx context.Context, handler func(context.Context, *{{.GoEventRef}}Event) error) error
 	New{{ .GoName }}EventIter(opts *deq.IterOptions) {{ .GoEventRef }}EventIter
 	New{{ .GoName }}IndexIter(opts *deq.IterOptions) {{ .GoEventRef }}EventIter
 	Pub{{.GoName}}Event(ctx context.Context, e *{{.GoEventRef}}Event) (*{{.GoEventRef}}Event, error)
@@ -273,11 +269,11 @@ func (c *_{{ $ServiceName }}Client) Await{{ .GoName }}Event(ctx context.Context,
 	return event, nil
 }
 
-func (c *_{{ $ServiceName }}Client) Sub{{ .GoName }}Event(ctx context.Context, handler func(context.Context, *{{.GoEventRef}}Event) ack.Code) error {
+func (c *_{{ $ServiceName }}Client) Sub{{ .GoName }}Event(ctx context.Context, handler func(context.Context, *{{.GoEventRef}}Event) error) error {
 	channel := c.db.Channel(c.channel, c.config.{{.GoName}}Topic())
 	defer channel.Close()
 
-	return channel.Sub(ctx, func(ctx context.Context, e deq.Event) (*deq.Event, ack.Code) {
+	return channel.Sub(ctx, func(ctx context.Context, e deq.Event) (*deq.Event, error) {
 			event, err := c.config.EventTo{{.GoName}}Event(e)
 			if err != nil {
 				panic("convert deq.Event to {{.GoEventRef}}Event: " + err.Error())
@@ -355,7 +351,7 @@ func (c *_{{ $ServiceName }}Client) {{ .Name }}(ctx context.Context, e *{{.InTyp
 {{ define "service" }}
 type {{ .Name }}Handlers interface {
 {{- range .Methods }}
-	{{ .Name }}(ctx context.Context, req *{{ .InType.GoEventRef }}Event) (*{{ .OutType.GoEventRef }}Event, ack.Code)
+	{{ .Name }}(ctx context.Context, req *{{ .InType.GoEventRef }}Event) (*{{ .OutType.GoEventRef }}Event, error)
 {{- end }}
 }
 
@@ -395,7 +391,7 @@ func (s *_{{ .Name }}Server) Listen(ctx context.Context) error {
 		channel := s.db.Channel(strings.TrimSuffix(s.channel, ".") + ".{{.Name}}", s.config.{{.InType}}Topic())
 		defer channel.Close()
 		
-		err := channel.Sub(ctx, func(ctx context.Context, e deq.Event) (*deq.Event, ack.Code) {
+		err := channel.Sub(ctx, func(ctx context.Context, e deq.Event) (*deq.Event, error) {
 			event, err := s.config.EventTo{{.InType}}Event(e)
 			if err != nil {
 				panic("convert deq.Event to {{.InType}}Event: " + err.Error())

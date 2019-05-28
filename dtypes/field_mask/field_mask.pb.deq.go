@@ -2,7 +2,7 @@
 //  Generated code. Do not modify.
 //  source: field_mask/field_mask.proto
 ///
-package field_mask
+package types
 
 import (
 	"context"
@@ -10,20 +10,17 @@ import (
 	"time"
 
 	"gitlab.com/katcheCode/deq"
-	
-	
-	
-	field_mask "github.com/gogo/protobuf/types"
+	types "github.com/gogo/protobuf/types"
 )
 
 type FieldMaskEvent struct {
 	ID 				   string
 	CreateTime   time.Time
-	DefaultState deq.EventState
-	State        deq.EventState
+	DefaultState deq.State
+	State        deq.State
 	Indexes      []string
 
-	FieldMask *field_mask.FieldMask
+	FieldMask *types.FieldMask
 }
 
 type _FieldMaskTopicConfig interface {

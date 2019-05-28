@@ -2,7 +2,7 @@
 //  Generated code. Do not modify.
 //  source: duration/duration.proto
 ///
-package duration
+package types
 
 import (
 	"context"
@@ -10,20 +10,17 @@ import (
 	"time"
 
 	"gitlab.com/katcheCode/deq"
-	
-	
-	
-	duration "github.com/gogo/protobuf/types"
+	types "github.com/gogo/protobuf/types"
 )
 
 type DurationEvent struct {
 	ID 				   string
 	CreateTime   time.Time
-	DefaultState deq.EventState
-	State        deq.EventState
+	DefaultState deq.State
+	State        deq.State
 	Indexes      []string
 
-	Duration *duration.Duration
+	Duration *types.Duration
 }
 
 type _DurationTopicConfig interface {

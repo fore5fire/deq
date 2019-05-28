@@ -12,9 +12,6 @@ import (
 	"time"
 
 	"gitlab.com/katcheCode/deq"
-	"gitlab.com/katcheCode/deq/ack"
-	
-	
 )
 
 type HelloRequestEvent struct {
@@ -248,7 +245,7 @@ type GreeterClient interface {
 	GetHelloRequestEvent(ctx context.Context, id string) (*HelloRequestEvent, error)
 	GetHelloRequestIndex(ctx context.Context, index string) (*HelloRequestEvent, error)
 	AwaitHelloRequestEvent(ctx context.Context, id string) (*HelloRequestEvent, error)
-	SubHelloRequestEvent(ctx context.Context, handler func(context.Context, *HelloRequestEvent) ack.Code) error
+	SubHelloRequestEvent(ctx context.Context, handler func(context.Context, *HelloRequestEvent) error) error
 	NewHelloRequestEventIter(opts *deq.IterOptions) HelloRequestEventIter
 	NewHelloRequestIndexIter(opts *deq.IterOptions) HelloRequestEventIter
 	PubHelloRequestEvent(ctx context.Context, e *HelloRequestEvent) (*HelloRequestEvent, error)
@@ -257,7 +254,7 @@ type GreeterClient interface {
 	GetHelloReplyEvent(ctx context.Context, id string) (*HelloReplyEvent, error)
 	GetHelloReplyIndex(ctx context.Context, index string) (*HelloReplyEvent, error)
 	AwaitHelloReplyEvent(ctx context.Context, id string) (*HelloReplyEvent, error)
-	SubHelloReplyEvent(ctx context.Context, handler func(context.Context, *HelloReplyEvent) ack.Code) error
+	SubHelloReplyEvent(ctx context.Context, handler func(context.Context, *HelloReplyEvent) error) error
 	NewHelloReplyEventIter(opts *deq.IterOptions) HelloReplyEventIter
 	NewHelloReplyIndexIter(opts *deq.IterOptions) HelloReplyEventIter
 	PubHelloReplyEvent(ctx context.Context, e *HelloReplyEvent) (*HelloReplyEvent, error)
@@ -384,11 +381,11 @@ func (c *_GreeterClient) AwaitHelloRequestEvent(ctx context.Context, id string) 
 	return event, nil
 }
 
-func (c *_GreeterClient) SubHelloRequestEvent(ctx context.Context, handler func(context.Context, *HelloRequestEvent) ack.Code) error {
+func (c *_GreeterClient) SubHelloRequestEvent(ctx context.Context, handler func(context.Context, *HelloRequestEvent) error) error {
 	channel := c.db.Channel(c.channel, c.config.HelloRequestTopic())
 	defer channel.Close()
 
-	return channel.Sub(ctx, func(ctx context.Context, e deq.Event) (*deq.Event, ack.Code) {
+	return channel.Sub(ctx, func(ctx context.Context, e deq.Event) (*deq.Event, error) {
 			event, err := c.config.EventToHelloRequestEvent(e)
 			if err != nil {
 				panic("convert deq.Event to HelloRequestEvent: " + err.Error())
@@ -497,11 +494,11 @@ func (c *_GreeterClient) AwaitHelloReplyEvent(ctx context.Context, id string) (*
 	return event, nil
 }
 
-func (c *_GreeterClient) SubHelloReplyEvent(ctx context.Context, handler func(context.Context, *HelloReplyEvent) ack.Code) error {
+func (c *_GreeterClient) SubHelloReplyEvent(ctx context.Context, handler func(context.Context, *HelloReplyEvent) error) error {
 	channel := c.db.Channel(c.channel, c.config.HelloReplyTopic())
 	defer channel.Close()
 
-	return channel.Sub(ctx, func(ctx context.Context, e deq.Event) (*deq.Event, ack.Code) {
+	return channel.Sub(ctx, func(ctx context.Context, e deq.Event) (*deq.Event, error) {
 			event, err := c.config.EventToHelloReplyEvent(e)
 			if err != nil {
 				panic("convert deq.Event to HelloReplyEvent: " + err.Error())
@@ -573,7 +570,7 @@ func (c *_GreeterClient) SayHello(ctx context.Context, e *HelloRequestEvent) (*H
 }
 
 type GreeterHandlers interface {
-	SayHello(ctx context.Context, req *HelloRequestEvent) (*HelloReplyEvent, ack.Code)
+	SayHello(ctx context.Context, req *HelloRequestEvent) (*HelloReplyEvent, error)
 }
 
 type GreeterServer interface {
@@ -612,7 +609,7 @@ func (s *_GreeterServer) Listen(ctx context.Context) error {
 		channel := s.db.Channel(strings.TrimSuffix(s.channel, ".") + ".SayHello", s.config.HelloRequestTopic())
 		defer channel.Close()
 		
-		err := channel.Sub(ctx, func(ctx context.Context, e deq.Event) (*deq.Event, ack.Code) {
+		err := channel.Sub(ctx, func(ctx context.Context, e deq.Event) (*deq.Event, error) {
 			event, err := s.config.EventToHelloRequestEvent(e)
 			if err != nil {
 				panic("convert deq.Event to HelloRequestEvent: " + err.Error())

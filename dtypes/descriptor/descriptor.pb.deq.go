@@ -2,7 +2,7 @@
 //  Generated code. Do not modify.
 //  source: descriptor/descriptor.proto
 ///
-package descriptor
+package types
 
 import (
 	"context"
@@ -10,20 +10,17 @@ import (
 	"time"
 
 	"gitlab.com/katcheCode/deq"
-	
-	
-	
-	descriptor "github.com/gogo/protobuf/types"
+	types "github.com/gogo/protobuf/types"
 )
 
 type FileDescriptorSetEvent struct {
 	ID 				   string
 	CreateTime   time.Time
-	DefaultState deq.EventState
-	State        deq.EventState
+	DefaultState deq.State
+	State        deq.State
 	Indexes      []string
 
-	FileDescriptorSet *descriptor.FileDescriptorSet
+	FileDescriptorSet *types.FileDescriptorSet
 }
 
 type _FileDescriptorSetTopicConfig interface {
@@ -71,11 +68,11 @@ func (it *XXX_FileDescriptorSetEventIter) Close() {
 type FileDescriptorProtoEvent struct {
 	ID 				   string
 	CreateTime   time.Time
-	DefaultState deq.EventState
-	State        deq.EventState
+	DefaultState deq.State
+	State        deq.State
 	Indexes      []string
 
-	FileDescriptorProto *descriptor.FileDescriptorProto
+	FileDescriptorProto *types.FileDescriptorProto
 }
 
 type _FileDescriptorProtoTopicConfig interface {
@@ -123,11 +120,11 @@ func (it *XXX_FileDescriptorProtoEventIter) Close() {
 type DescriptorProtoEvent struct {
 	ID 				   string
 	CreateTime   time.Time
-	DefaultState deq.EventState
-	State        deq.EventState
+	DefaultState deq.State
+	State        deq.State
 	Indexes      []string
 
-	DescriptorProto *descriptor.DescriptorProto
+	DescriptorProto *types.DescriptorProto
 }
 
 type _DescriptorProtoTopicConfig interface {
@@ -175,11 +172,11 @@ func (it *XXX_DescriptorProtoEventIter) Close() {
 type ExtensionRangeOptionsEvent struct {
 	ID 				   string
 	CreateTime   time.Time
-	DefaultState deq.EventState
-	State        deq.EventState
+	DefaultState deq.State
+	State        deq.State
 	Indexes      []string
 
-	ExtensionRangeOptions *descriptor.ExtensionRangeOptions
+	ExtensionRangeOptions *types.ExtensionRangeOptions
 }
 
 type _ExtensionRangeOptionsTopicConfig interface {
@@ -227,11 +224,11 @@ func (it *XXX_ExtensionRangeOptionsEventIter) Close() {
 type FieldDescriptorProtoEvent struct {
 	ID 				   string
 	CreateTime   time.Time
-	DefaultState deq.EventState
-	State        deq.EventState
+	DefaultState deq.State
+	State        deq.State
 	Indexes      []string
 
-	FieldDescriptorProto *descriptor.FieldDescriptorProto
+	FieldDescriptorProto *types.FieldDescriptorProto
 }
 
 type _FieldDescriptorProtoTopicConfig interface {
@@ -279,11 +276,11 @@ func (it *XXX_FieldDescriptorProtoEventIter) Close() {
 type OneofDescriptorProtoEvent struct {
 	ID 				   string
 	CreateTime   time.Time
-	DefaultState deq.EventState
-	State        deq.EventState
+	DefaultState deq.State
+	State        deq.State
 	Indexes      []string
 
-	OneofDescriptorProto *descriptor.OneofDescriptorProto
+	OneofDescriptorProto *types.OneofDescriptorProto
 }
 
 type _OneofDescriptorProtoTopicConfig interface {
@@ -331,11 +328,11 @@ func (it *XXX_OneofDescriptorProtoEventIter) Close() {
 type EnumDescriptorProtoEvent struct {
 	ID 				   string
 	CreateTime   time.Time
-	DefaultState deq.EventState
-	State        deq.EventState
+	DefaultState deq.State
+	State        deq.State
 	Indexes      []string
 
-	EnumDescriptorProto *descriptor.EnumDescriptorProto
+	EnumDescriptorProto *types.EnumDescriptorProto
 }
 
 type _EnumDescriptorProtoTopicConfig interface {
@@ -383,11 +380,11 @@ func (it *XXX_EnumDescriptorProtoEventIter) Close() {
 type EnumValueDescriptorProtoEvent struct {
 	ID 				   string
 	CreateTime   time.Time
-	DefaultState deq.EventState
-	State        deq.EventState
+	DefaultState deq.State
+	State        deq.State
 	Indexes      []string
 
-	EnumValueDescriptorProto *descriptor.EnumValueDescriptorProto
+	EnumValueDescriptorProto *types.EnumValueDescriptorProto
 }
 
 type _EnumValueDescriptorProtoTopicConfig interface {
@@ -435,11 +432,11 @@ func (it *XXX_EnumValueDescriptorProtoEventIter) Close() {
 type ServiceDescriptorProtoEvent struct {
 	ID 				   string
 	CreateTime   time.Time
-	DefaultState deq.EventState
-	State        deq.EventState
+	DefaultState deq.State
+	State        deq.State
 	Indexes      []string
 
-	ServiceDescriptorProto *descriptor.ServiceDescriptorProto
+	ServiceDescriptorProto *types.ServiceDescriptorProto
 }
 
 type _ServiceDescriptorProtoTopicConfig interface {
@@ -487,11 +484,11 @@ func (it *XXX_ServiceDescriptorProtoEventIter) Close() {
 type MethodDescriptorProtoEvent struct {
 	ID 				   string
 	CreateTime   time.Time
-	DefaultState deq.EventState
-	State        deq.EventState
+	DefaultState deq.State
+	State        deq.State
 	Indexes      []string
 
-	MethodDescriptorProto *descriptor.MethodDescriptorProto
+	MethodDescriptorProto *types.MethodDescriptorProto
 }
 
 type _MethodDescriptorProtoTopicConfig interface {
@@ -539,11 +536,11 @@ func (it *XXX_MethodDescriptorProtoEventIter) Close() {
 type FileOptionsEvent struct {
 	ID 				   string
 	CreateTime   time.Time
-	DefaultState deq.EventState
-	State        deq.EventState
+	DefaultState deq.State
+	State        deq.State
 	Indexes      []string
 
-	FileOptions *descriptor.FileOptions
+	FileOptions *types.FileOptions
 }
 
 type _FileOptionsTopicConfig interface {
@@ -591,11 +588,11 @@ func (it *XXX_FileOptionsEventIter) Close() {
 type MessageOptionsEvent struct {
 	ID 				   string
 	CreateTime   time.Time
-	DefaultState deq.EventState
-	State        deq.EventState
+	DefaultState deq.State
+	State        deq.State
 	Indexes      []string
 
-	MessageOptions *descriptor.MessageOptions
+	MessageOptions *types.MessageOptions
 }
 
 type _MessageOptionsTopicConfig interface {
@@ -643,11 +640,11 @@ func (it *XXX_MessageOptionsEventIter) Close() {
 type FieldOptionsEvent struct {
 	ID 				   string
 	CreateTime   time.Time
-	DefaultState deq.EventState
-	State        deq.EventState
+	DefaultState deq.State
+	State        deq.State
 	Indexes      []string
 
-	FieldOptions *descriptor.FieldOptions
+	FieldOptions *types.FieldOptions
 }
 
 type _FieldOptionsTopicConfig interface {
@@ -695,11 +692,11 @@ func (it *XXX_FieldOptionsEventIter) Close() {
 type OneofOptionsEvent struct {
 	ID 				   string
 	CreateTime   time.Time
-	DefaultState deq.EventState
-	State        deq.EventState
+	DefaultState deq.State
+	State        deq.State
 	Indexes      []string
 
-	OneofOptions *descriptor.OneofOptions
+	OneofOptions *types.OneofOptions
 }
 
 type _OneofOptionsTopicConfig interface {
@@ -747,11 +744,11 @@ func (it *XXX_OneofOptionsEventIter) Close() {
 type EnumOptionsEvent struct {
 	ID 				   string
 	CreateTime   time.Time
-	DefaultState deq.EventState
-	State        deq.EventState
+	DefaultState deq.State
+	State        deq.State
 	Indexes      []string
 
-	EnumOptions *descriptor.EnumOptions
+	EnumOptions *types.EnumOptions
 }
 
 type _EnumOptionsTopicConfig interface {
@@ -799,11 +796,11 @@ func (it *XXX_EnumOptionsEventIter) Close() {
 type EnumValueOptionsEvent struct {
 	ID 				   string
 	CreateTime   time.Time
-	DefaultState deq.EventState
-	State        deq.EventState
+	DefaultState deq.State
+	State        deq.State
 	Indexes      []string
 
-	EnumValueOptions *descriptor.EnumValueOptions
+	EnumValueOptions *types.EnumValueOptions
 }
 
 type _EnumValueOptionsTopicConfig interface {
@@ -851,11 +848,11 @@ func (it *XXX_EnumValueOptionsEventIter) Close() {
 type ServiceOptionsEvent struct {
 	ID 				   string
 	CreateTime   time.Time
-	DefaultState deq.EventState
-	State        deq.EventState
+	DefaultState deq.State
+	State        deq.State
 	Indexes      []string
 
-	ServiceOptions *descriptor.ServiceOptions
+	ServiceOptions *types.ServiceOptions
 }
 
 type _ServiceOptionsTopicConfig interface {
@@ -903,11 +900,11 @@ func (it *XXX_ServiceOptionsEventIter) Close() {
 type MethodOptionsEvent struct {
 	ID 				   string
 	CreateTime   time.Time
-	DefaultState deq.EventState
-	State        deq.EventState
+	DefaultState deq.State
+	State        deq.State
 	Indexes      []string
 
-	MethodOptions *descriptor.MethodOptions
+	MethodOptions *types.MethodOptions
 }
 
 type _MethodOptionsTopicConfig interface {
@@ -955,11 +952,11 @@ func (it *XXX_MethodOptionsEventIter) Close() {
 type UninterpretedOptionEvent struct {
 	ID 				   string
 	CreateTime   time.Time
-	DefaultState deq.EventState
-	State        deq.EventState
+	DefaultState deq.State
+	State        deq.State
 	Indexes      []string
 
-	UninterpretedOption *descriptor.UninterpretedOption
+	UninterpretedOption *types.UninterpretedOption
 }
 
 type _UninterpretedOptionTopicConfig interface {
@@ -1007,11 +1004,11 @@ func (it *XXX_UninterpretedOptionEventIter) Close() {
 type SourceCodeInfoEvent struct {
 	ID 				   string
 	CreateTime   time.Time
-	DefaultState deq.EventState
-	State        deq.EventState
+	DefaultState deq.State
+	State        deq.State
 	Indexes      []string
 
-	SourceCodeInfo *descriptor.SourceCodeInfo
+	SourceCodeInfo *types.SourceCodeInfo
 }
 
 type _SourceCodeInfoTopicConfig interface {
@@ -1059,11 +1056,11 @@ func (it *XXX_SourceCodeInfoEventIter) Close() {
 type GeneratedCodeInfoEvent struct {
 	ID 				   string
 	CreateTime   time.Time
-	DefaultState deq.EventState
-	State        deq.EventState
+	DefaultState deq.State
+	State        deq.State
 	Indexes      []string
 
-	GeneratedCodeInfo *descriptor.GeneratedCodeInfo
+	GeneratedCodeInfo *types.GeneratedCodeInfo
 }
 
 type _GeneratedCodeInfoTopicConfig interface {

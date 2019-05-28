@@ -2,7 +2,7 @@
 //  Generated code. Do not modify.
 //  source: empty/empty.proto
 ///
-package empty
+package types
 
 import (
 	"context"
@@ -10,20 +10,17 @@ import (
 	"time"
 
 	"gitlab.com/katcheCode/deq"
-	
-	
-	
-	empty "github.com/gogo/protobuf/types"
+	types "github.com/gogo/protobuf/types"
 )
 
 type EmptyEvent struct {
 	ID 				   string
 	CreateTime   time.Time
-	DefaultState deq.EventState
-	State        deq.EventState
+	DefaultState deq.State
+	State        deq.State
 	Indexes      []string
 
-	Empty *empty.Empty
+	Empty *types.Empty
 }
 
 type _EmptyTopicConfig interface {

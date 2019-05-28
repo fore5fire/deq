@@ -2,7 +2,7 @@
 //  Generated code. Do not modify.
 //  source: timestamp/timestamp.proto
 ///
-package timestamp
+package types
 
 import (
 	"context"
@@ -10,20 +10,17 @@ import (
 	"time"
 
 	"gitlab.com/katcheCode/deq"
-	
-	
-	
-	timestamp "github.com/gogo/protobuf/types"
+	types "github.com/gogo/protobuf/types"
 )
 
 type TimestampEvent struct {
 	ID 				   string
 	CreateTime   time.Time
-	DefaultState deq.EventState
-	State        deq.EventState
+	DefaultState deq.State
+	State        deq.State
 	Indexes      []string
 
-	Timestamp *timestamp.Timestamp
+	Timestamp *types.Timestamp
 }
 
 type _TimestampTopicConfig interface {

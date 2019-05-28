@@ -2,7 +2,7 @@
 //  Generated code. Do not modify.
 //  source: wrappers/wrappers.proto
 ///
-package wrappers
+package types
 
 import (
 	"context"
@@ -10,20 +10,17 @@ import (
 	"time"
 
 	"gitlab.com/katcheCode/deq"
-	
-	
-	
-	wrappers "github.com/gogo/protobuf/types"
+	types "github.com/gogo/protobuf/types"
 )
 
 type DoubleValueEvent struct {
 	ID 				   string
 	CreateTime   time.Time
-	DefaultState deq.EventState
-	State        deq.EventState
+	DefaultState deq.State
+	State        deq.State
 	Indexes      []string
 
-	DoubleValue *wrappers.DoubleValue
+	DoubleValue *types.DoubleValue
 }
 
 type _DoubleValueTopicConfig interface {
@@ -71,11 +68,11 @@ func (it *XXX_DoubleValueEventIter) Close() {
 type FloatValueEvent struct {
 	ID 				   string
 	CreateTime   time.Time
-	DefaultState deq.EventState
-	State        deq.EventState
+	DefaultState deq.State
+	State        deq.State
 	Indexes      []string
 
-	FloatValue *wrappers.FloatValue
+	FloatValue *types.FloatValue
 }
 
 type _FloatValueTopicConfig interface {
@@ -123,11 +120,11 @@ func (it *XXX_FloatValueEventIter) Close() {
 type Int64ValueEvent struct {
 	ID 				   string
 	CreateTime   time.Time
-	DefaultState deq.EventState
-	State        deq.EventState
+	DefaultState deq.State
+	State        deq.State
 	Indexes      []string
 
-	Int64Value *wrappers.Int64Value
+	Int64Value *types.Int64Value
 }
 
 type _Int64ValueTopicConfig interface {
@@ -175,11 +172,11 @@ func (it *XXX_Int64ValueEventIter) Close() {
 type UInt64ValueEvent struct {
 	ID 				   string
 	CreateTime   time.Time
-	DefaultState deq.EventState
-	State        deq.EventState
+	DefaultState deq.State
+	State        deq.State
 	Indexes      []string
 
-	UInt64Value *wrappers.UInt64Value
+	UInt64Value *types.UInt64Value
 }
 
 type _UInt64ValueTopicConfig interface {
@@ -227,11 +224,11 @@ func (it *XXX_UInt64ValueEventIter) Close() {
 type Int32ValueEvent struct {
 	ID 				   string
 	CreateTime   time.Time
-	DefaultState deq.EventState
-	State        deq.EventState
+	DefaultState deq.State
+	State        deq.State
 	Indexes      []string
 
-	Int32Value *wrappers.Int32Value
+	Int32Value *types.Int32Value
 }
 
 type _Int32ValueTopicConfig interface {
@@ -279,11 +276,11 @@ func (it *XXX_Int32ValueEventIter) Close() {
 type UInt32ValueEvent struct {
 	ID 				   string
 	CreateTime   time.Time
-	DefaultState deq.EventState
-	State        deq.EventState
+	DefaultState deq.State
+	State        deq.State
 	Indexes      []string
 
-	UInt32Value *wrappers.UInt32Value
+	UInt32Value *types.UInt32Value
 }
 
 type _UInt32ValueTopicConfig interface {
@@ -331,11 +328,11 @@ func (it *XXX_UInt32ValueEventIter) Close() {
 type BoolValueEvent struct {
 	ID 				   string
 	CreateTime   time.Time
-	DefaultState deq.EventState
-	State        deq.EventState
+	DefaultState deq.State
+	State        deq.State
 	Indexes      []string
 
-	BoolValue *wrappers.BoolValue
+	BoolValue *types.BoolValue
 }
 
 type _BoolValueTopicConfig interface {
@@ -383,11 +380,11 @@ func (it *XXX_BoolValueEventIter) Close() {
 type StringValueEvent struct {
 	ID 				   string
 	CreateTime   time.Time
-	DefaultState deq.EventState
-	State        deq.EventState
+	DefaultState deq.State
+	State        deq.State
 	Indexes      []string
 
-	StringValue *wrappers.StringValue
+	StringValue *types.StringValue
 }
 
 type _StringValueTopicConfig interface {
@@ -435,11 +432,11 @@ func (it *XXX_StringValueEventIter) Close() {
 type BytesValueEvent struct {
 	ID 				   string
 	CreateTime   time.Time
-	DefaultState deq.EventState
-	State        deq.EventState
+	DefaultState deq.State
+	State        deq.State
 	Indexes      []string
 
-	BytesValue *wrappers.BytesValue
+	BytesValue *types.BytesValue
 }
 
 type _BytesValueTopicConfig interface {

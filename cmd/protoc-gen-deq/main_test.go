@@ -21,7 +21,7 @@ func TestProtocGenDEQ(t *testing.T) {
 	if err != nil {
 		t.Fatalf("create test directory: %v", err)
 	}
-	// defer os.RemoveAll(dir)
+	defer os.RemoveAll(dir)
 
 	greeterDir := path.Join(dir, "example", "greeter")
 	err = os.MkdirAll(greeterDir, 0700)

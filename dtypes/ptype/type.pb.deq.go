@@ -2,7 +2,7 @@
 //  Generated code. Do not modify.
 //  source: ptype/type.proto
 ///
-package ptype
+package types
 
 import (
 	"context"
@@ -10,23 +10,17 @@ import (
 	"time"
 
 	"gitlab.com/katcheCode/deq"
-	
-	
-	
-	any "github.com/gogo/protobuf/types"
-	any__deq "gitlab.com/katcheCode/deq/dtypes/any"
-	ptype "github.com/gogo/protobuf/types"
-	source_context "google/protobuf"
+	types "github.com/gogo/protobuf/types"
 )
 
 type TypeEvent struct {
 	ID 				   string
 	CreateTime   time.Time
-	DefaultState deq.EventState
-	State        deq.EventState
+	DefaultState deq.State
+	State        deq.State
 	Indexes      []string
 
-	Type *ptype.Type
+	Type *types.Type
 }
 
 type _TypeTopicConfig interface {
@@ -74,11 +68,11 @@ func (it *XXX_TypeEventIter) Close() {
 type FieldEvent struct {
 	ID 				   string
 	CreateTime   time.Time
-	DefaultState deq.EventState
-	State        deq.EventState
+	DefaultState deq.State
+	State        deq.State
 	Indexes      []string
 
-	Field *ptype.Field
+	Field *types.Field
 }
 
 type _FieldTopicConfig interface {
@@ -126,11 +120,11 @@ func (it *XXX_FieldEventIter) Close() {
 type EnumEvent struct {
 	ID 				   string
 	CreateTime   time.Time
-	DefaultState deq.EventState
-	State        deq.EventState
+	DefaultState deq.State
+	State        deq.State
 	Indexes      []string
 
-	Enum *ptype.Enum
+	Enum *types.Enum
 }
 
 type _EnumTopicConfig interface {
@@ -178,11 +172,11 @@ func (it *XXX_EnumEventIter) Close() {
 type EnumValueEvent struct {
 	ID 				   string
 	CreateTime   time.Time
-	DefaultState deq.EventState
-	State        deq.EventState
+	DefaultState deq.State
+	State        deq.State
 	Indexes      []string
 
-	EnumValue *ptype.EnumValue
+	EnumValue *types.EnumValue
 }
 
 type _EnumValueTopicConfig interface {
@@ -230,11 +224,11 @@ func (it *XXX_EnumValueEventIter) Close() {
 type OptionEvent struct {
 	ID 				   string
 	CreateTime   time.Time
-	DefaultState deq.EventState
-	State        deq.EventState
+	DefaultState deq.State
+	State        deq.State
 	Indexes      []string
 
-	Option *ptype.Option
+	Option *types.Option
 }
 
 type _OptionTopicConfig interface {

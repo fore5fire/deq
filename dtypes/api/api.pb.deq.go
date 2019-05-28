@@ -2,7 +2,7 @@
 //  Generated code. Do not modify.
 //  source: api/api.proto
 ///
-package api
+package types
 
 import (
 	"context"
@@ -10,22 +10,17 @@ import (
 	"time"
 
 	"gitlab.com/katcheCode/deq"
-	
-	
-	
-	api "github.com/gogo/protobuf/types"
-	ptype "google/protobuf"
-	source_context "google/protobuf"
+	types "github.com/gogo/protobuf/types"
 )
 
 type ApiEvent struct {
 	ID 				   string
 	CreateTime   time.Time
-	DefaultState deq.EventState
-	State        deq.EventState
+	DefaultState deq.State
+	State        deq.State
 	Indexes      []string
 
-	Api *api.Api
+	Api *types.Api
 }
 
 type _ApiTopicConfig interface {
@@ -73,11 +68,11 @@ func (it *XXX_ApiEventIter) Close() {
 type MethodEvent struct {
 	ID 				   string
 	CreateTime   time.Time
-	DefaultState deq.EventState
-	State        deq.EventState
+	DefaultState deq.State
+	State        deq.State
 	Indexes      []string
 
-	Method *api.Method
+	Method *types.Method
 }
 
 type _MethodTopicConfig interface {
@@ -125,11 +120,11 @@ func (it *XXX_MethodEventIter) Close() {
 type MixinEvent struct {
 	ID 				   string
 	CreateTime   time.Time
-	DefaultState deq.EventState
-	State        deq.EventState
+	DefaultState deq.State
+	State        deq.State
 	Indexes      []string
 
-	Mixin *api.Mixin
+	Mixin *types.Mixin
 }
 
 type _MixinTopicConfig interface {

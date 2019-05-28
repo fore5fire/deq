@@ -2,7 +2,7 @@
 //  Generated code. Do not modify.
 //  source: any/any.proto
 ///
-package any
+package types
 
 import (
 	"context"
@@ -10,20 +10,17 @@ import (
 	"time"
 
 	"gitlab.com/katcheCode/deq"
-	
-	
-	
-	any "github.com/gogo/protobuf/types"
+	types "github.com/gogo/protobuf/types"
 )
 
 type AnyEvent struct {
 	ID 				   string
 	CreateTime   time.Time
-	DefaultState deq.EventState
-	State        deq.EventState
+	DefaultState deq.State
+	State        deq.State
 	Indexes      []string
 
-	Any *any.Any
+	Any *types.Any
 }
 
 type _AnyTopicConfig interface {
