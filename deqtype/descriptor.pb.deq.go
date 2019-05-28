@@ -1,8 +1,8 @@
 ///
 //  Generated code. Do not modify.
-//  source: descriptor/descriptor.proto
+//  source: descriptor.proto
 ///
-package types
+package deqtype
 
 import (
 	"context"
@@ -10,7 +10,7 @@ import (
 	"time"
 
 	"gitlab.com/katcheCode/deq"
-	types "github.com/gogo/protobuf/types"
+	descriptor "github.com/gogo/protobuf/protoc-gen-gogo/descriptor"
 )
 
 type FileDescriptorSetEvent struct {
@@ -20,7 +20,7 @@ type FileDescriptorSetEvent struct {
 	State        deq.State
 	Indexes      []string
 
-	FileDescriptorSet *types.FileDescriptorSet
+	FileDescriptorSet *descriptor.FileDescriptorSet
 }
 
 type _FileDescriptorSetTopicConfig interface {
@@ -72,7 +72,7 @@ type FileDescriptorProtoEvent struct {
 	State        deq.State
 	Indexes      []string
 
-	FileDescriptorProto *types.FileDescriptorProto
+	FileDescriptorProto *descriptor.FileDescriptorProto
 }
 
 type _FileDescriptorProtoTopicConfig interface {
@@ -124,7 +124,7 @@ type DescriptorProtoEvent struct {
 	State        deq.State
 	Indexes      []string
 
-	DescriptorProto *types.DescriptorProto
+	DescriptorProto *descriptor.DescriptorProto
 }
 
 type _DescriptorProtoTopicConfig interface {
@@ -176,7 +176,7 @@ type ExtensionRangeOptionsEvent struct {
 	State        deq.State
 	Indexes      []string
 
-	ExtensionRangeOptions *types.ExtensionRangeOptions
+	ExtensionRangeOptions *descriptor.ExtensionRangeOptions
 }
 
 type _ExtensionRangeOptionsTopicConfig interface {
@@ -228,7 +228,7 @@ type FieldDescriptorProtoEvent struct {
 	State        deq.State
 	Indexes      []string
 
-	FieldDescriptorProto *types.FieldDescriptorProto
+	FieldDescriptorProto *descriptor.FieldDescriptorProto
 }
 
 type _FieldDescriptorProtoTopicConfig interface {
@@ -280,7 +280,7 @@ type OneofDescriptorProtoEvent struct {
 	State        deq.State
 	Indexes      []string
 
-	OneofDescriptorProto *types.OneofDescriptorProto
+	OneofDescriptorProto *descriptor.OneofDescriptorProto
 }
 
 type _OneofDescriptorProtoTopicConfig interface {
@@ -332,7 +332,7 @@ type EnumDescriptorProtoEvent struct {
 	State        deq.State
 	Indexes      []string
 
-	EnumDescriptorProto *types.EnumDescriptorProto
+	EnumDescriptorProto *descriptor.EnumDescriptorProto
 }
 
 type _EnumDescriptorProtoTopicConfig interface {
@@ -384,7 +384,7 @@ type EnumValueDescriptorProtoEvent struct {
 	State        deq.State
 	Indexes      []string
 
-	EnumValueDescriptorProto *types.EnumValueDescriptorProto
+	EnumValueDescriptorProto *descriptor.EnumValueDescriptorProto
 }
 
 type _EnumValueDescriptorProtoTopicConfig interface {
@@ -436,7 +436,7 @@ type ServiceDescriptorProtoEvent struct {
 	State        deq.State
 	Indexes      []string
 
-	ServiceDescriptorProto *types.ServiceDescriptorProto
+	ServiceDescriptorProto *descriptor.ServiceDescriptorProto
 }
 
 type _ServiceDescriptorProtoTopicConfig interface {
@@ -488,7 +488,7 @@ type MethodDescriptorProtoEvent struct {
 	State        deq.State
 	Indexes      []string
 
-	MethodDescriptorProto *types.MethodDescriptorProto
+	MethodDescriptorProto *descriptor.MethodDescriptorProto
 }
 
 type _MethodDescriptorProtoTopicConfig interface {
@@ -540,7 +540,7 @@ type FileOptionsEvent struct {
 	State        deq.State
 	Indexes      []string
 
-	FileOptions *types.FileOptions
+	FileOptions *descriptor.FileOptions
 }
 
 type _FileOptionsTopicConfig interface {
@@ -592,7 +592,7 @@ type MessageOptionsEvent struct {
 	State        deq.State
 	Indexes      []string
 
-	MessageOptions *types.MessageOptions
+	MessageOptions *descriptor.MessageOptions
 }
 
 type _MessageOptionsTopicConfig interface {
@@ -644,7 +644,7 @@ type FieldOptionsEvent struct {
 	State        deq.State
 	Indexes      []string
 
-	FieldOptions *types.FieldOptions
+	FieldOptions *descriptor.FieldOptions
 }
 
 type _FieldOptionsTopicConfig interface {
@@ -696,7 +696,7 @@ type OneofOptionsEvent struct {
 	State        deq.State
 	Indexes      []string
 
-	OneofOptions *types.OneofOptions
+	OneofOptions *descriptor.OneofOptions
 }
 
 type _OneofOptionsTopicConfig interface {
@@ -748,7 +748,7 @@ type EnumOptionsEvent struct {
 	State        deq.State
 	Indexes      []string
 
-	EnumOptions *types.EnumOptions
+	EnumOptions *descriptor.EnumOptions
 }
 
 type _EnumOptionsTopicConfig interface {
@@ -800,7 +800,7 @@ type EnumValueOptionsEvent struct {
 	State        deq.State
 	Indexes      []string
 
-	EnumValueOptions *types.EnumValueOptions
+	EnumValueOptions *descriptor.EnumValueOptions
 }
 
 type _EnumValueOptionsTopicConfig interface {
@@ -852,7 +852,7 @@ type ServiceOptionsEvent struct {
 	State        deq.State
 	Indexes      []string
 
-	ServiceOptions *types.ServiceOptions
+	ServiceOptions *descriptor.ServiceOptions
 }
 
 type _ServiceOptionsTopicConfig interface {
@@ -904,7 +904,7 @@ type MethodOptionsEvent struct {
 	State        deq.State
 	Indexes      []string
 
-	MethodOptions *types.MethodOptions
+	MethodOptions *descriptor.MethodOptions
 }
 
 type _MethodOptionsTopicConfig interface {
@@ -956,7 +956,7 @@ type UninterpretedOptionEvent struct {
 	State        deq.State
 	Indexes      []string
 
-	UninterpretedOption *types.UninterpretedOption
+	UninterpretedOption *descriptor.UninterpretedOption
 }
 
 type _UninterpretedOptionTopicConfig interface {
@@ -1008,7 +1008,7 @@ type SourceCodeInfoEvent struct {
 	State        deq.State
 	Indexes      []string
 
-	SourceCodeInfo *types.SourceCodeInfo
+	SourceCodeInfo *descriptor.SourceCodeInfo
 }
 
 type _SourceCodeInfoTopicConfig interface {
@@ -1060,7 +1060,7 @@ type GeneratedCodeInfoEvent struct {
 	State        deq.State
 	Indexes      []string
 
-	GeneratedCodeInfo *types.GeneratedCodeInfo
+	GeneratedCodeInfo *descriptor.GeneratedCodeInfo
 }
 
 type _GeneratedCodeInfoTopicConfig interface {

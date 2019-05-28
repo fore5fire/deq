@@ -1,8 +1,8 @@
 ///
 //  Generated code. Do not modify.
-//  source: timestamp/timestamp.proto
+//  source: timestamp.proto
 ///
-package types
+package deqtype
 
 import (
 	"context"

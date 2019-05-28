@@ -1,8 +1,8 @@
 ///
 //  Generated code. Do not modify.
-//  source: field_mask/field_mask.proto
+//  source: field_mask.proto
 ///
-package types
+package deqtype
 
 import (
 	"context"

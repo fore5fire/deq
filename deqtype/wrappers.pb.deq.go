@@ -1,8 +1,8 @@
 ///
 //  Generated code. Do not modify.
-//  source: wrappers/wrappers.proto
+//  source: wrappers.proto
 ///
-package types
+package deqtype
 
 import (
 	"context"

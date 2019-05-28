@@ -1,8 +1,8 @@
 ///
 //  Generated code. Do not modify.
-//  source: empty/empty.proto
+//  source: empty.proto
 ///
-package types
+package deqtype
 
 import (
 	"context"

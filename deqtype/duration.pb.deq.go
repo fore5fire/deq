@@ -1,8 +1,8 @@
 ///
 //  Generated code. Do not modify.
-//  source: duration/duration.proto
+//  source: duration.proto
 ///
-package types
+package deqtype
 
 import (
 	"context"

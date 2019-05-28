@@ -1,8 +1,8 @@
 ///
 //  Generated code. Do not modify.
-//  source: api/api.proto
+//  source: api.proto
 ///
-package types
+package deqtype
 
 import (
 	"context"
@@ -10,7 +10,7 @@ import (
 	"time"
 
 	"gitlab.com/katcheCode/deq"
-	types "github.com/gogo/protobuf/types"
+	api "google.golang.org/genproto/protobuf/api"
 )
 
 type ApiEvent struct {
@@ -20,7 +20,7 @@ type ApiEvent struct {
 	State        deq.State
 	Indexes      []string
 
-	Api *types.Api
+	Api *api.Api
 }
 
 type _ApiTopicConfig interface {
@@ -72,7 +72,7 @@ type MethodEvent struct {
 	State        deq.State
 	Indexes      []string
 
-	Method *types.Method
+	Method *api.Method
 }
 
 type _MethodTopicConfig interface {
@@ -124,7 +124,7 @@ type MixinEvent struct {
 	State        deq.State
 	Indexes      []string
 
-	Mixin *types.Mixin
+	Mixin *api.Mixin
 }
 
 type _MixinTopicConfig interface {

@@ -54,7 +54,7 @@ require (
 	golang.org/x/perf v0.0.0-20190124201629-844a5f5b46f4 // indirect
 	golang.org/x/sys v0.0.0-20190130150945-aca44879d564 // indirect
 	golang.org/x/tools v0.0.0-20190131163942-067a2f313b69 // indirect
-	google.golang.org/genproto v0.0.0-20190128161407-8ac453e89fca // indirect
+	google.golang.org/genproto v0.0.0-20190128161407-8ac453e89fca
 	google.golang.org/grpc v1.18.0
 	honnef.co/go/tools v0.0.0-20190128043916-71123fcbb8fe // indirect
 	sourcegraph.com/sqs/pbtypes v1.0.0 // indirect

@@ -163,9 +163,7 @@ func generate(input *plugin.CodeGeneratorRequest) ([]*plugin.CodeGeneratorRespon
 		baseName := strings.TrimSuffix(baseFileName, path.Ext(baseFileName))
 
 		fName := Name{
-			FileDescriptor:   protofile,
-			PkgOverride:      params.ImportOverrides[protofile.GetName()],
-			EventPkgOverride: params.DEQImportOverrides[protofile.GetName()],
+			FileDescriptor: protofile,
 		}
 
 		file := File{
@@ -176,6 +174,9 @@ func generate(input *plugin.CodeGeneratorRequest) ([]*plugin.CodeGeneratorRespon
 			Types:    make([]Type, len(protofile.MessageType)),
 			Imports:  make(map[string]string),
 		}
+
+		fName.PkgOverride = params.ImportOverrides[protofile.GetName()]
+		fName.EventPkgOverride = params.DEQImportOverrides[protofile.GetName()]
 
 		// Add an import for this file if there's an override
 		if fName.PkgOverride != "" {
