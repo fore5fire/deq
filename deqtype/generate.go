@@ -1,5 +1,5 @@
 //go:generate protoc --deq_out=Many.proto=github.com/gogo/protobuf/types:. any.proto
-//go:generate protoc --deq_out=Mapi.proto=google.golang.org/genproto/protobuf/api:. api.proto
+//go:generate protoc --deq_out=Mapi.proto=github.com/gogo/protobuf/types:. api.proto
 //go:generate protoc --deq_out=Mduration.proto=github.com/gogo/protobuf/types:. duration.proto
 //go:generate protoc --deq_out=Mdescriptor.proto=github.com/gogo/protobuf/protoc-gen-gogo/descriptor:. descriptor.proto
 //go:generate protoc --deq_out=Mempty.proto=github.com/gogo/protobuf/types:. empty.proto

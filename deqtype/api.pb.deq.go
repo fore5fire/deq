@@ -10,7 +10,7 @@ import (
 	"time"
 
 	"gitlab.com/katcheCode/deq"
-	api "google.golang.org/genproto/protobuf/api"
+	types "github.com/gogo/protobuf/types"
 )
 
 type ApiEvent struct {
@@ -20,7 +20,7 @@ type ApiEvent struct {
 	State        deq.State
 	Indexes      []string
 
-	Api *api.Api
+	Api *types.Api
 }
 
 type _ApiTopicConfig interface {
@@ -72,7 +72,7 @@ type MethodEvent struct {
 	State        deq.State
 	Indexes      []string
 
-	Method *api.Method
+	Method *types.Method
 }
 
 type _MethodTopicConfig interface {
@@ -124,7 +124,7 @@ type MixinEvent struct {
 	State        deq.State
 	Indexes      []string
 
-	Mixin *api.Mixin
+	Mixin *types.Mixin
 }
 
 type _MixinTopicConfig interface {

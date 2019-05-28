@@ -23,10 +23,14 @@ func ParseParams(params string) (*Params, error) {
 			"google/protobuf/wrappers.proto":   "github.com/gogo/protobuf/types",
 		},
 		DEQImportOverrides: map[string]string{
-			"google/protobuf/field_mask.proto": "gitlab.com/katcheCode/deq/dtypes/field_mask",
-			"google/protobuf/empty.proto":      "gitlab.com/katcheCode/deq/dtypes/empty",
-			"google/protobuf/timestamp.proto":  "gitlab.com/katcheCode/deq/dtypes/timestamp",
-			"google/protobuf/any.proto":        "gitlab.com/katcheCode/deq/dtypes/any",
+			"google/protobuf/field_mask.proto": "gitlab.com/katcheCode/deq/deqtype",
+			"google/protobuf/empty.proto":      "gitlab.com/katcheCode/deq/deqtype",
+			"google/protobuf/timestamp.proto":  "gitlab.com/katcheCode/deq/deqtype",
+			"google/protobuf/any.proto":        "gitlab.com/katcheCode/deq/deqtype",
+			"google/protobuf/api.proto":        "gitlab.com/katcheCode/deq/deqtype",
+			"google/protobuf/descriptor.proto": "gitlab.com/katcheCode/deq/deqtype",
+			"google/protobuf/duration.proto":   "gitlab.com/katcheCode/deq/deqtype",
+			"google/protobuf/wrappers.proto":   "gitlab.com/katcheCode/deq/deqtype",
 		},
 	}
 
