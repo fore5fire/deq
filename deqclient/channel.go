@@ -41,7 +41,7 @@ func (c *Client) Channel(name, topic string) deq.Channel {
 
 func (c *clientChannel) Get(ctx context.Context, id string) (deq.Event, error) {
 	e, err := c.deqClient.Get(ctx, &api.GetRequest{
-		EventId: id,
+		Event:   id,
 		Topic:   c.topic,
 		Channel: c.name,
 	})
@@ -57,7 +57,7 @@ func (c *clientChannel) Get(ctx context.Context, id string) (deq.Event, error) {
 
 func (c *clientChannel) GetIndex(ctx context.Context, index string) (deq.Event, error) {
 	e, err := c.deqClient.Get(ctx, &api.GetRequest{
-		EventId:  index,
+		Event:    index,
 		Topic:    c.topic,
 		Channel:  c.name,
 		UseIndex: true,
@@ -72,9 +72,48 @@ func (c *clientChannel) GetIndex(ctx context.Context, index string) (deq.Event, 
 	return eventFromProto(e), nil
 }
 
+func (c *clientChannel) BatchGet(ctx context.Context, ids []string) (map[string]deq.Event, error) {
+
+	resp, err := c.deqClient.BatchGet(ctx, &api.BatchGetRequest{
+		Events:  ids,
+		Topic:   c.topic,
+		Channel: c.name,
+	})
+	if err != nil {
+		return nil, err
+	}
+
+	result := make(map[string]deq.Event, len(resp.Events))
+	for id, e := range resp.Events {
+		result[id] = eventFromProto(e)
+	}
+
+	return result, nil
+}
+
+func (c *clientChannel) BatchGetIndex(ctx context.Context, indexes []string) (map[string]deq.Event, error) {
+
+	resp, err := c.deqClient.BatchGet(ctx, &api.BatchGetRequest{
+		Events:   indexes,
+		Topic:    c.topic,
+		Channel:  c.name,
+		UseIndex: true,
+	})
+	if err != nil {
+		return nil, err
+	}
+
+	result := make(map[string]deq.Event, len(resp.Events))
+	for id, e := range resp.Events {
+		result[id] = eventFromProto(e)
+	}
+
+	return result, nil
+}
+
 func (c *clientChannel) Await(ctx context.Context, id string) (deq.Event, error) {
 	e, err := c.deqClient.Get(ctx, &api.GetRequest{
-		EventId: id,
+		Event:   id,
 		Topic:   c.topic,
 		Channel: c.name,
 		Await:   true,

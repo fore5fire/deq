@@ -244,6 +244,8 @@ type GreeterClient interface {
 	SyncAllTo(ctx context.Context, remote deq.Client) error
 	GetHelloRequestEvent(ctx context.Context, id string) (*HelloRequestEvent, error)
 	GetHelloRequestIndex(ctx context.Context, index string) (*HelloRequestEvent, error)
+	BatchGetHelloRequestEvent(ctx context.Context, ids []string) (map[string]*HelloRequestEvent, error)
+	BatchGetHelloRequestIndex(ctx context.Context, indexes []string) (map[string]*HelloRequestEvent, error)
 	AwaitHelloRequestEvent(ctx context.Context, id string) (*HelloRequestEvent, error)
 	SubHelloRequestEvent(ctx context.Context, handler func(context.Context, *HelloRequestEvent) error) error
 	NewHelloRequestEventIter(opts *deq.IterOptions) HelloRequestEventIter
@@ -253,6 +255,8 @@ type GreeterClient interface {
 	
 	GetHelloReplyEvent(ctx context.Context, id string) (*HelloReplyEvent, error)
 	GetHelloReplyIndex(ctx context.Context, index string) (*HelloReplyEvent, error)
+	BatchGetHelloReplyEvent(ctx context.Context, ids []string) (map[string]*HelloReplyEvent, error)
+	BatchGetHelloReplyIndex(ctx context.Context, indexes []string) (map[string]*HelloReplyEvent, error)
 	AwaitHelloReplyEvent(ctx context.Context, id string) (*HelloReplyEvent, error)
 	SubHelloReplyEvent(ctx context.Context, handler func(context.Context, *HelloReplyEvent) error) error
 	NewHelloReplyEventIter(opts *deq.IterOptions) HelloReplyEventIter
@@ -361,6 +365,50 @@ func (c *_GreeterClient) GetHelloRequestIndex(ctx context.Context, index string)
 	}
 
 	return event, nil
+}
+
+func (c *_GreeterClient) BatchGetHelloRequestEvent(ctx context.Context, ids []string) (map[string]*HelloRequestEvent, error) {
+	
+	channel := c.db.Channel(c.channel, c.config.HelloRequestTopic())
+	defer channel.Close()
+
+	deqEvents, err := channel.BatchGet(ctx, ids)
+	if err != nil {
+		return nil, err
+	}
+
+	events := make(map[string]*HelloRequestEvent, len(deqEvents))
+	for a, e := range deqEvents {
+		event, err := c.config.EventToHelloRequestEvent(e)
+		if err != nil {
+			return nil, fmt.Errorf("convert deq.Event to HelloRequestEvent: %v", err)
+		}
+		events[a] = event 
+	}
+
+	return events, nil
+}
+
+func (c *_GreeterClient) BatchGetHelloRequestIndex(ctx context.Context, indexes []string) (map[string]*HelloRequestEvent, error) {
+	
+	channel := c.db.Channel(c.channel, c.config.HelloRequestTopic())
+	defer channel.Close()
+
+	deqEvents, err := channel.BatchGetIndex(ctx, indexes)
+	if err != nil {
+		return nil, err
+	}
+
+	events := make(map[string]*HelloRequestEvent, len(deqEvents))
+	for a, e := range deqEvents {
+		event, err := c.config.EventToHelloRequestEvent(e)
+		if err != nil {
+			return nil, fmt.Errorf("convert deq.Event to HelloRequestEvent: %v", err)
+		}
+		events[a] = event 
+	}
+
+	return events, nil
 }
 
 func (c *_GreeterClient) AwaitHelloRequestEvent(ctx context.Context, id string) (*HelloRequestEvent, error) {
@@ -474,6 +522,50 @@ func (c *_GreeterClient) GetHelloReplyIndex(ctx context.Context, index string) (
 	}
 
 	return event, nil
+}
+
+func (c *_GreeterClient) BatchGetHelloReplyEvent(ctx context.Context, ids []string) (map[string]*HelloReplyEvent, error) {
+	
+	channel := c.db.Channel(c.channel, c.config.HelloReplyTopic())
+	defer channel.Close()
+
+	deqEvents, err := channel.BatchGet(ctx, ids)
+	if err != nil {
+		return nil, err
+	}
+
+	events := make(map[string]*HelloReplyEvent, len(deqEvents))
+	for a, e := range deqEvents {
+		event, err := c.config.EventToHelloReplyEvent(e)
+		if err != nil {
+			return nil, fmt.Errorf("convert deq.Event to HelloReplyEvent: %v", err)
+		}
+		events[a] = event 
+	}
+
+	return events, nil
+}
+
+func (c *_GreeterClient) BatchGetHelloReplyIndex(ctx context.Context, indexes []string) (map[string]*HelloReplyEvent, error) {
+	
+	channel := c.db.Channel(c.channel, c.config.HelloReplyTopic())
+	defer channel.Close()
+
+	deqEvents, err := channel.BatchGetIndex(ctx, indexes)
+	if err != nil {
+		return nil, err
+	}
+
+	events := make(map[string]*HelloReplyEvent, len(deqEvents))
+	for a, e := range deqEvents {
+		event, err := c.config.EventToHelloReplyEvent(e)
+		if err != nil {
+			return nil, fmt.Errorf("convert deq.Event to HelloReplyEvent: %v", err)
+		}
+		events[a] = event 
+	}
+
+	return events, nil
 }
 
 func (c *_GreeterClient) AwaitHelloReplyEvent(ctx context.Context, id string) (*HelloReplyEvent, error) {

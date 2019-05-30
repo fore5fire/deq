@@ -11,7 +11,6 @@ import (
 
 	"github.com/google/go-cmp/cmp"
 	"gitlab.com/katcheCode/deq"
-	"gitlab.com/katcheCode/deq/ack"
 )
 
 func TestSub(t *testing.T) {
@@ -155,7 +154,7 @@ func TestSub(t *testing.T) {
 	// // Subscribe to events
 	go func() {
 		channel := db.Channel("test-channel", "TopicA")
-		err := channel.Sub(ctx, func(ctx context.Context, e deq.Event) (*deq.Event, ack.Code) {
+		err := channel.Sub(ctx, func(ctx context.Context, e deq.Event) (*deq.Event, error) {
 
 			recieved <- e
 
@@ -163,7 +162,7 @@ func TestSub(t *testing.T) {
 				ID:         e.ID,
 				Topic:      "Response-TopicA",
 				CreateTime: createTime,
-			}, ack.DequeueOK
+			}, nil
 		})
 		channel.Close()
 		errc <- err
@@ -172,11 +171,11 @@ func TestSub(t *testing.T) {
 	// Subscribe to response events
 	go func() {
 		channel := db.Channel("test-channel", "Response-TopicA")
-		err := channel.Sub(ctx, func(ctx context.Context, e deq.Event) (*deq.Event, ack.Code) {
+		err := channel.Sub(ctx, func(ctx context.Context, e deq.Event) (*deq.Event, error) {
 
 			responses <- e
 
-			return nil, ack.DequeueOK
+			return nil, nil
 		})
 		channel.Close()
 		errc <- err
@@ -370,7 +369,7 @@ func TestAwaitChannel(t *testing.T) {
 		channel := db.Channel("channel", "topic")
 		defer channel.Close()
 
-		err := channel.SetEventState(ctx, "event1", deq.StateDequeuedOK)
+		err := channel.SetEventState(ctx, "event1", deq.StateOK)
 		if err != nil {
 			log.Printf("set event state: %v", err)
 		}
@@ -386,7 +385,7 @@ func TestAwaitChannel(t *testing.T) {
 	if err != nil {
 		t.Fatalf("await dequeue: %v", err)
 	}
-	if state != deq.StateDequeuedOK {
+	if state != deq.StateOK {
 		t.Fatalf("returned incorrect state: %v", state)
 	}
 }
@@ -424,12 +423,12 @@ func TestGet(t *testing.T) {
 		t.Errorf("\n%s", cmp.Diff(expected, actual))
 	}
 
-	err = channel.SetEventState(ctx, expected.ID, deq.StateDequeuedOK)
+	err = channel.SetEventState(ctx, expected.ID, deq.StateOK)
 	if err != nil {
 		t.Fatalf("set event state: %v", err)
 	}
 
-	expected.State = deq.StateDequeuedOK
+	expected.State = deq.StateOK
 
 	actual, err = channel.Get(ctx, expected.ID)
 	if err != nil {
@@ -437,6 +436,199 @@ func TestGet(t *testing.T) {
 	}
 	if !cmp.Equal(actual, expected) {
 		t.Errorf("get after set state:\n%s", cmp.Diff(expected, actual))
+	}
+}
+
+func TestGetIndex(t *testing.T) {
+	t.Parallel()
+
+	ctx := context.Background()
+
+	db, discard := newTestDB()
+	defer discard()
+
+	expected := deq.Event{
+		ID:           "event1",
+		Topic:        "topic",
+		CreateTime:   time.Now(),
+		DefaultState: deq.StateQueued,
+		State:        deq.StateQueued,
+		Indexes:      []string{"index1", "index3"},
+	}
+
+	_, err := db.Pub(ctx, expected)
+	if err != nil {
+		t.Fatalf("pub: %v", err)
+	}
+
+	channel := db.Channel("channel", expected.Topic)
+	defer channel.Close()
+
+	actual, err := channel.GetIndex(ctx, "index1")
+	if err != nil {
+		t.Fatalf("get first index: %v", err)
+	}
+	if !cmp.Equal(actual, expected) {
+		t.Errorf("\n%s", cmp.Diff(expected, actual))
+	}
+
+	actual, err = channel.GetIndex(ctx, "index2")
+	if err != nil && err != deq.ErrNotFound {
+		t.Fatalf("get missing index: %v", err)
+	}
+	if err == nil {
+		t.Errorf("get missing index: found event %v", actual)
+	}
+
+	actual, err = channel.GetIndex(ctx, "index3")
+	if err != nil {
+		t.Fatalf("get second index: %v", err)
+	}
+	if !cmp.Equal(actual, expected) {
+		t.Errorf("\n%s", cmp.Diff(expected, actual))
+	}
+}
+
+func TestBatchGet(t *testing.T) {
+	t.Parallel()
+
+	ctx := context.Background()
+
+	db, discard := newTestDB()
+	defer discard()
+
+	pub := []deq.Event{
+		{
+			ID:           "event1",
+			Topic:        "topic",
+			CreateTime:   time.Now().Round(0),
+			DefaultState: deq.StateQueued,
+			State:        deq.StateQueued,
+		},
+		{
+			ID:           "event2",
+			Topic:        "topic",
+			CreateTime:   time.Now().Round(0),
+			DefaultState: deq.StateQueued,
+			State:        deq.StateQueued,
+		},
+		{
+			ID:           "event3",
+			Topic:        "topic",
+			CreateTime:   time.Now().Round(0),
+			DefaultState: deq.StateQueued,
+			State:        deq.StateQueued,
+		},
+		{
+			ID:           "event4",
+			Topic:        "topic",
+			CreateTime:   time.Now().Round(0),
+			DefaultState: deq.StateQueued,
+			State:        deq.StateQueued,
+		},
+	}
+
+	for _, e := range pub {
+		_, err := db.Pub(ctx, e)
+		if err != nil {
+			t.Fatalf("pub: %v", err)
+		}
+	}
+
+	expected := map[string]deq.Event{
+		"event1": pub[0],
+		"event3": pub[2],
+		"event4": pub[3],
+	}
+
+	ids := []string{
+		"event1", "event3", "event4",
+	}
+
+	channel := db.Channel("channel", pub[0].Topic)
+	defer channel.Close()
+
+	actual, err := channel.BatchGet(ctx, ids)
+	if err != nil {
+		t.Fatalf("get: %v", err)
+	}
+	if !cmp.Equal(actual, expected) {
+		t.Errorf("\n%s", cmp.Diff(expected, actual))
+	}
+}
+
+func TestBatchGetIndex(t *testing.T) {
+	t.Parallel()
+
+	ctx := context.Background()
+
+	db, discard := newTestDB()
+	defer discard()
+
+	now := time.Now().Round(0)
+	after := now.Add(time.Second)
+
+	pub := []deq.Event{
+		{
+			ID:           "event1",
+			Topic:        "topic",
+			CreateTime:   now,
+			DefaultState: deq.StateQueued,
+			State:        deq.StateQueued,
+			Indexes:      []string{"1"},
+		},
+		{
+			ID:           "event2",
+			Topic:        "topic",
+			CreateTime:   after,
+			DefaultState: deq.StateQueued,
+			State:        deq.StateQueued,
+			Indexes:      []string{"1"},
+		},
+		{
+			ID:           "event3",
+			Topic:        "topic",
+			CreateTime:   now,
+			DefaultState: deq.StateQueued,
+			State:        deq.StateQueued,
+			Indexes:      []string{"2"},
+		},
+		{
+			ID:           "event4",
+			Topic:        "topic",
+			CreateTime:   now,
+			DefaultState: deq.StateQueued,
+			State:        deq.StateQueued,
+			Indexes:      []string{"3"},
+		},
+	}
+
+	for _, e := range pub {
+		_, err := db.Pub(ctx, e)
+		if err != nil {
+			t.Fatalf("pub: %v", err)
+		}
+	}
+
+	expected := map[string]deq.Event{
+		"1": pub[1],
+		"2": pub[2],
+		"3": pub[3],
+	}
+
+	indexes := []string{
+		"1", "2", "3",
+	}
+
+	channel := db.Channel("channel", pub[0].Topic)
+	defer channel.Close()
+
+	actual, err := channel.BatchGetIndex(ctx, indexes)
+	if err != nil {
+		t.Fatalf("get: %v", err)
+	}
+	if !cmp.Equal(actual, expected) {
+		t.Errorf("\n%s", cmp.Diff(expected, actual))
 	}
 }
 

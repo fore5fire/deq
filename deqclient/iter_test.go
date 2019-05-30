@@ -2,7 +2,6 @@ package deqclient
 
 import (
 	"context"
-	"log"
 	"testing"
 	"time"
 
@@ -106,7 +105,6 @@ func TestIndexIter(t *testing.T) {
 	if !cmp.Equal(expect, actual) {
 		t.Errorf("\n%s", cmp.Diff(expect, actual))
 	}
-	t.Fatal()
 }
 
 type testIterClient struct {
@@ -115,7 +113,6 @@ type testIterClient struct {
 }
 
 func (c testIterClient) List(ctx context.Context, in *api.ListRequest, opts ...grpc.CallOption) (*api.ListResponse, error) {
-	log.Println(in)
 	pageSize := 20
 	if in.PageSize != 0 {
 		pageSize = int(in.PageSize)
@@ -139,7 +136,7 @@ func (c testIterClient) List(ctx context.Context, in *api.ListRequest, opts ...g
 	if start+pageSize < end {
 		end = start + pageSize
 	}
-	log.Println(start, end)
+
 	return &api.ListResponse{
 		Events: c.events[start:end],
 	}, nil

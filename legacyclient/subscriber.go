@@ -139,7 +139,7 @@ func (sub *Subscriber) Sub(ctx context.Context, m Message, handler HandlerFunc) 
 func (sub *Subscriber) Get(ctx context.Context, eventID string, result Message) (e Event, err error) {
 
 	event, err := sub.client.Get(ctx, &api.GetRequest{
-		EventId: eventID,
+		Event:   eventID,
 		Channel: sub.opts.Channel,
 		Topic:   proto.MessageName(result),
 	})
@@ -163,7 +163,7 @@ func (sub *Subscriber) Get(ctx context.Context, eventID string, result Message) 
 // into `result`, such that `e.Msg == result`.
 func (sub *Subscriber) Await(ctx context.Context, eventID string, result Message) (Event, error) {
 	e, err := sub.client.Get(ctx, &api.GetRequest{
-		EventId: eventID,
+		Event:   eventID,
 		Channel: sub.opts.Channel,
 		Topic:   proto.MessageName(result),
 		Await:   true,

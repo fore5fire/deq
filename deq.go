@@ -22,6 +22,8 @@ type Channel interface {
 	Sub(ctx context.Context, handler SubHandler) error
 	Get(ctx context.Context, id string) (Event, error)
 	GetIndex(ctx context.Context, index string) (Event, error)
+	BatchGet(ctx context.Context, ids []string) (map[string]Event, error)
+	BatchGetIndex(ctx context.Context, indexes []string) (map[string]Event, error)
 	// NewEventIter creates a new iterator over events by ID. Passing nil for opts is the same as
 	// passing a pointer to the zero value.
 	NewEventIter(*IterOptions) EventIter

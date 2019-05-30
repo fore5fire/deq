@@ -153,6 +153,8 @@ type {{ .Name }}Client interface {
 	{{- range .Types }}
 	Get{{ .GoName }}Event(ctx context.Context, id string) (*{{ .GoEventRef }}Event, error)
 	Get{{ .GoName }}Index(ctx context.Context, index string) (*{{ .GoEventRef }}Event, error)
+	BatchGet{{ .GoName }}Event(ctx context.Context, ids []string) (map[string]*{{ .GoEventRef }}Event, error)
+	BatchGet{{ .GoName }}Index(ctx context.Context, indexes []string) (map[string]*{{ .GoEventRef }}Event, error)
 	Await{{ .GoName }}Event(ctx context.Context, id string) (*{{ .GoEventRef }}Event, error)
 	Sub{{ .GoName }}Event(ctx context.Context, handler func(context.Context, *{{.GoEventRef}}Event) error) error
 	New{{ .GoName }}EventIter(opts *deq.IterOptions) {{ .GoEventRef }}EventIter
@@ -249,6 +251,50 @@ func (c *_{{ $ServiceName }}Client) Get{{ .GoName }}Index(ctx context.Context, i
 	}
 
 	return event, nil
+}
+
+func (c *_{{ $ServiceName }}Client) BatchGet{{ .GoName }}Event(ctx context.Context, ids []string) (map[string]*{{ .GoEventRef }}Event, error) {
+	
+	channel := c.db.Channel(c.channel, c.config.{{.GoName}}Topic())
+	defer channel.Close()
+
+	deqEvents, err := channel.BatchGet(ctx, ids)
+	if err != nil {
+		return nil, err
+	}
+
+	events := make(map[string]*{{.GoEventRef}}Event, len(deqEvents))
+	for a, e := range deqEvents {
+		event, err := c.config.EventTo{{.GoName}}Event(e)
+		if err != nil {
+			return nil, fmt.Errorf("convert deq.Event to {{.GoEventRef}}Event: %v", err)
+		}
+		events[a] = event 
+	}
+
+	return events, nil
+}
+
+func (c *_{{ $ServiceName }}Client) BatchGet{{ .GoName }}Index(ctx context.Context, indexes []string) (map[string]*{{ .GoEventRef }}Event, error) {
+	
+	channel := c.db.Channel(c.channel, c.config.{{.GoName}}Topic())
+	defer channel.Close()
+
+	deqEvents, err := channel.BatchGetIndex(ctx, indexes)
+	if err != nil {
+		return nil, err
+	}
+
+	events := make(map[string]*{{.GoEventRef}}Event, len(deqEvents))
+	for a, e := range deqEvents {
+		event, err := c.config.EventTo{{.GoName}}Event(e)
+		if err != nil {
+			return nil, fmt.Errorf("convert deq.Event to {{.GoEventRef}}Event: %v", err)
+		}
+		events[a] = event 
+	}
+
+	return events, nil
 }
 
 func (c *_{{ $ServiceName }}Client) Await{{ .GoName }}Event(ctx context.Context, id string) (*{{ .GoEventRef }}Event, error) {

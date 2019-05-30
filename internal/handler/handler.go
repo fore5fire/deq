@@ -213,8 +213,8 @@ func (s *Handler) Ack(ctx context.Context, in *pb.AckRequest) (*pb.AckResponse, 
 // Get implements DEQ.Get
 func (s *Handler) Get(ctx context.Context, in *pb.GetRequest) (*pb.Event, error) {
 
-	if in.EventId == "" {
-		return nil, status.Error(codes.InvalidArgument, "argument event_id is required")
+	if in.Event == "" {
+		return nil, status.Error(codes.InvalidArgument, "argument event is required")
 	}
 	if in.Topic == "" {
 		return nil, status.Error(codes.InvalidArgument, "topic is required")
@@ -233,7 +233,7 @@ func (s *Handler) Get(ctx context.Context, in *pb.GetRequest) (*pb.Event, error)
 	var err error
 
 	if in.Await {
-		e, err = channel.Await(ctx, in.EventId)
+		e, err = channel.Await(ctx, in.Event)
 		if err == context.Canceled || err == context.DeadlineExceeded {
 			return nil, status.FromContextError(err).Err()
 		}
@@ -242,7 +242,7 @@ func (s *Handler) Get(ctx context.Context, in *pb.GetRequest) (*pb.Event, error)
 			return nil, status.Error(codes.Internal, "")
 		}
 	} else if in.UseIndex {
-		e, err = channel.GetIndex(ctx, in.EventId)
+		e, err = channel.GetIndex(ctx, in.Event)
 		if err == deq.ErrNotFound {
 			return nil, status.Error(codes.NotFound, "")
 		}
@@ -251,7 +251,7 @@ func (s *Handler) Get(ctx context.Context, in *pb.GetRequest) (*pb.Event, error)
 			return nil, status.Error(codes.Internal, "")
 		}
 	} else {
-		e, err = channel.Get(ctx, in.EventId)
+		e, err = channel.Get(ctx, in.Event)
 		if err == deq.ErrNotFound {
 			return nil, status.Error(codes.NotFound, "")
 		}
@@ -262,6 +262,54 @@ func (s *Handler) Get(ctx context.Context, in *pb.GetRequest) (*pb.Event, error)
 	}
 
 	return eventToProto(e), nil
+}
+
+// BatchGet implements DEQ.BatchGet
+func (s *Handler) BatchGet(ctx context.Context, in *pb.BatchGetRequest) (*pb.BatchGetResponse, error) {
+
+	if len(in.Events) == 0 {
+		return nil, status.Error(codes.InvalidArgument, "argument events is required")
+	}
+	if in.Topic == "" {
+		return nil, status.Error(codes.InvalidArgument, "topic is required")
+	}
+	if in.Channel == "" {
+		return nil, status.Error(codes.InvalidArgument, "argument channel is required")
+	}
+
+	channel := s.store.Channel(in.Channel, in.Topic)
+	defer channel.Close()
+
+	var events map[string]deq.Event
+	var err error
+
+	if in.UseIndex {
+		events, err = channel.BatchGetIndex(ctx, in.Events)
+		if err == deq.ErrNotFound {
+			return nil, status.Error(codes.NotFound, "")
+		}
+		if err != nil {
+			log.Printf("Get: get event by index: %v", err)
+			return nil, status.Error(codes.Internal, "")
+		}
+	} else {
+		events, err = channel.BatchGet(ctx, in.Events)
+		if err == deq.ErrNotFound {
+			return nil, status.Error(codes.NotFound, "")
+		}
+		if err != nil {
+			log.Printf("Get: get event: %v", err)
+			return nil, status.Error(codes.Internal, "")
+		}
+	}
+
+	result := make(map[string]*pb.Event, len(events))
+	for a, e := range events {
+		result[a] = eventToProto(e)
+	}
+	return &pb.BatchGetResponse{
+		Events: result,
+	}, nil
 }
 
 // List implements DEQ.List

@@ -13,6 +13,9 @@ service DEQ {
   rpc Ack (AckRequest) returns (AckResponse);
   // Get retrieves an event on a channel without modifying its status or place in the queue.
   rpc Get (GetRequest) returns (Event);
+  // BatchGet retrieves multiple events on a channel without modifying their status or place in the
+  // queue.
+  rpc BatchGet (BatchGetRequest) returns (BatchGetResponse);
   // List retrieves a list of events on a channel, sorted by event id, without modifying their
   // status or place in the queue.
   rpc List (ListRequest) returns (ListResponse);
@@ -146,20 +149,38 @@ message AckResponse {
 }
 
 message GetRequest {
-  // The id of the event to get.
+  // The ID or index of the event to get.
   // Required.
-  string event_id = 1;
+  string event = 1;
   // The topic of the event to get.
   // Required.
   string topic = 2;
   // The channel to get the event from.
   // Required.
   string channel = 3;
-  // If await is true, the request will not respond until the
-  // event is published instead of returning code NOT_FOUND.
+  // If await is true, the request will not respond until the event is published instead of
+  // returning error code NOT_FOUND.
   bool await = 4;
   // If true, the event is looked up by index instead of ID. Cannot be true if await is true.
   bool use_index = 5;
+}
+
+message BatchGetRequest {
+  // The IDs or indexes of the events to get.
+  // Required.
+  repeated string events = 1;
+  // The topic of the events to get.
+  // Required.
+  string topic = 2;
+  // The channel to get the events from.
+  // Required.
+  string channel = 3;
+  // If true, the events are looked up by index instead of ID.
+  bool use_index = 4;
+}
+
+message BatchGetResponse {
+  map<string, Event> events = 1;
 }
 
 message ListRequest {

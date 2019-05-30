@@ -8,7 +8,6 @@ import (
 
 	"github.com/google/go-cmp/cmp"
 	"gitlab.com/katcheCode/deq"
-	"gitlab.com/katcheCode/deq/ack"
 )
 
 func TestSyncTo(t *testing.T) {
@@ -135,11 +134,11 @@ func TestSyncTo(t *testing.T) {
 		channel := db2.Channel("test-channel-remote", "TopicA")
 		defer channel.Close()
 
-		errc2 <- channel.Sub(ctx, func(ctx context.Context, e deq.Event) (*deq.Event, ack.Code) {
+		errc2 <- channel.Sub(ctx, func(ctx context.Context, e deq.Event) (*deq.Event, error) {
 
 			recieved <- e
 
-			return nil, ack.DequeueOK
+			return nil, nil
 		})
 	}()
 

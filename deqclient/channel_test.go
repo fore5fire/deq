@@ -7,7 +7,6 @@ import (
 
 	"github.com/google/go-cmp/cmp"
 	"gitlab.com/katcheCode/deq"
-	"gitlab.com/katcheCode/deq/ack"
 	api "gitlab.com/katcheCode/deq/api/v1/deq"
 	"google.golang.org/grpc"
 )
@@ -69,12 +68,12 @@ func TestSub(t *testing.T) {
 	out := make(chan deq.Event)
 
 	go func() {
-		channel.Sub(ctx, func(ctx context.Context, e deq.Event) (*deq.Event, ack.Code) {
+		channel.Sub(ctx, func(ctx context.Context, e deq.Event) (*deq.Event, error) {
 			out <- e
 			return &deq.Event{
 				ID:    "response",
 				Topic: "TestSub-response",
-			}, ack.DequeueOK
+			}, nil
 		})
 	}()
 
