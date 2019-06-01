@@ -4,6 +4,8 @@ import (
 	"context"
 	"errors"
 	"time"
+
+	"gitlab.com/katcheCode/deq/deqopt"
 )
 
 // Client is a client for accessing the database.
@@ -20,17 +22,14 @@ type Client interface {
 // Each channel has an independant queue and recieves events independantly of other channels.
 type Channel interface {
 	Sub(ctx context.Context, handler SubHandler) error
-	Get(ctx context.Context, id string) (Event, error)
-	GetIndex(ctx context.Context, index string) (Event, error)
-	BatchGet(ctx context.Context, ids []string) (map[string]Event, error)
-	BatchGetIndex(ctx context.Context, indexes []string) (map[string]Event, error)
+	Get(ctx context.Context, id string, options ...deqopt.GetOption) (Event, error)
+	BatchGet(ctx context.Context, ids []string, options ...deqopt.BatchGetOption) (map[string]Event, error)
 	// NewEventIter creates a new iterator over events by ID. Passing nil for opts is the same as
 	// passing a pointer to the zero value.
 	NewEventIter(*IterOptions) EventIter
 	// NewEventIter creates a new iterator over events by the index. Passing nil for opts is the same
 	// as passing a pointer to the zero value.
 	NewIndexIter(*IterOptions) EventIter
-	Await(ctx context.Context, eventID string) (Event, error)
 	SetEventState(ctx context.Context, id string, state State) error
 	RequeueEvent(ctx context.Context, e Event, delay time.Duration) error
 	Close()

@@ -2,11 +2,14 @@ package deqclient
 
 import (
 	"context"
+	"fmt"
 	"io"
 	"log"
 	"strings"
 	"sync"
 	"time"
+
+	"gitlab.com/katcheCode/deq/deqopt"
 
 	"gitlab.com/katcheCode/deq"
 	"gitlab.com/katcheCode/deq/ack"
@@ -39,28 +42,16 @@ func (c *Client) Channel(name, topic string) deq.Channel {
 	}
 }
 
-func (c *clientChannel) Get(ctx context.Context, id string) (deq.Event, error) {
-	e, err := c.deqClient.Get(ctx, &api.GetRequest{
-		Event:   id,
-		Topic:   c.topic,
-		Channel: c.name,
-	})
-	if status.Code(err) == codes.NotFound {
-		return deq.Event{}, deq.ErrNotFound
-	}
-	if err != nil {
-		return deq.Event{}, err
-	}
+func (c *clientChannel) Get(ctx context.Context, event string, options ...deqopt.GetOption) (deq.Event, error) {
 
-	return eventFromProto(e), nil
-}
+	opts := deqopt.NewGetOptionSet(options)
 
-func (c *clientChannel) GetIndex(ctx context.Context, index string) (deq.Event, error) {
 	e, err := c.deqClient.Get(ctx, &api.GetRequest{
-		Event:    index,
+		Event:    event,
 		Topic:    c.topic,
 		Channel:  c.name,
-		UseIndex: true,
+		Await:    opts.Await,
+		UseIndex: opts.UseIndex,
 	})
 	if status.Code(err) == codes.NotFound {
 		return deq.Event{}, deq.ErrNotFound
@@ -72,12 +63,20 @@ func (c *clientChannel) GetIndex(ctx context.Context, index string) (deq.Event, 
 	return eventFromProto(e), nil
 }
 
-func (c *clientChannel) BatchGet(ctx context.Context, ids []string) (map[string]deq.Event, error) {
+func (c *clientChannel) BatchGet(ctx context.Context, ids []string, options ...deqopt.BatchGetOption) (map[string]deq.Event, error) {
+
+	opts := deqopt.NewBatchGetOptionSet(options)
+
+	if opts.Await {
+		return nil, fmt.Errorf("BatchGet with option Await() is not yet implemented")
+	}
 
 	resp, err := c.deqClient.BatchGet(ctx, &api.BatchGetRequest{
-		Events:  ids,
-		Topic:   c.topic,
-		Channel: c.name,
+		Events:        ids,
+		Topic:         c.topic,
+		Channel:       c.name,
+		UseIndex:      opts.UseIndex,
+		AllowNotFound: opts.AllowNotFound,
 	})
 	if err != nil {
 		return nil, err
@@ -89,43 +88,6 @@ func (c *clientChannel) BatchGet(ctx context.Context, ids []string) (map[string]
 	}
 
 	return result, nil
-}
-
-func (c *clientChannel) BatchGetIndex(ctx context.Context, indexes []string) (map[string]deq.Event, error) {
-
-	resp, err := c.deqClient.BatchGet(ctx, &api.BatchGetRequest{
-		Events:   indexes,
-		Topic:    c.topic,
-		Channel:  c.name,
-		UseIndex: true,
-	})
-	if err != nil {
-		return nil, err
-	}
-
-	result := make(map[string]deq.Event, len(resp.Events))
-	for id, e := range resp.Events {
-		result[id] = eventFromProto(e)
-	}
-
-	return result, nil
-}
-
-func (c *clientChannel) Await(ctx context.Context, id string) (deq.Event, error) {
-	e, err := c.deqClient.Get(ctx, &api.GetRequest{
-		Event:   id,
-		Topic:   c.topic,
-		Channel: c.name,
-		Await:   true,
-	})
-	if status.Code(err) == codes.NotFound {
-		return deq.Event{}, deq.ErrNotFound
-	}
-	if err != nil {
-		return deq.Event{}, err
-	}
-
-	return eventFromProto(e), nil
 }
 
 func (c *clientChannel) SetEventState(ctx context.Context, id string, state deq.State) error {

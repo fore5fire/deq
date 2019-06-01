@@ -2,6 +2,7 @@ package deqdb
 
 import (
 	"context"
+	"errors"
 	"fmt"
 	"log"
 	"sync"
@@ -10,6 +11,7 @@ import (
 	"github.com/dgraph-io/badger"
 	"gitlab.com/katcheCode/deq"
 	"gitlab.com/katcheCode/deq/ack"
+	"gitlab.com/katcheCode/deq/deqopt"
 	"gitlab.com/katcheCode/deq/internal/data"
 )
 
@@ -283,22 +285,69 @@ func (c *Channel) Err() error {
 }
 
 // Get returns the event for an event ID, or ErrNotFound if none is found
-func (c *Channel) Get(ctx context.Context, eventID string) (deq.Event, error) {
+func (c *Channel) Get(ctx context.Context, event string, options ...deqopt.GetOption) (deq.Event, error) {
+
+	opts := deqopt.NewGetOptionSet(options)
+
+	// Determine whether to get by ID or index.
+	get := c.get
+	if opts.UseIndex {
+		get = c.getIndex
+	}
+
 	txn := c.db.NewTransaction(false)
 	defer txn.Discard()
 
-	e, err := getEvent(txn, c.topic, eventID, c.name)
+	// If we aren't awaiting, just return the result.
+	if !opts.Await {
+		e, err := get(txn, event)
+		if err != nil {
+			return deq.Event{}, err
+		}
+		return *e, nil
+	}
+
+	if opts.UseIndex {
+		return deq.Event{}, errors.New("options Await() and UseIndex() cannot both be used")
+	}
+
+	// Setup the subscription before we try to get, so we don't miss an event just after getting.
+	sub := c.NewEventStateSubscription(event)
+
+	e, err := get(txn, event)
+	if err == nil {
+		// event already exists, no need to wait.
+		return *e, nil
+	}
+	if err != deq.ErrNotFound {
+		return deq.Event{}, err
+	}
+
+	// Discard the original transaction, we'll need a new one when we try to get again.
+	txn.Discard()
+
+	// We got ErrNotFound, so let's wait until the event is published.
+	_, err = sub.Next(ctx)
 	if err != nil {
 		return deq.Event{}, err
 	}
 
+	txn = c.db.NewTransaction(false)
+	defer txn.Discard()
+
+	e, err = get(txn, event)
+	if err != nil {
+		return deq.Event{}, fmt.Errorf("retry get after await: %v", err)
+	}
 	return *e, nil
 }
 
+func (c *Channel) get(txn *badger.Txn, id string) (*deq.Event, error) {
+	return getEvent(txn, c.topic, id, c.name)
+}
+
 // GetIndex returns the event for an event's index, or ErrNotFound if none is found
-func (c *Channel) GetIndex(ctx context.Context, index string) (deq.Event, error) {
-	txn := c.db.NewTransaction(false)
-	defer txn.Discard()
+func (c *Channel) getIndex(txn *badger.Txn, index string) (*deq.Event, error) {
 
 	var payload data.IndexPayload
 	err := getIndexPayload(txn, data.IndexKey{
@@ -306,29 +355,41 @@ func (c *Channel) GetIndex(ctx context.Context, index string) (deq.Event, error)
 		Value: index,
 	}, &payload)
 	if err != nil {
-		return deq.Event{}, err
+		return nil, err
 	}
 
 	e, err := getEvent(txn, c.topic, payload.EventId, c.name)
 	if err != nil {
-		return deq.Event{}, err
+		return nil, err
 	}
 
-	return *e, nil
+	return e, nil
 }
 
 // BatchGet gets multiple events by ID, returned as a map of ID to event.
 //
 // ErrNotFound is returned if any event in ids is not found.
-func (c *Channel) BatchGet(ctx context.Context, ids []string) (map[string]deq.Event, error) {
+func (c *Channel) BatchGet(ctx context.Context, events []string, options ...deqopt.BatchGetOption) (map[string]deq.Event, error) {
 
 	ctx, cancel := context.WithCancel(ctx)
 	defer cancel()
 
+	opts := deqopt.NewBatchGetOptionSet(options)
+
+	if opts.UseIndex {
+		return nil, fmt.Errorf("BatchGet with option UseIndex() is not yet implemented")
+	}
+
+	// Determine whether to get by ID or index.
+	get := c.get
+	if opts.UseIndex {
+		get = c.getIndex
+	}
+
 	// Deduplicate requested IDs.
-	deduped := make(map[string]struct{}, len(ids))
-	for _, index := range ids {
-		deduped[index] = struct{}{}
+	deduped := make(map[string]struct{}, len(events))
+	for _, event := range events {
+		deduped[event] = struct{}{}
 	}
 
 	// Calculate the number of workers we want running.
@@ -352,8 +413,8 @@ func (c *Channel) BatchGet(ctx context.Context, ids []string) (map[string]deq.Ev
 			txn := c.db.NewTransaction(false)
 			defer txn.Discard()
 
-			for id := range requests {
-				e, err := getEvent(txn, c.topic, id, c.name)
+			for event := range requests {
+				e, err := get(txn, event)
 				if err != nil {
 					responses <- Response{Err: err}
 					return
@@ -375,6 +436,9 @@ func (c *Channel) BatchGet(ctx context.Context, ids []string) (map[string]deq.Ev
 	for range deduped {
 		select {
 		case resp := <-responses:
+			if opts.AllowNotFound && resp.Err == deq.ErrNotFound {
+				continue
+			}
 			if resp.Err != nil {
 				return nil, resp.Err
 			}
@@ -385,123 +449,6 @@ func (c *Channel) BatchGet(ctx context.Context, ids []string) (map[string]deq.Ev
 	}
 
 	return result, nil
-}
-
-// BatchGetIndex gets multiple events by index, returned as a map of index to event.
-//
-// ErrNotFound is returned if any event in indexes is not found.
-func (c *Channel) BatchGetIndex(ctx context.Context, indexes []string) (map[string]deq.Event, error) {
-
-	ctx, cancel := context.WithCancel(ctx)
-	defer cancel()
-
-	// Deduplicate requested indexes.
-	deduped := make(map[string]struct{}, len(indexes))
-	for _, index := range indexes {
-		deduped[index] = struct{}{}
-	}
-
-	// Calculate the number of workers we want running.
-	workerCount := 8
-	if workerCount > len(deduped) {
-		workerCount = len(deduped)
-	}
-
-	// Setup channels.
-	type Response struct {
-		Event *deq.Event
-		Err   error
-		Index string
-	}
-
-	requests := make(chan data.IndexKey, len(deduped))
-	responses := make(chan Response, len(deduped))
-
-	// Kick off workers.
-	for i := 0; i < workerCount; i++ {
-		go func() {
-			txn := c.db.NewTransaction(false)
-			defer txn.Discard()
-
-			for index := range requests {
-				var payload data.IndexPayload
-				err := getIndexPayload(txn, index, &payload)
-				if err != nil {
-					responses <- Response{Err: err}
-					return
-				}
-
-				e, err := getEvent(txn, c.topic, payload.EventId, c.name)
-				if err != nil {
-					responses <- Response{Err: err}
-					return
-				}
-
-				responses <- Response{
-					Event: e,
-					Index: index.Value,
-				}
-			}
-		}()
-	}
-
-	// Send requests to workers.
-	for index := range deduped {
-		requests <- data.IndexKey{
-			Topic: c.topic,
-			Value: index,
-		}
-	}
-	close(requests)
-
-	// Read worker responses.
-	result := make(map[string]deq.Event, len(deduped))
-	for range deduped {
-		select {
-		case resp := <-responses:
-			if resp.Err != nil {
-				return nil, resp.Err
-			}
-			result[resp.Index] = *resp.Event
-		case <-ctx.Done():
-			return nil, ctx.Err()
-		}
-	}
-
-	return result, nil
-}
-
-// Await gets an event for the requested event id, waiting for the event to be created if it does
-// not already exist.
-//
-// Await never returns ErrNotFound. If the context expires, the context error is returned
-// unmodified.
-func (c *Channel) Await(ctx context.Context, eventID string) (deq.Event, error) {
-
-	// start subscription before the read so we won't miss the notification
-	sub := c.NewEventStateSubscription(eventID)
-	defer sub.Close()
-
-	e, err := c.Get(ctx, eventID)
-	if err != nil && err != deq.ErrNotFound {
-		return deq.Event{}, err
-	}
-	if err == nil {
-		// event already exists, no need to wait.
-		return e, nil
-	}
-
-	_, err = sub.Next(ctx)
-	if err != nil {
-		return deq.Event{}, err
-	}
-
-	e, err = c.Get(ctx, eventID)
-	if err != nil {
-		return deq.Event{}, fmt.Errorf("retry get after await: %v", err)
-	}
-
-	return e, nil
 }
 
 // SetEventState sets the state of an event for this channel.

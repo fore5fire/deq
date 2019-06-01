@@ -6,6 +6,8 @@ import (
 	"math"
 	"time"
 
+	"gitlab.com/katcheCode/deq/deqopt"
+
 	"gitlab.com/katcheCode/deq"
 	pb "gitlab.com/katcheCode/deq/api/v1/deq"
 	"gitlab.com/katcheCode/deq/deqdb"
@@ -232,33 +234,24 @@ func (s *Handler) Get(ctx context.Context, in *pb.GetRequest) (*pb.Event, error)
 	var e deq.Event
 	var err error
 
+	channel = s.store.Channel(in.Channel, in.Topic)
+	defer channel.Close()
+
+	var opts []deqopt.GetOption
+	if in.UseIndex {
+		opts = append(opts, deqopt.UseIndex())
+	}
 	if in.Await {
-		e, err = channel.Await(ctx, in.Event)
-		if err == context.Canceled || err == context.DeadlineExceeded {
-			return nil, status.FromContextError(err).Err()
-		}
-		if err != nil {
-			log.Printf("Get: await event: %v", err)
-			return nil, status.Error(codes.Internal, "")
-		}
-	} else if in.UseIndex {
-		e, err = channel.GetIndex(ctx, in.Event)
-		if err == deq.ErrNotFound {
-			return nil, status.Error(codes.NotFound, "")
-		}
-		if err != nil {
-			log.Printf("Get: get event by index: %v", err)
-			return nil, status.Error(codes.Internal, "")
-		}
-	} else {
-		e, err = channel.Get(ctx, in.Event)
-		if err == deq.ErrNotFound {
-			return nil, status.Error(codes.NotFound, "")
-		}
-		if err != nil {
-			log.Printf("Get: get event: %v", err)
-			return nil, status.Error(codes.Internal, "")
-		}
+		opts = append(opts, deqopt.Await())
+	}
+
+	e, err = channel.Get(ctx, in.Event, opts...)
+	if err == deq.ErrNotFound {
+		return nil, status.Error(codes.NotFound, "")
+	}
+	if err != nil {
+		log.Printf("Get: get event: %v", err)
+		return nil, status.Error(codes.Internal, "")
 	}
 
 	return eventToProto(e), nil
@@ -280,33 +273,28 @@ func (s *Handler) BatchGet(ctx context.Context, in *pb.BatchGetRequest) (*pb.Bat
 	channel := s.store.Channel(in.Channel, in.Topic)
 	defer channel.Close()
 
-	var events map[string]deq.Event
-	var err error
-
+	var opts []deqopt.BatchGetOption
 	if in.UseIndex {
-		events, err = channel.BatchGetIndex(ctx, in.Events)
-		if err == deq.ErrNotFound {
-			return nil, status.Error(codes.NotFound, "")
-		}
-		if err != nil {
-			log.Printf("Get: get event by index: %v", err)
-			return nil, status.Error(codes.Internal, "")
-		}
-	} else {
-		events, err = channel.BatchGet(ctx, in.Events)
-		if err == deq.ErrNotFound {
-			return nil, status.Error(codes.NotFound, "")
-		}
-		if err != nil {
-			log.Printf("Get: get event: %v", err)
-			return nil, status.Error(codes.Internal, "")
-		}
+		opts = append(opts, deqopt.UseIndex())
+	}
+	if in.AllowNotFound {
+		opts = append(opts, deqopt.AllowNotFound())
+	}
+
+	events, err := channel.BatchGet(ctx, in.Events, opts...)
+	if err == deq.ErrNotFound {
+		return nil, status.Error(codes.NotFound, "")
+	}
+	if err != nil {
+		log.Printf("Get: get event by index: %v", err)
+		return nil, status.Error(codes.Internal, "")
 	}
 
 	result := make(map[string]*pb.Event, len(events))
 	for a, e := range events {
 		result[a] = eventToProto(e)
 	}
+
 	return &pb.BatchGetResponse{
 		Events: result,
 	}, nil
