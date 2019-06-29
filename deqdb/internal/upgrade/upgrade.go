@@ -1,33 +1,42 @@
-package deqdb
+package upgrade
 
 import (
+	"context"
+	"errors"
 	"fmt"
 	"log"
 
 	"github.com/dgraph-io/badger"
-	"gitlab.com/katcheCode/deq/internal/data"
+	"gitlab.com/katcheCode/deq/deqdb/internal/data"
+	"gitlab.com/katcheCode/deq/deqdb/internal/upgrade/v1_1_0"
 )
 
-// upgradeDB upgrades the store's db to the current version.
+// DB upgrades a store's db to the current version.
 // It is not safe to use the database concurrently with upgradeDB.
-func (s *Store) upgradeDB(currentVersion string) error {
+func DB(ctx context.Context, db data.DB, currentVersion string) error {
 
-	switch currentVersion {
-	case dbCodeVersion:
+	if currentVersion == CodeVersion {
 		return nil
-	case "1.0.0":
-		log.Printf("[INFO] upgrading db from 1.0.0 to %s", dbCodeVersion)
+	}
+
+	// Upgrade 1.0.0 to 1.1.0
+	if currentVersion == "1.0.0" {
+		log.Printf("[INFO] upgrading db from 1.0.0 to 1.1.0")
 		batchSize := 500
 		u := &upgradeV1_0_0{}
 		more := true
 		for more {
+			if ctx.Err() != nil {
+				return ctx.Err()
+			}
+
 			err := func() error {
-				txn := s.db.NewTransaction(true)
+				txn := db.NewTransaction(true)
 				defer txn.Discard()
 
 				more = u.NextBatch(txn, batchSize)
 
-				err := txn.Commit(nil)
+				err := txn.Commit()
 				if err != nil {
 					return fmt.Errorf("commit batch: %v", err)
 				}
@@ -39,30 +48,53 @@ func (s *Store) upgradeDB(currentVersion string) error {
 				return err
 			}
 		}
-		log.Printf("[INFO] db upgraded to version %s", dbCodeVersion)
+		currentVersion = "1.1.0"
+	}
 
-	default:
+	// Upgrade 1.1.0 to 1.2.0
+	if currentVersion == "1.1.0" {
+		log.Printf("[INFO] upgrading db from 1.1.0 to 1.2.0")
+		err := v1_1_0.UpgradeToV1_2_0(ctx, db)
+		if err != nil {
+			return fmt.Errorf("upgrade from 1.1.0 to 1.2.0: %v", err)
+		}
+
+		currentVersion = "1.2.0"
+	}
+
+	if currentVersion != CodeVersion {
 		return fmt.Errorf("unsupported on-disk version: %s", currentVersion)
 	}
 
-	txn := s.db.NewTransaction(true)
+	txn := db.NewTransaction(true)
 	defer txn.Discard()
 
-	err := txn.Set([]byte(dbVersionKey), []byte(dbCodeVersion))
+	err := txn.Set([]byte(VersionKey), []byte(CodeVersion))
 	if err != nil {
 		return err
 	}
 
-	err = txn.Commit(nil)
+	err = txn.Commit()
 	if err != nil {
 		return fmt.Errorf("commit db upgrade: %v", err)
 	}
 
+	log.Printf("[INFO] db upgraded to version %s", CodeVersion)
+
 	return nil
 }
 
-func (s *Store) getDBVersion(txn *badger.Txn) (string, error) {
-	item, err := txn.Get([]byte(dbVersionKey))
+// ErrVersionUnknown is returned when the storage version can not be determined.
+var ErrVersionUnknown = errors.New("version unknown")
+
+// StorageVersion returns the current version of the database as saved in the storage engine.
+//
+// badger.ErrKeyNotFound is returned if the database version could not be detected.
+func StorageVersion(txn data.Txn) (string, error) {
+	item, err := txn.Get([]byte(VersionKey))
+	if err == badger.ErrKeyNotFound {
+		return "", ErrVersionUnknown
+	}
 	if err != nil {
 		return "", err
 	}
@@ -82,7 +114,7 @@ type upgradeV1_0_0 struct {
 
 // NextBatch upgrades the database from v1.0.0 to the current version. It is the caller's
 // responsibility to commit the Txn.
-func (u *upgradeV1_0_0) NextBatch(txn *badger.Txn, batchSize int) bool {
+func (u *upgradeV1_0_0) NextBatch(txn data.Txn, batchSize int) bool {
 
 	prefix := []byte{data.IndexTagV1_0_0, data.Sep}
 	if len(u.cursor) == 0 {
@@ -110,16 +142,17 @@ func (u *upgradeV1_0_0) NextBatch(txn *badger.Txn, batchSize int) bool {
 			continue
 		}
 
-		eTime, err := getEventTimePayload(txn, data.EventTimeKey{
+		var eTime data.EventTimePayload
+		err = data.GetEventTimePayload(txn, &data.EventTimeKey{
 			Topic: oldIndex.Topic,
 			ID:    oldIndex.ID,
-		})
+		}, &eTime)
 		if err != nil {
 			log.Printf("get event time payload: %v", err)
 			continue
 		}
 
-		err = writeIndex(txn, data.IndexKey{
+		err = data.WriteIndex(txn, &data.IndexKey{
 			Topic: oldIndex.Topic,
 			Value: oldIndex.Value,
 		}, &data.IndexPayload{
@@ -144,6 +177,8 @@ func (u *upgradeV1_0_0) NextBatch(txn *badger.Txn, batchSize int) bool {
 }
 
 const (
-	dbVersionKey  = "___DEQ_DB_VERSION___"
-	dbCodeVersion = "1.1.0"
+	// VersionKey is the key the current database version is stored under.
+	VersionKey = "___DEQ_DB_VERSION___"
+	// CodeVersion is the database version the running code expects.
+	CodeVersion = "1.2.0"
 )

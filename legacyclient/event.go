@@ -7,7 +7,7 @@ import (
 	"gitlab.com/katcheCode/deq"
 )
 
-// Event is a deserialized event that is sent to or recieved from deq.
+// Event is a deserialized event that is sent to or received from deq.
 type Event struct {
 	ID           string
 	Msg          Message
@@ -22,7 +22,7 @@ func (e Event) Topic() string {
 	return proto.MessageName(e.Msg)
 }
 
-// Equal returns true if e and other are equivelant and false otherwise.
+// Equal returns true if e and other are equivalent and false otherwise.
 func (e Event) Equal(other Event) bool {
 	return e.ID == other.ID &&
 		proto.Equal(e.Msg, other.Msg) &&

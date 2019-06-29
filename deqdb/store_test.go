@@ -2,33 +2,53 @@ package deqdb
 
 import (
 	"context"
+	"flag"
 	"fmt"
-	"io/ioutil"
-	"os"
 	"testing"
 	"time"
 
 	"github.com/google/go-cmp/cmp"
 	"gitlab.com/katcheCode/deq"
+	"gitlab.com/katcheCode/deq/deqdb/internal/data"
 )
 
-func newTestDB() (*Store, func()) {
-	dir, err := ioutil.TempDir("", "test-pub")
-	if err != nil {
-		panic("create temp dir: " + err.Error())
-	}
+var long bool
 
-	db, err := Open(Options{
-		Dir:             dir,
-		UpgradeIfNeeded: true,
-	})
+func init() {
+	flag.BoolVar(&long, "long", false, "run long tests")
+	flag.Parse()
+}
+
+type TestLogger struct {
+	tb     testing.TB
+	prefix string
+}
+
+func (l *TestLogger) Printf(format string, a ...interface{}) {
+	l.tb.Helper()
+	a = append([]interface{}{time.Now().Format("15:04:05.000000"), l.prefix}, a...)
+	l.tb.Logf("%s %s: "+format, a...)
+}
+
+func newTestDB(tb testing.TB) (*Store, func()) {
+	tb.Helper()
+	memdb := data.NewInMemoryDB()
+
+	info := &TestLogger{tb, "INFO"}
+	debug := &TestLogger{tb, "DEBUG"}
+
+	db, err := open(memdb, 40, false, info, debug)
 	if err != nil {
-		panic("open db: " + err.Error())
+		tb.Fatalf("open db: %v", err)
 	}
 
 	return db, func() {
-		db.Close()
-		os.RemoveAll(dir)
+		tb.Helper()
+
+		err := db.Close()
+		if err != nil {
+			tb.Fatal(err)
+		}
 	}
 }
 
@@ -37,7 +57,7 @@ func TestDel(t *testing.T) {
 
 	ctx := context.Background()
 
-	db, discard := newTestDB()
+	db, discard := newTestDB(t)
 	defer discard()
 
 	expected := deq.Event{
@@ -75,7 +95,7 @@ func TestPub(t *testing.T) {
 
 	ctx := context.Background()
 
-	db, discard := newTestDB()
+	db, discard := newTestDB(t)
 	defer discard()
 
 	expected := deq.Event{
@@ -84,6 +104,7 @@ func TestPub(t *testing.T) {
 		CreateTime:   time.Now(),
 		DefaultState: deq.StateQueued,
 		State:        deq.StateQueued,
+		SendCount:    1,
 	}
 
 	channel := db.Channel("channel", expected.Topic)
@@ -108,6 +129,14 @@ func TestPub(t *testing.T) {
 	if err != nil {
 		t.Fatalf("get: %v", err)
 	}
+	// SendCount is only eventually consistent, so it might not have updated yet
+	if event.SendCount < 0 || event.SendCount > 1 {
+		t.Errorf("get: send count: want 0 or 1, got %d", event.SendCount)
+	}
+	expected.SendCount = event.SendCount
+	if !cmp.Equal(event, expected) {
+		t.Errorf("get:\n%s", cmp.Diff(expected, event))
+	}
 	if !cmp.Equal(event, expected) {
 		t.Errorf("get:\n%s", cmp.Diff(expected, event))
 	}
@@ -118,7 +147,7 @@ func TestMassPub(t *testing.T) {
 
 	ctx := context.Background()
 
-	db, discard := newTestDB()
+	db, discard := newTestDB(t)
 	defer discard()
 
 	topic := "topic"
@@ -164,55 +193,119 @@ func TestPubDuplicate(t *testing.T) {
 
 	ctx := context.Background()
 
-	db, discard := newTestDB()
+	db, discard := newTestDB(t)
 	defer discard()
 
-	expected := deq.Event{
+	want := deq.Event{
 		ID:           "event1",
 		Topic:        "topic",
 		CreateTime:   time.Now(),
 		DefaultState: deq.StateQueued,
 		State:        deq.StateQueued,
+		SendCount:    1,
 	}
 
-	channel := db.Channel("channel", expected.Topic)
+	channel := db.Channel("channel", want.Topic)
 	defer channel.Close()
 
 	// Publish the event
-	_, err := db.Pub(ctx, expected)
+	_, err := db.Pub(ctx, want)
 	if err != nil {
 		t.Fatalf("pub: %v", err)
 	}
 
 	// Publish and verify event with same id and payload
-	_, err = db.Pub(ctx, expected)
+	_, err = db.Pub(ctx, want)
 	if err != nil {
-		t.Fatalf("identifical duplicate pub: %v", err)
+		t.Fatalf("identical duplicate pub: %v", err)
 	}
 
 	// Publish and verify event with same id and different payload
-	expected.Payload = []byte{1}
-	_, err = db.Pub(ctx, expected)
+	want.Payload = []byte{1}
+	_, err = db.Pub(ctx, want)
 	if err != deq.ErrAlreadyExists {
 		t.Fatalf("modified duplicate pub: %v", err)
 	}
-	expected.Payload = nil
+	want.Payload = nil
 
-	event, err := channel.Next(context.Background())
+	got, err := channel.Next(context.Background())
 	if err != nil {
 		t.Fatalf("get next: %v", err)
 	}
-	if !cmp.Equal(event, expected) {
-		t.Errorf("get next:\n%s", cmp.Diff(expected, event))
+	if !cmp.Equal(want, got) {
+		t.Errorf("get next:\n%s", cmp.Diff(want, got))
+	}
+}
+
+func TestMassPublish(t *testing.T) {
+	t.Parallel()
+
+	ctx := context.Background()
+
+	db, discard := newTestDB(t)
+	defer discard()
+
+	for i := 0; i <= 500; i++ {
+		id := fmt.Sprintf("%.3d", i)
+		_, err := db.Pub(ctx, deq.Event{
+			ID:      id,
+			Topic:   "TestMassPublish",
+			Payload: []byte(id),
+		})
+		if err != nil {
+			t.Fatalf("create event %d: %v", i, err)
+		}
 	}
 
-	expected.State = deq.StateQueued
+	channel := db.Channel("Channel1", "TestMassPublish")
+	defer channel.Close()
 
-	event, err = channel.Get(ctx, expected.ID)
+	channel.SetIdleTimeout(time.Second / 3)
+
+	var events1 []deq.Event
+	err := channel.Sub(ctx, func(ctx context.Context, e deq.Event) (*deq.Event, error) {
+		events1 = append(events1, e)
+		return nil, nil
+	})
 	if err != nil {
-		t.Fatalf("get: %v", err)
+		t.Fatalf("streaming events before publishing: %v", err)
 	}
-	if !cmp.Equal(event, expected) {
-		t.Errorf("get:\n%s", cmp.Diff(expected, event))
+
+	for i := 500; i < 1000; i++ {
+		id := fmt.Sprintf("%.3d", i)
+		_, err = db.Pub(ctx, deq.Event{
+			ID:      id,
+			Topic:   "TestMassPublish",
+			Payload: []byte(id),
+		})
+		if err != nil {
+			t.Fatalf("Error Creating Event: %v", err)
+		}
+	}
+
+	var events2 []deq.Event
+	err = channel.Sub(ctx, func(ctx context.Context, e deq.Event) (*deq.Event, error) {
+		events1 = append(events1, e)
+		return nil, nil
+	})
+	if err != nil {
+		t.Fatalf("streaming events after publishing: %v", err)
+	}
+
+	events := append(events1, events2...)
+
+	var missed []int
+outer:
+	for i := 0; i < 1000; i++ {
+		for _, m := range events {
+			if string(m.Payload) == fmt.Sprintf("%.3d", i) {
+				continue outer
+			}
+		}
+		missed = append(missed, i)
+	}
+
+	if len(missed) > 0 {
+		t.Fatalf("Missed messages: %v", missed)
 	}
 }

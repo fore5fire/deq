@@ -21,13 +21,11 @@ service DEQ {
   rpc List (ListRequest) returns (ListResponse);
   // Del deletes an event. Currently unimplemented.
   rpc Del (DelRequest) returns (Empty);
-  // Topics returns all topics for which an event has been published.
-  rpc Topics (TopicsRequest) returns (TopicsResponse);
 }
 
 // Events wrap arbitrary data published on a particular topic and retrived on a particular channel.
-// The same event retrieved on different channels may have a different state and requeue_count, as
-// these fields are channel specific.
+// The same event retrieved on different channels may have a different state, send_count, and
+// backoff_rate, as these fields are channel specific.
 message Event {
   // The unique identifier for the event. Use a deterministic id for request idempotency.
   // Required.
@@ -43,20 +41,25 @@ message Event {
   sfixed64 create_time = 4;
   // Indexes of the event.
   repeated string indexes = 8;
-  // The initial state of this event for existing channels. If not QUEUED, the event will be created
-  // but not sent to subscribers of topic.
+  // The initial state of this event for existing channels. If not QUEUED, QUEUED_LINEAR, or
+  // QUEUED_CONSTANT, the event will be created but not sent to subscribers of the topic.
   State default_state = 5;
-  // State of the event for the channel it is recieved on.
+  // State of the event for the channel it is received on.
   // Output only.
   State state = 6;
-  // Number of attempts to send the event on the channel it is recieved on.
+  // Number of attempts to send the event on the channel it is received on.
   // Output only.
-  int32 requeue_count = 7;
+  int32 send_count = 7;
 
   enum State {
     UNSPECIFIED_STATE = 0;
-    // QUEUED indicates the event is queued on the channel.
+    // QUEUED indicates the event is queued on the channel with exponential backoff.
     QUEUED = 1;
+    // QUEUED_LINEAR indicates the event is queued on the channel with linear backoff.
+    QUEUED_LINEAR = 7;
+    // QUEUED_CONSTANT indicates the event is queued on the channel with no backoff.
+    QUEUED_CONSTANT = 8;
+
     // OK indicates the event was processed successfully.
     OK = 2;
     // INTERNAL indicates the event was not processed successfully because of an internal error.
@@ -64,6 +67,9 @@ message Event {
     // INVALID indicates the event was not processed successfully because it contains one or invalid
     // more invalid fields.
     INVALID = 5;
+    // SEND_LIMIT_REACHED indicates that the event was dequeued automatically after reaching its
+	  // send limit.
+    SEND_LIMIT_REACHED = 6;
 
     // DEQUEUED_ERROR is a legacy event state. Use INTERNAL or INVALID instead.
     DEQUEUED_ERROR = 3;
@@ -91,14 +97,14 @@ message SubRequest {
   // string min_id = 3;
   // // Events with id lexiographically greater than max_id will not be sent.
   // string max_id = 4;
-  // Deprecated. If true, equivelant to idle_timout_milliseconds = 1000.
+  // Deprecated. If true, equivalent to idle_timout_milliseconds = 1000.
   bool follow = 5;
   // If positive, the request will not complete until the channel is idle for the specified number
   // of milliseconds.
   int32 idle_timeout_milliseconds = 7;
-  // Number of milliseconds to wait before requeuing the event if it is not dequeued.
+  // Number of milliseconds to wait before resending the event if it is not dequeued.
   // Defaults to 8000.
-  int32 requeue_delay_milliseconds = 6;
+  int32 resend_delay_milliseconds = 6;
 }
 
 message AckRequest {
@@ -127,15 +133,14 @@ enum AckCode {
   // Set the event's state to INTERNAL. This dequeues the event from the channel.
   INTERNAL = 8;
 
-  // Sets the event's state to QUEUED and requeues the event on the channel with an
-  // exponential backoff.
+  // Sets the event's state on the channel to QUEUED.
   REQUEUE = 5;
-  // Sets the event's state to QUEUED and requeues the event on the channel with a linear backoff.
+  // Sets the event's state on the channel to QUEUED_LINEAR.
   REQUEUE_LINEAR = 4;
-  // Sets the event's state to QUEUED and requeues the event on the channel with no backoff.
+  // Sets the event's state on the channel to QUEUED_CONSTANT.
   REQUEUE_CONSTANT = 3;
 
-  // Reset the requeue timeout of the event.
+  // Reset the requeue timeout of the event. Currently unimplemented.
   RESET_TIMEOUT = 6;
 
   // DEQUEUE_ERROR is a legacy option. Use INTERNAL or INVALID instead.

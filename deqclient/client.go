@@ -113,10 +113,16 @@ func eventStateFromProto(state api.Event_State) deq.State {
 		return deq.StateOK
 	case api.Event_QUEUED:
 		return deq.StateQueued
+	case api.Event_QUEUED_LINEAR:
+		return deq.StateQueuedLinear
+	case api.Event_QUEUED_CONSTANT:
+		return deq.StateQueuedConstant
 	case api.Event_INTERNAL:
 		return deq.StateInternal
 	case api.Event_INVALID:
 		return deq.StateInvalid
+	case api.Event_SEND_LIMIT_REACHED:
+		return deq.StateSendLimitReached
 	case api.Event_DEQUEUED_ERROR:
 		return deq.StateDequeuedError
 	default:
@@ -130,10 +136,16 @@ func eventStateToProto(state deq.State) api.Event_State {
 		return api.Event_OK
 	case deq.StateQueued:
 		return api.Event_QUEUED
+	case deq.StateQueuedLinear:
+		return api.Event_QUEUED_LINEAR
+	case deq.StateQueuedConstant:
+		return api.Event_QUEUED_CONSTANT
 	case deq.StateInternal:
 		return api.Event_INTERNAL
 	case deq.StateInvalid:
 		return api.Event_INVALID
+	case deq.StateSendLimitReached:
+		return api.Event_SEND_LIMIT_REACHED
 	case deq.StateDequeuedError:
 		return api.Event_DEQUEUED_ERROR
 	default:
@@ -157,7 +169,7 @@ func eventFromProto(e *api.Event) deq.Event {
 		Indexes:      e.Indexes,
 		DefaultState: eventStateFromProto(e.DefaultState),
 		State:        eventStateFromProto(e.State),
-		RequeueCount: int(e.RequeueCount),
+		SendCount:    int(e.SendCount),
 	}
 }
 
@@ -177,6 +189,6 @@ func eventToProto(e deq.Event) *api.Event {
 		Indexes:      e.Indexes,
 		DefaultState: eventStateToProto(e.DefaultState),
 		State:        eventStateToProto(e.State),
-		RequeueCount: int32(e.RequeueCount),
+		SendCount:    int32(e.SendCount),
 	}
 }

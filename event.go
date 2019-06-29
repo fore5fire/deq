@@ -24,12 +24,12 @@ type Event struct {
 	// DefaultState is the initial state of this event for existing channels. If not EventStateQueued,
 	// the event will be created but not sent to subscribers of topic.
 	DefaultState State
-	// EventState is the state of the event in the channel it is recieved on.
+	// EventState is the state of the event in the channel it is received on.
 	// Output only.
 	State State
-	// RequeueCount is the number of attempts to send the event to the channel it is recieved on.
+	// SendCount is the number of attempts to send the event to the channel it is received on.
 	// Output only.
-	RequeueCount int
+	SendCount int
 }
 
 // State is the state of an event on a specific channel.
@@ -37,19 +37,34 @@ type State int
 
 const (
 	// StateUnspecified is the default value of an EventState.
-	StateUnspecified State = iota
-	// StateQueued indicates that the event is queued on the channel.
-	StateQueued
+	StateUnspecified State = 0
+
+	// StateQueued indicates that the event is queued on the channel with exponential backoff. The
+	// send delay for the event is calculated as 2^send_count * initial once send_count is greater
+	// than zero.
+	StateQueued State = 1
+	// StateQueuedLinear indicates that the event is queued on the channel with linear backoff. The
+	// send delay for the event is calculated as send_count * initial.
+	StateQueuedLinear State = 7
+	// StateQueuedConstant indicates that the event is queued on the channel with no backoff. The
+	// send delay for the event is equal to the initial rate once send_count is greater than zero.
+	StateQueuedConstant State = 8
+
 	// StateOK indicates that the event was processed successfully and is not queued on
 	// the channel.
-	StateOK
-	// StateDequeuedError is a legacy option. Use StateInvalid or StateInternal instead.
-	StateDequeuedError
+	StateOK State = 2
 	// StateInvalid indicates that the event has one or more fields has an invalid value. The
 	// event's creator should create a new event with the invalid fields corrected.
-	StateInvalid
+	StateInvalid State = 4
 	// StateInternal indicates that the event encountered an internal error durring processing.
-	StateInternal
+	StateInternal State = 5
+	// StateSendLimitReached indicates that the event was dequeued automatically after reaching its
+	// send limit.
+	StateSendLimitReached State = 6
+
+	// StateDequeuedError is a legacy option. Use StateInvalid or StateInternal instead.
+	StateDequeuedError State = 3
+
 	// DefaultState is the default event state for new events if none is specified.
 	DefaultState = StateQueued
 )
@@ -60,12 +75,18 @@ func (s State) String() string {
 		return ""
 	case StateQueued:
 		return "Queued"
+	case StateQueuedLinear:
+		return "QueuedLinear"
+	case StateQueuedConstant:
+		return "QueuedConstant"
 	case StateOK:
 		return "OK"
 	case StateInvalid:
 		return "Invalid"
 	case StateInternal:
 		return "Internal"
+	case StateSendLimitReached:
+		return "SendLimitReached"
 	case StateDequeuedError:
 		return "DequeuedError"
 	default:

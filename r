@@ -13,7 +13,7 @@ GOOS=linux CGO_ENABLED=0 GOMAXPROCS=128 go build -o build/deqd gitlab.com/katche
 docker build --tag=deqd:local build
 
 echo starting server
-docker run -itd --rm --name=deqd -p 8080:8080 -e PORT=8080 -e DEQ_LISTEN_INSECURE=true deqd:local
+docker run -itd --rm --name=deqd -p 8080:8080 -e PORT=8080 -e DEQ_DEBUG=true -e DEQ_LISTEN_INSECURE=true deqd:local
 
 docker logs deqd -f | sed -e 's/^/SERVER: /;' &
 LOGS_PID=$!

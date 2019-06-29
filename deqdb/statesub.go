@@ -62,7 +62,7 @@ func (c *Channel) NewEventStateSubscription(id string) *EventStateSubscription {
 	return sub
 }
 
-// Next blocks until an update is recieved, then returns the new state.
+// Next blocks until an update is received, then returns the new state.
 //
 // It's possible for a subscription to miss updates if its internal buffer is full. In this case,
 // it will skip earlier updates while preserving update order, such that the current state is always

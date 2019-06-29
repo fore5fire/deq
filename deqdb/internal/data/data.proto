@@ -2,7 +2,12 @@ syntax = "proto3";
 
 message ChannelPayload {
   EventState event_state = 1;
-  int32 requeue_count = 2;
+  // Deprecated as of db format v1.2.0. In db v1.2.0 and later, use SendCount message instead.
+  int32 deprecated_send_count = 2;
+}
+
+message SendCount {
+  int32 send_count = 1;
 }
 
 message EventTimePayload {
@@ -23,8 +28,11 @@ message EventPayload {
 enum EventState {
   UNSPECIFIED_STATE = 0;
   QUEUED = 1;
+  QUEUED_LINEAR = 7;
+  QUEUED_CONSTANT = 8;
   OK = 2;
   INVALID = 4;
   INTERNAL = 5;
+  SEND_LIMIT_EXCEEDED = 6;
   DEQUEUED_ERROR = 3;
 }

@@ -9,298 +9,11 @@ import (
 	"gitlab.com/katcheCode/deq"
 )
 
-func TestEmptyTopicIter(t *testing.T) {
-	t.Parallel()
-	ctx := context.Background()
-
-	db, discard := newTestDB()
-	defer discard()
-
-	iter := db.NewTopicIter(nil)
-	defer iter.Close()
-
-	for iter.Next(ctx) {
-		t.Errorf("iterate empty db: %v", iter.Topic())
-	}
-}
-
-func TestTopicIter(t *testing.T) {
-	t.Parallel()
-
-	ctx := context.Background()
-
-	db, discard := newTestDB()
-	defer discard()
-
-	events := []deq.Event{
-		{
-			ID:         "event1",
-			Topic:      "TopicA",
-			CreateTime: time.Now(),
-		},
-		{
-			ID:         "event2",
-			Topic:      "TopicA",
-			CreateTime: time.Now(),
-		},
-		{
-			ID:         "event1",
-			Topic:      "TopicB",
-			CreateTime: time.Now(),
-		},
-		{
-			ID:         "event2",
-			Topic:      "TopicB",
-			CreateTime: time.Now(),
-		},
-		{
-			ID:         "event2",
-			Topic:      "TopicC",
-			CreateTime: time.Now(),
-		},
-	}
-
-	for _, e := range events {
-		_, err := db.Pub(ctx, e)
-		if err != nil {
-			t.Fatalf("pub: %v", err)
-		}
-	}
-
-	expected := []string{"TopicA", "TopicB", "TopicC"}
-	var actual []string
-
-	iter := db.NewTopicIter(nil)
-	defer iter.Close()
-
-	for iter.Next(ctx) {
-		actual = append(actual, iter.Topic())
-	}
-
-	if !cmp.Equal(actual, expected) {
-		t.Errorf("\n%s", cmp.Diff(expected, actual))
-	}
-}
-
-func TestTopicIterReversed(t *testing.T) {
-	t.Parallel()
-
-	ctx := context.Background()
-
-	db, discard := newTestDB()
-	defer discard()
-
-	events := []deq.Event{
-		{
-			ID:         "event1",
-			Topic:      "TopicA",
-			CreateTime: time.Now(),
-		},
-		{
-			ID:         "event2",
-			Topic:      "TopicA",
-			CreateTime: time.Now(),
-		},
-		{
-			ID:         "event1",
-			Topic:      "TopicB",
-			CreateTime: time.Now(),
-		},
-		{
-			ID:         "event2",
-			Topic:      "TopicB",
-			CreateTime: time.Now(),
-		},
-		{
-			ID:         "event2",
-			Topic:      "TopicC",
-			CreateTime: time.Now(),
-		},
-	}
-
-	for _, e := range events {
-		_, err := db.Pub(ctx, e)
-		if err != nil {
-			t.Fatalf("pub: %v", err)
-		}
-	}
-
-	expected := []string{"TopicC", "TopicB", "TopicA"}
-	var actual []string
-
-	iter := db.NewTopicIter(&deq.IterOptions{
-		Reversed: true,
-	})
-	defer iter.Close()
-
-	for iter.Next(ctx) {
-		actual = append(actual, iter.Topic())
-	}
-
-	if !cmp.Equal(actual, expected) {
-		t.Errorf("\n%s", cmp.Diff(expected, actual))
-	}
-}
-
-func TestTopicIterMin(t *testing.T) {
-	t.Parallel()
-
-	ctx := context.Background()
-
-	db, discard := newTestDB()
-	defer discard()
-
-	events := []deq.Event{
-		{
-			ID:         "event1",
-			Topic:      "TopicA",
-			CreateTime: time.Now(),
-		},
-		{
-			ID:         "event2",
-			Topic:      "TopicA",
-			CreateTime: time.Now(),
-		},
-		{
-			ID:         "event1",
-			Topic:      "TopicB",
-			CreateTime: time.Now(),
-		},
-		{
-			ID:         "event2",
-			Topic:      "TopicB",
-			CreateTime: time.Now(),
-		},
-		{
-			ID:         "event2",
-			Topic:      "TopicC",
-			CreateTime: time.Now(),
-		},
-	}
-
-	for _, e := range events {
-		_, err := db.Pub(ctx, e)
-		if err != nil {
-			t.Fatalf("pub: %v", err)
-		}
-	}
-
-	expected := []string{"TopicB", "TopicC"}
-	var actual []string
-
-	iter := db.NewTopicIter(&deq.IterOptions{
-		Min: "TopicAA",
-	})
-	defer iter.Close()
-
-	for iter.Next(ctx) {
-		actual = append(actual, iter.Topic())
-	}
-
-	if !cmp.Equal(actual, expected) {
-		t.Errorf("\n%s", cmp.Diff(expected, actual))
-	}
-
-	expected = []string{"TopicA", "TopicB", "TopicC"}
-	actual = nil
-
-	// Test inclusive boundry
-	iter2 := db.NewTopicIter(&deq.IterOptions{
-		Min: "TopicA",
-	})
-	defer iter2.Close()
-
-	for iter2.Next(ctx) {
-		actual = append(actual, iter2.Topic())
-	}
-
-	if !cmp.Equal(actual, expected) {
-		t.Errorf("\n%s", cmp.Diff(expected, actual))
-	}
-}
-
-func TestTopicIterMax(t *testing.T) {
-	t.Parallel()
-
-	ctx := context.Background()
-
-	db, discard := newTestDB()
-	defer discard()
-
-	events := []deq.Event{
-		{
-			ID:         "event1",
-			Topic:      "TopicA",
-			CreateTime: time.Now(),
-		},
-		{
-			ID:         "event2",
-			Topic:      "TopicA",
-			CreateTime: time.Now(),
-		},
-		{
-			ID:         "event1",
-			Topic:      "TopicB",
-			CreateTime: time.Now(),
-		},
-		{
-			ID:         "event2",
-			Topic:      "TopicB",
-			CreateTime: time.Now(),
-		},
-		{
-			ID:         "event2",
-			Topic:      "TopicC",
-			CreateTime: time.Now(),
-		},
-	}
-
-	for _, e := range events {
-		_, err := db.Pub(ctx, e)
-		if err != nil {
-			t.Fatalf("pub: %v", err)
-		}
-	}
-
-	expected := []string{"TopicA", "TopicB"}
-	var actual []string
-
-	iter := db.NewTopicIter(&deq.IterOptions{
-		Max: "TopicBB",
-	})
-	defer iter.Close()
-
-	for iter.Next(ctx) {
-		actual = append(actual, iter.Topic())
-	}
-
-	if !cmp.Equal(actual, expected) {
-		t.Errorf("\n%s", cmp.Diff(expected, actual))
-	}
-
-	expected = []string{"TopicA", "TopicB", "TopicC"}
-	actual = nil
-
-	// Test inclusive boundry
-	iter2 := db.NewTopicIter(&deq.IterOptions{
-		Max: "TopicC",
-	})
-	defer iter2.Close()
-
-	for iter2.Next(ctx) {
-		actual = append(actual, iter2.Topic())
-	}
-
-	if !cmp.Equal(actual, expected) {
-		t.Errorf("test inclusive boundry:\n%s", cmp.Diff(expected, actual))
-	}
-}
-
 func TestEmptyEventIter(t *testing.T) {
 	t.Parallel()
 	ctx := context.Background()
 
-	db, discard := newTestDB()
+	db, discard := newTestDB(t)
 	defer discard()
 
 	channel := db.Channel("channel1", "topic1")
@@ -319,7 +32,7 @@ func TestEventIter(t *testing.T) {
 
 	ctx := context.Background()
 
-	db, discard := newTestDB()
+	db, discard := newTestDB(t)
 	defer discard()
 
 	createTime := time.Now()
@@ -391,7 +104,7 @@ func TestEventIterReversed(t *testing.T) {
 
 	ctx := context.Background()
 
-	db, discard := newTestDB()
+	db, discard := newTestDB(t)
 	defer discard()
 
 	createTime := time.Now()
@@ -464,7 +177,7 @@ func TestEmptyIndexIter(t *testing.T) {
 	t.Parallel()
 	ctx := context.Background()
 
-	db, discard := newTestDB()
+	db, discard := newTestDB(t)
 	defer discard()
 
 	channel := db.Channel("channel1", "topic1")
@@ -483,7 +196,7 @@ func TestIndexIter(t *testing.T) {
 
 	ctx := context.Background()
 
-	db, discard := newTestDB()
+	db, discard := newTestDB(t)
 	defer discard()
 
 	firstTime := time.Now().Round(0)
@@ -588,7 +301,7 @@ func TestIndexIterReversed(t *testing.T) {
 
 	ctx := context.Background()
 
-	db, discard := newTestDB()
+	db, discard := newTestDB(t)
 	defer discard()
 
 	createTime := time.Now()
@@ -678,7 +391,7 @@ func TestIndexIterLimits(t *testing.T) {
 
 	ctx := context.Background()
 
-	db, discard := newTestDB()
+	db, discard := newTestDB(t)
 	defer discard()
 
 	createTime := time.Now()

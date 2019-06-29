@@ -3,9 +3,9 @@ package handler
 import (
 	"context"
 	"log"
-	"math"
 	"time"
 
+	"gitlab.com/katcheCode/deq/ack"
 	"gitlab.com/katcheCode/deq/deqopt"
 
 	"gitlab.com/katcheCode/deq"
@@ -85,7 +85,7 @@ func (s *Handler) Sub(in *pb.SubRequest, stream pb.DEQ_SubServer) error {
 		return status.Error(codes.InvalidArgument, "Missing required argument 'channel'")
 	}
 
-	baseRequeueDelay := time.Duration(in.RequeueDelayMilliseconds) * time.Millisecond
+	baseRequeueDelay := time.Duration(in.ResendDelayMilliseconds) * time.Millisecond
 	if baseRequeueDelay == 0 {
 		baseRequeueDelay = 8 * time.Second
 	}
@@ -97,41 +97,32 @@ func (s *Handler) Sub(in *pb.SubRequest, stream pb.DEQ_SubServer) error {
 	channel := s.store.Channel(in.Channel, in.Topic)
 	defer channel.Close()
 
-	channel.BackoffFunc(deqdb.ExponentialBackoff(baseRequeueDelay))
+	channel.SetInitialResendDelay(baseRequeueDelay)
+	channel.SetIdleTimeout(idleTimeout)
 
-	nextCtx := stream.Context()
-	cancel := func() {}
-	defer cancel()
-
-	for {
-
-		if idleTimeout > 0 {
-			cancel()
-			nextCtx, cancel = context.WithTimeout(stream.Context(), idleTimeout)
-		}
-
-		e, err := channel.Next(nextCtx)
-		if err == context.DeadlineExceeded || err == context.Canceled {
-			if err == stream.Context().Err() { // error is from actual request context
-				return status.FromContextError(stream.Context().Err()).Err()
-			}
-			if channel.Idle() {
-				return nil
-			}
-			continue
+	// TODO: get error info from client
+	err := channel.Sub(stream.Context(), func(ctx context.Context, e deq.Event) (*deq.Event, error) {
+		err := stream.Send(eventToProto(e))
+		if err != nil && err == ctx.Err() {
+			return nil, status.FromContextError(stream.Context().Err()).Err()
 		}
 		if err != nil {
-			log.Printf("Sub: get next event from channel: %v", err)
-			return status.Error(codes.Internal, "")
+			log.Printf("Sub: send event: %v", err)
+			return nil, status.Error(codes.Unavailable, "")
 		}
-
-		err = stream.Send(eventToProto(e))
-		if err != nil {
-			// channel.RequeueEvent(e, 0)
-			log.Printf("send event: %v", err)
-			return status.Error(codes.Internal, "")
-		}
+		return nil, ack.Error(ack.NoOp, "")
+	})
+	if err != nil && err == stream.Context().Err() {
+		return status.FromContextError(stream.Context().Err()).Err()
 	}
+	if err != nil {
+		log.Printf("Sub: %v", err)
+		return status.Error(codes.Internal, "")
+	}
+
+	// IdleTimeout reached
+
+	return nil
 }
 
 // Ack implements DEQ.Ack
@@ -157,9 +148,14 @@ func (s *Handler) Ack(ctx context.Context, in *pb.AckRequest) (*pb.AckResponse, 
 		eventState = deq.StateInternal
 	case pb.AckCode_DEQUEUE_ERROR:
 		eventState = deq.StateDequeuedError
-	case pb.AckCode_REQUEUE_CONSTANT, pb.AckCode_REQUEUE_LINEAR, pb.AckCode_REQUEUE:
-		eventState = deq.StateQueued
 	case pb.AckCode_RESET_TIMEOUT:
+		// TODO: implement RESET_TIMEOUT ack code.
+	case pb.AckCode_REQUEUE:
+		eventState = deq.StateQueued
+	case pb.AckCode_REQUEUE_LINEAR:
+		eventState = deq.StateQueuedLinear
+	case pb.AckCode_REQUEUE_CONSTANT:
+		eventState = deq.StateQueuedConstant
 
 	case pb.AckCode_UNSPECIFIED:
 		return nil, status.Error(codes.InvalidArgument, "argument code is required")
@@ -170,43 +166,13 @@ func (s *Handler) Ack(ctx context.Context, in *pb.AckRequest) (*pb.AckResponse, 
 	channel := s.store.Channel(in.Channel, in.Topic)
 	defer channel.Close()
 
-	e, err := channel.Get(ctx, in.EventId)
-	if err == deq.ErrNotFound {
-		return nil, status.Error(codes.NotFound, "")
-	}
-	if err != nil {
-		log.Printf("Delete: get event: %v", err)
-		return nil, status.Error(codes.Internal, "")
-	}
-
-	err = channel.SetEventState(ctx, in.EventId, eventState)
+	err := channel.SetEventState(ctx, in.EventId, eventState)
 	if err == deq.ErrNotFound {
 		return nil, status.Error(codes.NotFound, "")
 	}
 	if err != nil {
 		log.Printf("set event %s status: %v", in.EventId, err)
 		return nil, status.Error(codes.Internal, "")
-	}
-
-	if eventState == deq.StateQueued {
-
-		baseTime := time.Second
-		var delay time.Duration
-		switch in.Code {
-		case pb.AckCode_REQUEUE:
-			cappedRequeue := math.Min(float64(e.RequeueCount), 12)
-			delay = time.Duration(math.Pow(2, cappedRequeue)) * baseTime
-		case pb.AckCode_REQUEUE_LINEAR:
-			delay = baseTime * time.Duration(e.RequeueCount+1)
-		case pb.AckCode_REQUEUE_CONSTANT:
-			delay = baseTime
-		}
-
-		if delay < 0 || delay > time.Hour {
-			delay = time.Hour
-		}
-
-		channel.RequeueEvent(ctx, e, delay)
 	}
 
 	return &pb.AckResponse{}, nil
@@ -381,25 +347,6 @@ func (s *Handler) Del(ctx context.Context, in *pb.DelRequest) (*pb.Empty, error)
 	return &pb.Empty{}, nil
 }
 
-// Topics implements DEQ.Topics
-func (s *Handler) Topics(ctx context.Context, in *pb.TopicsRequest) (*pb.TopicsResponse, error) {
-
-	var topics []string
-
-	// TODO: expose paging and sorting options
-
-	iter := s.store.NewTopicIter(&deq.IterOptions{})
-	defer iter.Close()
-
-	for ctx.Err() == nil && iter.Next(ctx) {
-		topics = append(topics, iter.Topic())
-	}
-
-	return &pb.TopicsResponse{
-		Topics: topics,
-	}, nil
-}
-
 func eventToProto(e deq.Event) *pb.Event {
 	return &pb.Event{
 		Id:           e.ID,
@@ -409,7 +356,7 @@ func eventToProto(e deq.Event) *pb.Event {
 		CreateTime:   e.CreateTime.UnixNano(),
 		DefaultState: stateToProto(e.DefaultState),
 		State:        stateToProto(e.State),
-		RequeueCount: int32(e.RequeueCount),
+		SendCount:    int32(e.SendCount),
 	}
 }
 
@@ -422,7 +369,7 @@ func protoToEvent(e *pb.Event) deq.Event {
 		CreateTime:   time.Unix(0, e.CreateTime),
 		DefaultState: protoToState(e.DefaultState),
 		State:        protoToState(e.State),
-		RequeueCount: int(e.RequeueCount),
+		SendCount:    int(e.SendCount),
 	}
 }
 
@@ -432,12 +379,18 @@ func protoToState(s pb.Event_State) deq.State {
 		return deq.StateUnspecified
 	case pb.Event_QUEUED:
 		return deq.StateQueued
+	case pb.Event_QUEUED_LINEAR:
+		return deq.StateQueuedLinear
+	case pb.Event_QUEUED_CONSTANT:
+		return deq.StateQueuedConstant
 	case pb.Event_OK:
 		return deq.StateOK
 	case pb.Event_INTERNAL:
 		return deq.StateInternal
 	case pb.Event_INVALID:
 		return deq.StateInvalid
+	case pb.Event_SEND_LIMIT_REACHED:
+		return deq.StateSendLimitReached
 	case pb.Event_DEQUEUED_ERROR:
 		return deq.StateDequeuedError
 	default:
@@ -451,12 +404,18 @@ func stateToProto(s deq.State) pb.Event_State {
 		return pb.Event_UNSPECIFIED_STATE
 	case deq.StateQueued:
 		return pb.Event_QUEUED
+	case deq.StateQueuedLinear:
+		return pb.Event_QUEUED_LINEAR
+	case deq.StateQueuedConstant:
+		return pb.Event_QUEUED_CONSTANT
 	case deq.StateOK:
 		return pb.Event_OK
 	case deq.StateInternal:
 		return pb.Event_INTERNAL
 	case deq.StateInvalid:
 		return pb.Event_INVALID
+	case deq.StateSendLimitReached:
+		return pb.Event_SEND_LIMIT_REACHED
 	case deq.StateDequeuedError:
 		return pb.Event_DEQUEUED_ERROR
 	default:

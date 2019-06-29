@@ -1,0 +1,10 @@
+syntax = "proto3";
+package deq.events;
+
+option go_package = "deqtype";
+
+// Topic events are published automatically the first time an event is published to a topic.
+message Topic {
+  // The name of the new topic.
+  string topic = 1;
+}

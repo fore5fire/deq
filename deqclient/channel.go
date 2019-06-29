@@ -22,6 +22,9 @@ type clientChannel struct {
 	client      deq.Client
 	deqClient   api.DEQClient
 	name, topic string
+
+	initialDelay time.Duration
+	idleTimeout  time.Duration
 }
 
 func (c *Client) Channel(name, topic string) deq.Channel {
@@ -40,6 +43,16 @@ func (c *Client) Channel(name, topic string) deq.Channel {
 		name:      name,
 		topic:     topic,
 	}
+}
+
+// SetInitialResendDelay sets the initial send delay of an event's first resend on the channel.
+// This is used as a base value from which any backoff is applied.
+func (c *clientChannel) SetInitialResendDelay(delay time.Duration) {
+	c.initialDelay = delay
+}
+
+func (c *clientChannel) SetIdleTimeout(idleTimeout time.Duration) {
+	c.idleTimeout = idleTimeout
 }
 
 func (c *clientChannel) Get(ctx context.Context, event string, options ...deqopt.GetOption) (deq.Event, error) {
@@ -123,11 +136,14 @@ func (c *clientChannel) SetEventState(ctx context.Context, id string, state deq.
 
 func (c *clientChannel) Sub(ctx context.Context, handler deq.SubHandler) error {
 	ctx, cancel := context.WithCancel(ctx)
+	defer cancel()
 
 	stream, err := c.deqClient.Sub(ctx, &api.SubRequest{
-		Channel: c.name,
-		Topic:   c.topic,
-		Follow:  true,
+		Channel:                 c.name,
+		Topic:                   c.topic,
+		Follow:                  c.idleTimeout == 0,
+		ResendDelayMilliseconds: int32(c.initialDelay.Nanoseconds() / int64(time.Millisecond)),
+		IdleTimeoutMilliseconds: int32(c.idleTimeout.Nanoseconds() / int64(time.Millisecond)),
 	})
 	if err != nil {
 		return err
@@ -174,8 +190,12 @@ func (c *clientChannel) Sub(ctx context.Context, handler deq.SubHandler) error {
 					log.Printf("handle channel %q topic %q event %q: %v", c.name, c.topic, result.req.ID, result.err)
 				}
 
-				code := codeToProto(ack.ErrorCode(result.err))
+				ackCode := ack.ErrorCode(result.err)
+				if ackCode == ack.NoOp {
+					continue
+				}
 
+				code := codeToProto(ackCode)
 				_, err := c.deqClient.Ack(ctx, &api.AckRequest{
 					Channel: c.name,
 					Topic:   c.topic,
@@ -213,6 +233,24 @@ func (c *clientChannel) Sub(ctx context.Context, handler deq.SubHandler) error {
 			return ctx.Err()
 		}
 	}
+}
+
+func (c *clientChannel) Next(ctx context.Context) (deq.Event, error) {
+	stream, err := c.deqClient.Sub(ctx, &api.SubRequest{
+		Channel: c.name,
+		Topic:   c.topic,
+		Follow:  true,
+	})
+	if err != nil {
+		return deq.Event{}, err
+	}
+
+	e, err := stream.Recv()
+	if err != nil {
+		return deq.Event{}, err
+	}
+
+	return eventFromProto(e), nil
 }
 
 func (c *clientChannel) RequeueEvent(ctx context.Context, e deq.Event, delay time.Duration) error {

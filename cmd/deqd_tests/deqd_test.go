@@ -28,7 +28,8 @@ func init() {
 	}
 }
 
-func gatherTestModels(conn *grpc.ClientConn, duration time.Duration) (result []*TestModel, err error) {
+func gatherTestModels(tb testing.TB, conn *grpc.ClientConn, duration time.Duration) (result []*TestModel, err error) {
+	tb.Helper()
 
 	ctx, cancel := context.WithTimeout(context.Background(), duration)
 	defer cancel()
@@ -41,8 +42,12 @@ func gatherTestModels(conn *grpc.ClientConn, duration time.Duration) (result []*
 	mut := sync.Mutex{}
 
 	err = sub.Sub(ctx, &TestModel{}, func(e legacyclient.Event) ack.Code {
+		tb.Helper()
+		tb.Log(time.Now().Format("15:04:05.000000"), e.ID)
+
 		mut.Lock()
 		defer mut.Unlock()
+
 		result = append(result, e.Msg.(*TestModel))
 		return ack.DequeueOK
 	})
@@ -55,7 +60,7 @@ func gatherTestModels(conn *grpc.ClientConn, duration time.Duration) (result []*
 
 func TestCreateAndReceive(t *testing.T) {
 
-	// events, err := gatherTestModels(c, time.Second)
+	// events, err := gatherTestModels(t, c, time.Second)
 	// if err == nil && len(events) > 0 {
 	// 	t.Fatalf("Received event when none was created: %v\n", events)
 	// }
@@ -99,7 +104,7 @@ func TestCreateAndReceive(t *testing.T) {
 	// 	t.Fatalf("Created event id has incorrect create time. Expected between %v and %v, got %v", beforeTime, afterTime, createTime)
 	// }
 
-	messages, err := gatherTestModels(conn, time.Second)
+	messages, err := gatherTestModels(t, conn, time.Second)
 	if err != nil {
 		t.Fatalf("Sub: %v", err)
 	}
@@ -110,7 +115,7 @@ func TestCreateAndReceive(t *testing.T) {
 
 func TestPubDuplicate(t *testing.T) {
 
-	// events, err := gatherTestModels(c, time.Second)
+	// events, err := gatherTestModels(t, c, time.Second)
 	// if err == nil && len(events) > 0 {
 	// 	t.Fatalf("Received event when none was created: %v\n", events)
 	// }
@@ -161,7 +166,7 @@ func TestPubDuplicate(t *testing.T) {
 func TestMassPublish(t *testing.T) {
 	t.Parallel()
 
-	ctx, cancel := context.WithTimeout(context.Background(), time.Second*10)
+	ctx, cancel := context.WithTimeout(context.Background(), time.Second*30)
 	defer cancel()
 
 	p := legacyclient.NewPublisher(conn, legacyclient.PublisherOpts{})
@@ -179,9 +184,9 @@ func TestMassPublish(t *testing.T) {
 		}
 	}
 
-	events1, err := gatherTestModels(conn, time.Second*8)
+	events1, err := gatherTestModels(t, conn, time.Second*15)
 	if err != nil {
-		t.Fatalf("Error streaming events: %v", err)
+		t.Fatalf("%s Error streaming events: %v", time.Now().Format("15:04:05.000000"), err)
 	}
 
 	for i := 500; i < 1000; i++ {
@@ -196,7 +201,7 @@ func TestMassPublish(t *testing.T) {
 		}
 	}
 
-	events2, err := gatherTestModels(conn, time.Second*8)
+	events2, err := gatherTestModels(t, conn, time.Second*15)
 	if err != nil {
 		t.Fatalf("Error streaming events: %v", err)
 	}
@@ -238,7 +243,7 @@ func TestRequeue(t *testing.T) {
 	}
 	expected.RequeueCount = 4
 
-	time.Sleep(time.Second * 8)
+	time.Sleep(time.Second)
 
 	consumer := legacyclient.NewSubscriber(conn, legacyclient.SubscriberOpts{
 		Channel:     "TestChannel1",

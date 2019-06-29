@@ -6,7 +6,11 @@ package data
 import (
 	"bytes"
 	"errors"
+	fmt "fmt"
 	"io"
+
+	"github.com/dgraph-io/badger"
+	"gitlab.com/katcheCode/deq"
 
 	"github.com/gogo/protobuf/proto"
 )
@@ -18,6 +22,7 @@ const (
 	EventV0Tag   = 'E'
 	EventTimeTag = 't'
 	IndexTag     = 'I'
+	SendCountTag = 'c'
 
 	Sep byte = 0
 
@@ -38,6 +43,7 @@ var (
 // Key is an object which can be marshalled and unmarshalled by this package
 type Key interface {
 	Marshal([]byte) ([]byte, error)
+	NewValue() proto.Message
 	isKey()
 }
 
@@ -54,8 +60,8 @@ func UnmarshalTo(src []byte, dest Key) error {
 		return UnmarshalIndexKey(src, dest)
 	case *IndexKeyV1_0_0:
 		return UnmarshalIndexKeyV1_0_0(src, dest)
-	case EventKey, ChannelKey, EventTimeKey, IndexKey, IndexKeyV1_0_0:
-		return errors.New("dest must be pointer to a key")
+	case *SendCountKey:
+		return UnmarshalSendCountKey(src, dest)
 	default:
 		return errors.New("unrecognized type")
 	}
@@ -70,25 +76,23 @@ func Unmarshal(src []byte) (Key, error) {
 
 	switch src[0] {
 	case EventTag:
-		var key EventKey
-		err := UnmarshalEventKey(src, &key)
-		return key, err
+		key := new(EventKey)
+		return key, UnmarshalEventKey(src, key)
 	case EventTimeTag:
-		var key EventTimeKey
-		err := UnmarshalEventTimeKey(src, &key)
-		return key, err
+		key := new(EventTimeKey)
+		return key, UnmarshalEventTimeKey(src, key)
 	case ChannelTag:
-		var key ChannelKey
-		err := UnmarshalChannelKey(src, &key)
-		return key, err
+		key := new(ChannelKey)
+		return key, UnmarshalChannelKey(src, key)
 	case IndexTag:
-		var key IndexKey
-		err := UnmarshalIndexKey(src, &key)
-		return key, err
+		key := new(IndexKey)
+		return key, UnmarshalIndexKey(src, key)
 	case IndexTagV1_0_0:
-		var key IndexKeyV1_0_0
-		err := UnmarshalIndexKeyV1_0_0(src, &key)
-		return key, err
+		key := new(IndexKeyV1_0_0)
+		return key, UnmarshalIndexKeyV1_0_0(src, key)
+	case SendCountTag:
+		key := new(SendCountKey)
+		return key, UnmarshalSendCountKey(src, key)
 	default:
 		return nil, errors.New("unrecognized type")
 	}
@@ -115,4 +119,27 @@ func UnmarshalPayload(data []byte, key Key) (proto.Message, error) {
 	}
 
 	return payload, nil
+}
+
+func Get(txn Txn, key Key, dst proto.Message) error {
+	rawkey, err := key.Marshal(nil)
+	if err != nil {
+		return fmt.Errorf("marshal key: %v", err)
+	}
+
+	item, err := txn.Get(rawkey)
+	if err == badger.ErrKeyNotFound {
+		return deq.ErrNotFound
+	}
+	if err != nil {
+		return err
+	}
+
+	return item.Value(func(val []byte) error {
+		err = proto.Unmarshal(val, dst)
+		if err != nil {
+			return fmt.Errorf("unmarshal value: %v", err)
+		}
+		return nil
+	})
 }

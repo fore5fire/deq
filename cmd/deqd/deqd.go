@@ -15,18 +15,15 @@ import (
 	"time"
 
 	pb "gitlab.com/katcheCode/deq/api/v1/deq"
+	"gitlab.com/katcheCode/deq/cmd/deqd/internal/handler"
 	"gitlab.com/katcheCode/deq/deqdb"
-	"gitlab.com/katcheCode/deq/internal/handler"
 	"google.golang.org/grpc"
 	"google.golang.org/grpc/credentials"
 )
 
 var (
 	// debug indicates if debug mode is set
-	debug = os.Getenv("DEBUG") == "true"
-
-	// develop indicates if development mode is set
-	develop = os.Getenv("DEVELOP") == "true"
+	debug = strings.ToLower(os.Getenv("DEQ_DEBUG")) == "true"
 
 	// listenAddress is the address that the grpc server will listen on
 	listenAddress = os.Getenv("DEQ_LISTEN_ADDRESS")
@@ -119,12 +116,18 @@ func run(dbDir, address, statsAddress, certFile, keyFile string, insecure bool) 
 		return fmt.Errorf("create data directory %s: %v", dbDir, err)
 	}
 
-	store, err := deqdb.Open(deqdb.Options{
+	opts := deqdb.Options{
 		Dir:                 dbDir,
 		KeepCorrupt:         keepCorrupt,
 		DefaultRequeueLimit: requeueLimit,
 		UpgradeIfNeeded:     true,
-	})
+	}
+
+	if debug {
+		opts.Debug = log.New(os.Stdout, "DEBUG: ", log.Ltime|log.Lmicroseconds|log.LUTC)
+	}
+
+	store, err := deqdb.Open(opts)
 	if err != nil {
 		return fmt.Errorf("open database: %v", err)
 	}
@@ -132,17 +135,17 @@ func run(dbDir, address, statsAddress, certFile, keyFile string, insecure bool) 
 
 	server := handler.New(store)
 
-	var opts []grpc.ServerOption
+	var grpcopts []grpc.ServerOption
 
 	if !insecure {
 		creds, err := credentials.NewServerTLSFromFile(certFile, keyFile)
 		if err != nil {
 			return fmt.Errorf("load tls credentials: %v", err)
 		}
-		opts = append(opts, grpc.Creds(creds))
+		grpcopts = append(grpcopts, grpc.Creds(creds))
 	}
 
-	grpcServer := grpc.NewServer(opts...)
+	grpcServer := grpc.NewServer(grpcopts...)
 
 	pb.RegisterDEQServer(grpcServer, server)
 
@@ -155,7 +158,7 @@ func run(dbDir, address, statsAddress, certFile, keyFile string, insecure bool) 
 		case <-ctx.Done():
 			return
 		case s := <-sig:
-			log.Printf("recieved signal %v: shutting down...", s)
+			log.Printf("received signal %v: shutting down...", s)
 			grpcServer.Stop()
 		}
 	}()

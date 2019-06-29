@@ -15,6 +15,8 @@ import (
 	"errors"
 	"fmt"
 	"log"
+	"os"
+	"strings"
 	"sync"
 	"time"
 	"unicode"
@@ -23,7 +25,9 @@ import (
 	"github.com/dgraph-io/badger"
 	"github.com/dgraph-io/badger/options"
 	"gitlab.com/katcheCode/deq"
-	"gitlab.com/katcheCode/deq/internal/data"
+	"gitlab.com/katcheCode/deq/deqdb/internal/data"
+	"gitlab.com/katcheCode/deq/deqdb/internal/upgrade"
+	"gitlab.com/katcheCode/deq/deqtype"
 )
 
 type storeClient struct {
@@ -44,7 +48,7 @@ func (c *storeClient) Channel(name, topic string) deq.Channel {
 
 // Store is an DEQ event store that saves to disk
 type Store struct {
-	db               *badger.DB
+	db               data.DB
 	in               chan eventPromise
 	out              chan *deq.Event
 	sharedChannelsMu sync.Mutex
@@ -53,6 +57,9 @@ type Store struct {
 	done chan error
 
 	defaultRequeueLimit int
+
+	info  Logger
+	debug Logger
 }
 
 // Options are parameters for opening a store
@@ -71,6 +78,15 @@ type Options struct {
 	// UpgradeIfNeeded is false and the version of the data on disk doesn't match the version of the
 	// running code, Open returns an ErrVersionMismatch.
 	UpgradeIfNeeded bool
+
+	// Info is used to log information that is not directly returned from function calls, including
+	// ignored errors in background goroutines. Info defaults to using a log.Logger from the standard
+	// library printing to stderr.
+	Info Logger
+
+	// Debug is used to log debug information. It Defaults to disabled, and should usually only be set
+	// to provide details for debugging this package.
+	Debug Logger
 }
 
 // LoadingMode specifies how to load data into memory. Generally speaking, lower memory is slower
@@ -122,51 +138,74 @@ func Open(opts Options) (*Store, error) {
 		requeueLimit = 40
 	}
 
-	badgerOpts := badger.DefaultOptions
-	badgerOpts.Dir = opts.Dir
-	badgerOpts.ValueDir = opts.Dir
-	badgerOpts.SyncWrites = true
-	badgerOpts.TableLoadingMode, badgerOpts.ValueLogLoadingMode = opts.LoadingMode.badgerOptions()
-	badgerOpts.MaxTableSize = 1 << 24
-	badgerOpts.Truncate = !opts.KeepCorrupt
+	info := opts.Info
+	if info == nil {
+		info = log.New(os.Stderr, "", log.LstdFlags|log.Lshortfile|log.LUTC)
+	}
+	debug := opts.Debug
+	if debug == nil {
+		debug = disabledLogger{}
+	}
+
+	tableLoadingMode, valueLogLoadingMode := opts.LoadingMode.badgerOptions()
+
+	badgerOpts := badger.DefaultOptions(opts.Dir).
+		WithValueDir(opts.Dir).
+		WithSyncWrites(true).
+		WithTableLoadingMode(tableLoadingMode).
+		WithValueLogLoadingMode(valueLogLoadingMode).
+		WithMaxTableSize(1 << 24).
+		WithTruncate(!opts.KeepCorrupt).
+		WithLogger(badgerLogger{
+			info:  info,
+			debug: debug,
+		})
 
 	db, err := badger.Open(badgerOpts)
 	if err != nil {
 		return nil, err
 	}
+
+	return open(data.DBFromBadger(db), requeueLimit, opts.UpgradeIfNeeded, info, debug)
+}
+
+func open(db data.DB, defaultRequeueLimit int, allowUpgrade bool, info, debug Logger) (*Store, error) {
+
 	s := &Store{
 		db:                  db,
 		in:                  make(chan eventPromise, 20),
 		out:                 make(chan *deq.Event, 20),
 		sharedChannels:      make(map[channelKey]*sharedChannel),
 		done:                make(chan error),
-		defaultRequeueLimit: requeueLimit,
+		defaultRequeueLimit: defaultRequeueLimit,
+		info:                info,
+		debug:               debug,
 	}
 
 	txn := db.NewTransaction(true)
 
-	version, err := s.getDBVersion(txn)
-	if err != nil && err != badger.ErrKeyNotFound {
-		return nil, fmt.Errorf("read current database version: %v", err)
+	version, err := upgrade.StorageVersion(txn)
+	if err != nil && err != upgrade.ErrVersionUnknown {
+		return nil, fmt.Errorf("read current storage version: %v", err)
 	}
-	if err == badger.ErrKeyNotFound {
+	if err == upgrade.ErrVersionUnknown {
 		// No version on disk, should be a new database.
-		log.Printf("no version found, assuming new database")
-		err := txn.Set([]byte(dbVersionKey), []byte(dbCodeVersion))
+		s.debug.Printf("no version found, assuming new database")
+		err := txn.Set([]byte(upgrade.VersionKey), []byte(upgrade.CodeVersion))
 		if err != nil {
 			return nil, fmt.Errorf("write version for new db: %v", err)
 		}
-		version = dbCodeVersion
+		version = upgrade.CodeVersion
 	}
 
-	log.Printf("current database version is %s", version)
+	s.debug.Printf("current storage version is %s", version)
 
-	if version != dbCodeVersion {
-		if !opts.UpgradeIfNeeded {
+	if version != upgrade.CodeVersion {
+		if !allowUpgrade {
 			return nil, deq.ErrVersionMismatch
 		}
 
-		err = s.upgradeDB(version)
+		err = upgrade.DB(context.TODO(), s.db, version)
 		if err != nil {
 			return nil, fmt.Errorf("upgrade db: %v", err)
 		}
@@ -191,7 +230,7 @@ func (s *Store) Close() error {
 	defer s.sharedChannelsMu.Unlock()
 
 	if len(s.sharedChannels) > 0 {
-		log.Printf("[WARN] Store.Close called before closing all channels")
+		return errors.New("Store.Close called before closing all channels")
 	}
 
 	close(s.done)
@@ -205,30 +244,39 @@ func (s *Store) Close() error {
 	return nil
 }
 
-func isValidTopic(topic string) bool {
+// validateTopic returns an error if topic is invalid, or nil otherwise. If allowInternal is true,
+// topics that are reserved for system use will pass validation. Generally, allowInternal should be
+// false only when the user is attempting to publish an event. When the system publishes an event or
+// the user is reading events from a topic, access to internal topic names should be allowed.
+func validateTopic(topic string, allowInternal bool) error {
 	if len(topic) == 0 {
-		return false
+		return errors.New("topic must not be empty")
 	}
 
 	first, size := utf8.DecodeRuneInString(topic)
 	if (first < 'a' || first > 'z') && (first < 'A' || first > 'Z') || unicode.IsDigit(first) {
-		return false
+		return errors.New("topic must begin with an alphanumeric character")
 	}
 
 	for _, r := range topic[size:] {
 		if !unicode.IsLetter(r) && !unicode.IsNumber(r) && r != '-' && r != '.' && r != '_' {
-			return false
+			return errors.New("topic must only contain alphanumeric characters, as well as '-', '.', and '_'")
 		}
 	}
 
-	return true
+	if !allowInternal && strings.HasPrefix(topic, "deq.events.") {
+		return errors.New("topics in package deq.events are reserved")
+	}
+
+	return nil
 }
 
 // Pub publishes an event.
 func (s *Store) Pub(ctx context.Context, e deq.Event) (deq.Event, error) {
 
-	if !isValidTopic(e.Topic) {
-		return deq.Event{}, fmt.Errorf("e.Topic is not valid")
+	err := validateTopic(e.Topic, false)
+	if err != nil {
+		return deq.Event{}, fmt.Errorf("e.Topic is not valid: %v", err)
 	}
 	if e.CreateTime.IsZero() {
 		e.CreateTime = time.Now()
@@ -236,59 +284,103 @@ func (s *Store) Pub(ctx context.Context, e deq.Event) (deq.Event, error) {
 	if e.DefaultState == deq.StateUnspecified {
 		e.DefaultState = deq.StateQueued
 	}
-
-	txn := s.db.NewTransaction(true)
-	defer txn.Discard()
-
-	err := writeEvent(txn, &e)
-	if err == deq.ErrAlreadyExists {
-		// Supress the error if the new and existing events have matching payloads.
-		existing, err := getEvent(txn, e.Topic, e.ID, "")
-		if err != nil {
-			return deq.Event{}, fmt.Errorf("get existing event: %v", err)
-		}
-		if !bytes.Equal(existing.Payload, e.Payload) {
-			return deq.Event{}, deq.ErrAlreadyExists
-		}
-		return *existing, nil
-	}
-	if err != nil {
-		return deq.Event{}, err
-	}
-
-	err = txn.Commit(nil)
-	if err == badger.ErrConflict {
-		txn := s.db.NewTransaction(false)
-		defer txn.Discard()
-		existing, err := getEvent(txn, e.Topic, e.ID, "")
-		if err != nil {
-			return deq.Event{}, fmt.Errorf("get conflicting event: %v", err)
-		}
-		if !bytes.Equal(existing.Payload, e.Payload) {
-			return deq.Event{}, deq.ErrAlreadyExists
-		}
-		return *existing, nil
-	}
-	if err != nil {
-		return deq.Event{}, err
-	}
-
 	e.State = e.DefaultState
+	e.SendCount = 0
 
-	if e.DefaultState == deq.StateQueued {
-		s.out <- &e
+	for i := 0; i < 3; i++ {
+		txn := s.db.NewTransaction(true)
+		defer txn.Discard()
+
+		// Publish a topic event if this is the first event on this topic.
+		var topicEvent *deq.Event
+		_, err = data.GetEvent(txn, "deq.events.Topic", e.Topic, "")
+		if err != nil && err != deq.ErrNotFound {
+			return deq.Event{}, fmt.Errorf("check existing topic: %v", err)
+		}
+		if err == deq.ErrNotFound {
+			topic := &deqtype.Topic{
+				Topic: e.Topic,
+			}
+			payload, err := topic.Marshal()
+			if err != nil {
+				return deq.Event{}, fmt.Errorf("new topic: marshal topic payload: %v", err)
+			}
+			topicEvent = &deq.Event{
+				ID:         e.Topic,
+				CreateTime: time.Now(),
+				Topic:      "deq.events.Topic",
+				Payload:    payload,
+			}
+			err = data.WriteEvent(txn, topicEvent)
+			if err != nil {
+				return deq.Event{}, fmt.Errorf("new topic: write event: %v", err)
+			}
+		}
+
+		// Write the event to disk.
+		err = data.WriteEvent(txn, &e)
+		if err == deq.ErrAlreadyExists {
+			// Suppress the error if the new and existing events have matching payloads.
+			existing, err := data.GetEvent(txn, e.Topic, e.ID, "")
+			if err != nil {
+				return deq.Event{}, fmt.Errorf("get existing event: %v", err)
+			}
+			if !bytes.Equal(existing.Payload, e.Payload) {
+				return deq.Event{}, deq.ErrAlreadyExists
+			}
+			return *existing, nil
+		}
+		if err != nil {
+			return deq.Event{}, err
+		}
+
+		err = txn.Commit()
+		if err == badger.ErrConflict {
+			txn := s.db.NewTransaction(false)
+			defer txn.Discard()
+			existing, err := data.GetEvent(txn, e.Topic, e.ID, "")
+			if err == deq.ErrNotFound {
+				// The conflict was caused by another event on the topic thinking it was first and also
+				// publishing a deq.events.Topic event. Just one retry should be enough.
+				continue
+			}
+			if err != nil {
+				return deq.Event{}, fmt.Errorf("get conflicting event: %v", err)
+			}
+			if !bytes.Equal(existing.Payload, e.Payload) {
+				return deq.Event{}, deq.ErrAlreadyExists
+			}
+			return *existing, nil
+		}
+		if err != nil {
+			return deq.Event{}, err
+		}
+
+		if e.DefaultState == deq.StateQueued {
+			s.queueOut(&e)
+		}
+
+		if topicEvent != nil {
+			s.queueOut(topicEvent)
+		}
+
+		return e, nil
 	}
+
+	return deq.Event{}, badger.ErrConflict
+}
+
+func (s *Store) queueOut(e *deq.Event) {
+	s.out <- e
 
 	s.sharedChannelsMu.Lock()
 	defer s.sharedChannelsMu.Unlock()
 
-	for _, channel := range s.sharedChannels {
-		if channel.topic == e.Topic {
-			channel.broadcastEventUpdated(e.ID, e.State)
+	for _, shared := range s.sharedChannels {
+		if shared.topic == e.Topic {
+			shared.broadcastEventUpdated(e.ID, e.State)
 		}
 	}
-
-	return e, nil
 }
 
 // Del deletes an event
@@ -299,7 +391,7 @@ func (s *Store) Del(ctx context.Context, topic, id string) error {
 
 	// TODO: refactor this, we really don't need the whole event, just
 	// the create time
-	e, err := getEvent(txn, topic, id, "")
+	e, err := data.GetEvent(txn, topic, id, "")
 	if err != nil {
 		return err
 	}
@@ -332,7 +424,7 @@ func (s *Store) Del(ctx context.Context, topic, id string) error {
 		return fmt.Errorf("delete event key: %v", err)
 	}
 
-	err = txn.Commit(nil)
+	err = txn.Commit()
 	if err != nil {
 		return err
 	}
@@ -342,14 +434,17 @@ func (s *Store) Del(ctx context.Context, topic, id string) error {
 
 func (s *Store) listenOut() {
 	for e := range s.out {
+		// TODO: Move db write code here to implement batch writes
+		s.debug.Printf("store: received event %q %q", e.Topic, e.ID)
 		s.sharedChannelsMu.Lock()
 		for _, shared := range s.sharedChannels {
 			if shared.topic == e.Topic {
 				select {
 				case shared.in <- e:
-					// TODO: Move db write code here
+					s.debug.Printf("store: new event %q %q scheduled on channel %q", e.Topic, e.ID, shared.name)
 				default: // Skip if full, listeners can catch up from disk later
 					shared.setMissed(true)
+					s.debug.Printf("store: new event %q %q missed on channel %q", e.Topic, e.ID, shared.name)
 				}
 			}
 		}
@@ -366,7 +461,9 @@ func (s *Store) garbageCollect(interval time.Duration) {
 		case <-s.done:
 			return
 		case <-ticker.C:
+			s.debug.Printf("running storage garbage collector...")
 			s.db.RunValueLogGC(0.7)
+			s.debug.Printf("storage garbage colletion finished")
 		}
 	}
 }

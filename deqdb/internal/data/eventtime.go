@@ -3,7 +3,12 @@ package data
 import (
 	"bytes"
 	"errors"
+	fmt "fmt"
 	"strings"
+
+	"github.com/dgraph-io/badger"
+	proto "github.com/gogo/protobuf/proto"
+	"gitlab.com/katcheCode/deq"
 )
 
 // EventTimeKey is a key for EventTimePayloads. It can be marshalled and used
@@ -48,6 +53,10 @@ func (key EventTimeKey) Marshal(buf []byte) ([]byte, error) {
 	buf = append(buf, key.ID...)
 
 	return buf, nil
+}
+
+func (key EventTimeKey) NewValue() proto.Message {
+	return new(EventTimePayload)
 }
 
 // UnmarshalEventTimeKey updates the this key's values by decoding the provided buf
@@ -106,4 +115,28 @@ func EventTimeCursorAfterTopic(topic string) ([]byte, error) {
 	ret = append(ret, Sep, 0xff, 0xff, 0xff, 0xff)
 
 	return ret, nil
+}
+
+// GetEventTimePayload gets an EventTimePayload from the database by its EventTimeKey.
+//
+// If no EventTimePayload exists in the database for the specified key, deq.ErrNotFound is returnd.
+func GetEventTimePayload(txn Txn, key *EventTimeKey, dst *EventTimePayload) error {
+	rawKey, err := key.Marshal(nil)
+	if err != nil {
+		return fmt.Errorf("marshal event time key: %v", err)
+	}
+	item, err := txn.Get(rawKey)
+	if err == badger.ErrKeyNotFound {
+		return deq.ErrNotFound
+	}
+	if err != nil {
+		return err
+	}
+	return item.Value(func(val []byte) error {
+		err := proto.Unmarshal(val, dst)
+		if err != nil {
+			return fmt.Errorf("unmarshal event time payload: %v", err)
+		}
+		return nil
+	})
 }

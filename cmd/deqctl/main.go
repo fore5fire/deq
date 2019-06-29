@@ -34,7 +34,8 @@ func main() {
 		fmt.Println("")
 		fmt.Println("Available Commands:")
 		fmt.Println("list: print events for a topic.")
-		fmt.Println("topics: print all topics.")
+		// fmt.Println("topics: print all topics.")
+		fmt.Println("get: get an event.")
 		fmt.Println("")
 		fmt.Println("Available Flags:")
 		flag.PrintDefaults()
@@ -59,22 +60,22 @@ func main() {
 
 	cmd := flag.Arg(0)
 	switch cmd {
-	case "topics":
-		deqc, err := dial(host, nameOverride, insecure)
-		if err != nil {
-			fmt.Printf("dial: %v\n", err)
-			os.Exit(1)
-		}
+	// case "topics":
+	// 	deqc, err := dial(host, nameOverride, insecure)
+	// 	if err != nil {
+	// 		fmt.Printf("dial: %v\n", err)
+	// 		os.Exit(1)
+	// 	}
 
-		topics, err := deqc.Topics(ctx, &deq.TopicsRequest{})
-		if err != nil {
-			fmt.Printf("list topics: %v\n", err)
-			os.Exit(2)
-		}
+	// 	topics, err := deqc.Topics(ctx, &deq.TopicsRequest{})
+	// 	if err != nil {
+	// 		fmt.Printf("list topics: %v\n", err)
+	// 		os.Exit(2)
+	// 	}
 
-		for _, topic := range topics.Topics {
-			fmt.Println(topic)
-		}
+	// 	for _, topic := range topics.Topics {
+	// 		fmt.Println(topic)
+	// 	}
 	case "list":
 		topic := flag.Arg(1)
 		if topic == "" {
@@ -104,7 +105,7 @@ func main() {
 				break
 			}
 			if err != nil {
-				fmt.Printf("recieve message: %v\n", err)
+				fmt.Printf("receive message: %v\n", err)
 				os.Exit(2)
 			}
 			fmt.Printf("id: %v, topic: %s\nindexes: %v\n %s\n\n", e.Id, e.Topic, e.Indexes, e.Payload)
@@ -112,13 +113,13 @@ func main() {
 
 	case "get":
 		topic := flag.Arg(1)
-		id := flag.Arg(2)
+		event := flag.Arg(2)
 		if topic == "" {
 			fmt.Printf("topic is required\n")
 			os.Exit(1)
 		}
-		if id == "" {
-			fmt.Printf("id is required\n")
+		if event == "" {
+			fmt.Printf("event is required\n")
 			os.Exit(1)
 		}
 
@@ -131,7 +132,7 @@ func main() {
 		e, err := deqc.Get(ctx, &deq.GetRequest{
 			Channel:  channel,
 			Topic:    topic,
-			EventId:  id,
+			Event:    event,
 			UseIndex: useIndex,
 		})
 		if err != nil {

@@ -1,4 +1,4 @@
-package deqdb
+package upgrade
 
 import (
 	"testing"

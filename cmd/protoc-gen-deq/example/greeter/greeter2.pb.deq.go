@@ -204,7 +204,6 @@ type Greeter2Client interface {
 	NewHelloRequestEventIter(opts *deq.IterOptions) HelloRequestEventIter
 	NewHelloRequestIndexIter(opts *deq.IterOptions) HelloRequestEventIter
 	PubHelloRequestEvent(ctx context.Context, e *HelloRequestEvent) (*HelloRequestEvent, error)
-	DelHelloRequestEvent(ctx context.Context, id string) error
 	
 	GetHelloReplyEvent(ctx context.Context, id string, options ...deqopt.GetOption) (*HelloReplyEvent, error)
 	BatchGetHelloReplyEvents(ctx context.Context, ids []string, options ...deqopt.BatchGetOption) (map[string]*HelloReplyEvent, error)
@@ -212,7 +211,6 @@ type Greeter2Client interface {
 	NewHelloReplyEventIter(opts *deq.IterOptions) HelloReplyEventIter
 	NewHelloReplyIndexIter(opts *deq.IterOptions) HelloReplyEventIter
 	PubHelloReplyEvent(ctx context.Context, e *HelloReplyEvent) (*HelloReplyEvent, error)
-	DelHelloReplyEvent(ctx context.Context, id string) error
 	
 	GetEmptyEvent(ctx context.Context, id string, options ...deqopt.GetOption) (*deqtype.EmptyEvent, error)
 	BatchGetEmptyEvents(ctx context.Context, ids []string, options ...deqopt.BatchGetOption) (map[string]*deqtype.EmptyEvent, error)
@@ -220,7 +218,6 @@ type Greeter2Client interface {
 	NewEmptyEventIter(opts *deq.IterOptions) deqtype.EmptyEventIter
 	NewEmptyIndexIter(opts *deq.IterOptions) deqtype.EmptyEventIter
 	PubEmptyEvent(ctx context.Context, e *deqtype.EmptyEvent) (*deqtype.EmptyEvent, error)
-	DelEmptyEvent(ctx context.Context, id string) error
 	
 	SayHello(ctx context.Context, e *HelloRequestEvent) (*HelloReplyEvent, error)
 	
@@ -402,9 +399,6 @@ func (c *_Greeter2Client) PubHelloRequestEvent(ctx context.Context, e *HelloRequ
 	return e, nil
 }
 
-func (c *_Greeter2Client) DelHelloRequestEvent(ctx context.Context, id string) error {
-	return c.db.Del(ctx, c.config.HelloRequestTopic(), id)
-}
 
 func (c *_Greeter2Client) GetHelloReplyEvent(ctx context.Context, id string, options ...deqopt.GetOption) (*HelloReplyEvent, error) {
 	
@@ -501,9 +495,6 @@ func (c *_Greeter2Client) PubHelloReplyEvent(ctx context.Context, e *HelloReplyE
 	return e, nil
 }
 
-func (c *_Greeter2Client) DelHelloReplyEvent(ctx context.Context, id string) error {
-	return c.db.Del(ctx, c.config.HelloReplyTopic(), id)
-}
 
 func (c *_Greeter2Client) GetEmptyEvent(ctx context.Context, id string, options ...deqopt.GetOption) (*deqtype.EmptyEvent, error) {
 	
@@ -600,9 +591,6 @@ func (c *_Greeter2Client) PubEmptyEvent(ctx context.Context, e *deqtype.EmptyEve
 	return e, nil
 }
 
-func (c *_Greeter2Client) DelEmptyEvent(ctx context.Context, id string) error {
-	return c.db.Del(ctx, c.config.EmptyTopic(), id)
-}
 
 
 func (c *_Greeter2Client) SayHello(ctx context.Context, e *HelloRequestEvent) (*HelloReplyEvent, error) {

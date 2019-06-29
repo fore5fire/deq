@@ -250,7 +250,6 @@ type GreeterClient interface {
 	NewHelloRequestEventIter(opts *deq.IterOptions) HelloRequestEventIter
 	NewHelloRequestIndexIter(opts *deq.IterOptions) HelloRequestEventIter
 	PubHelloRequestEvent(ctx context.Context, e *HelloRequestEvent) (*HelloRequestEvent, error)
-	DelHelloRequestEvent(ctx context.Context, id string) error
 	
 	GetHelloReplyEvent(ctx context.Context, id string, options ...deqopt.GetOption) (*HelloReplyEvent, error)
 	BatchGetHelloReplyEvents(ctx context.Context, ids []string, options ...deqopt.BatchGetOption) (map[string]*HelloReplyEvent, error)
@@ -258,7 +257,6 @@ type GreeterClient interface {
 	NewHelloReplyEventIter(opts *deq.IterOptions) HelloReplyEventIter
 	NewHelloReplyIndexIter(opts *deq.IterOptions) HelloReplyEventIter
 	PubHelloReplyEvent(ctx context.Context, e *HelloReplyEvent) (*HelloReplyEvent, error)
-	DelHelloReplyEvent(ctx context.Context, id string) error
 	
 	SayHello(ctx context.Context, e *HelloRequestEvent) (*HelloReplyEvent, error)
 	}
@@ -422,9 +420,6 @@ func (c *_GreeterClient) PubHelloRequestEvent(ctx context.Context, e *HelloReque
 	return e, nil
 }
 
-func (c *_GreeterClient) DelHelloRequestEvent(ctx context.Context, id string) error {
-	return c.db.Del(ctx, c.config.HelloRequestTopic(), id)
-}
 
 func (c *_GreeterClient) GetHelloReplyEvent(ctx context.Context, id string, options ...deqopt.GetOption) (*HelloReplyEvent, error) {
 	
@@ -521,9 +516,6 @@ func (c *_GreeterClient) PubHelloReplyEvent(ctx context.Context, e *HelloReplyEv
 	return e, nil
 }
 
-func (c *_GreeterClient) DelHelloReplyEvent(ctx context.Context, id string) error {
-	return c.db.Del(ctx, c.config.HelloReplyTopic(), id)
-}
 
 
 func (c *_GreeterClient) SayHello(ctx context.Context, e *HelloRequestEvent) (*HelloReplyEvent, error) {

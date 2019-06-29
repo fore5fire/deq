@@ -36,6 +36,9 @@ const (
 	// RequeueConstant requeues an event with no backoff
 	RequeueConstant = Code(api.AckCode_REQUEUE_CONSTANT)
 
+	// NoOp explicitly has no effect.
+	NoOp = Code(-1)
+
 	// DequeueOK is a legacy code. Use OK instead.
 	//
 	// DequeueOK dequeues an event, indicating it was processed successfully.

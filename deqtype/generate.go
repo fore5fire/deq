@@ -7,5 +7,6 @@
 //go:generate protoc --deq_out=Mtimestamp.proto=github.com/gogo/protobuf/types:. timestamp.proto
 //go:generate protoc --deq_out=Mtype.proto=github.com/gogo/protobuf/types:. type.proto
 //go:generate protoc --deq_out=Mwrappers.proto=github.com/gogo/protobuf/types:. wrappers.proto
+//go:generate protoc --gogofaster_out=. --deq_out=. deq.proto
 
 package deqtype

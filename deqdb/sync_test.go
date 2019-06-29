@@ -13,9 +13,9 @@ import (
 func TestSyncTo(t *testing.T) {
 	t.Parallel()
 
-	db, discard := newTestDB()
+	db, discard := newTestDB(t)
 	defer discard()
-	db2, discard2 := newTestDB()
+	db2, discard2 := newTestDB(t)
 	defer discard2()
 
 	// Round(0) gets rid of leap-second info, which will be lost in serialization
@@ -66,6 +66,7 @@ func TestSyncTo(t *testing.T) {
 				CreateTime:   createTime,
 				DefaultState: deq.StateQueued,
 				State:        deq.StateQueued,
+				SendCount:    1,
 			},
 			{
 				ID:           "after-event2",
@@ -73,6 +74,7 @@ func TestSyncTo(t *testing.T) {
 				CreateTime:   createTime,
 				DefaultState: deq.StateQueued,
 				State:        deq.StateQueued,
+				SendCount:    1,
 			},
 			{
 				ID:           "before-event1",
@@ -80,6 +82,7 @@ func TestSyncTo(t *testing.T) {
 				CreateTime:   createTime,
 				DefaultState: deq.StateQueued,
 				State:        deq.StateQueued,
+				SendCount:    1,
 			},
 			{
 				ID:           "before-event2",
@@ -87,27 +90,17 @@ func TestSyncTo(t *testing.T) {
 				CreateTime:   createTime,
 				DefaultState: deq.StateQueued,
 				State:        deq.StateQueued,
+				SendCount:    1,
 			},
 		},
 	}
 
-	errc := make(chan error)
-	errc2 := make(chan error)
-	recieved := make(chan deq.Event)
+	done := make(chan bool)
+	done2 := make(chan bool)
+	received := make(chan deq.Event)
 
 	ctx, cancel := context.WithCancel(context.Background())
-	defer func() {
-		cancel()
-		// check err channels
-		err := <-errc
-		if err != ctx.Err() {
-			t.Errorf("sync: %v", err)
-		}
-		err = <-errc2
-		if err != ctx.Err() {
-			t.Errorf("sub: %v", err)
-		}
-	}()
+	defer cancel()
 
 	// Publish before events
 	for _, e := range events.Before {
@@ -118,28 +111,32 @@ func TestSyncTo(t *testing.T) {
 	}
 
 	// Sync events
+	channel := db.Channel("test-channel", "TopicA")
+	defer channel.Close()
 	go func() {
-		defer close(errc)
+		defer close(done)
 
-		channel := db.Channel("test-channel", "TopicA")
-		defer channel.Close()
-
-		errc <- deq.SyncTo(ctx, AsClient(db2), channel)
+		err := deq.SyncTo(ctx, AsClient(db2), channel)
+		if err != ctx.Err() && err != ErrChannelClosed {
+			t.Errorf("sync: %v", err)
+		}
 	}()
 
 	// Subscribe to synced events
+	subChannel := db2.Channel("test-channel-remote", "TopicA")
+	defer subChannel.Close()
 	go func() {
-		defer close(errc2)
+		defer close(done2)
 
-		channel := db2.Channel("test-channel-remote", "TopicA")
-		defer channel.Close()
+		err := subChannel.Sub(ctx, func(ctx context.Context, e deq.Event) (*deq.Event, error) {
 
-		errc2 <- channel.Sub(ctx, func(ctx context.Context, e deq.Event) (*deq.Event, error) {
-
-			recieved <- e
+			received <- e
 
 			return nil, nil
 		})
+		if err != ctx.Err() && err != ErrChannelClosed {
+			t.Errorf("sub: %v", err)
+		}
 	}()
 
 	// Publish some more events now that we're syncing
@@ -150,9 +147,9 @@ func TestSyncTo(t *testing.T) {
 		}
 	}
 
-	// Verify that events were recieved by synced database
+	// Verify that events were received by synced database
 	var actual []deq.Event
-	for e := range recieved {
+	for e := range received {
 		actual = append(actual, e)
 		if len(actual) >= len(events.Expected) {
 			break
@@ -164,6 +161,16 @@ func TestSyncTo(t *testing.T) {
 	})
 
 	if !cmp.Equal(events.Expected, actual) {
-		t.Errorf("recieved events:\n%s", cmp.Diff(events.Expected, actual))
+		t.Errorf("received events:\n%s", cmp.Diff(events.Expected, actual))
+	}
+
+	// Verify that subscriptions close correctly.
+	cancel()
+	for i := 0; i < 2; i++ {
+		select {
+		case <-done:
+		case <-time.After(time.Second):
+			t.Fatal("close subs: timed out")
+		}
 	}
 }

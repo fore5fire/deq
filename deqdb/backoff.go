@@ -3,32 +3,50 @@ package deqdb
 import (
 	"math"
 	"time"
-
-	"gitlab.com/katcheCode/deq"
 )
 
-// BackoffFunc is a function that returns the requeue delay for an event.
-type BackoffFunc func(deq.Event) time.Duration
+type sendDelayFunc func(initial time.Duration, sendCount int)
 
-// ExponentialBackoff returns a BackoffFunc implementing an exponential backoff based on an event's
-// RequeueCount, starting at a duration of d when an event's RequeueCount is 0 and doubling with
-// each requeue. The maximum backoff is capped at one hour to prevent overflow.
-func ExponentialBackoff(d time.Duration) BackoffFunc {
-	return func(e deq.Event) time.Duration {
-		trueVal := math.Pow(2, float64(e.RequeueCount))
-		// trueVal doesn't overflow, it's max is +inf, so apply the cap before converting to a duration.
-		capped := math.Min(trueVal, float64(time.Hour/d))
-		return time.Duration(capped) * d
+// sendDelayExp returns the send delay for an event with exponential backoff.
+//
+// When sendCount is 0, a duration of 0 is returned. Otherwise, the delay calculated as initial doubled
+// (sendCount - 1) times.
+//
+// The maximum delay is capped at one hour to prevent overflow.
+func sendDelayExp(initial time.Duration, sendCount int) time.Duration {
+	if sendCount == 0 {
+		return 0
 	}
+
+	trueVal := math.Pow(2, float64(sendCount))
+	// trueVal doesn't overflow, it's max is +inf, so apply the cap before converting to a duration.
+	capped := math.Min(trueVal, float64(time.Hour/initial))
+	return time.Duration(capped) * initial
 }
 
-// LinearBackoff returns a BackoffFunc implementing a linear backoff based on an event's
-// RequeueCount, starting at a duration of d when an event's RequeueCount is 0 and increasing by
-// d with each requeue. The maximum backoff is capped at one hour to prevent overflow.
-func LinearBackoff(d time.Duration) BackoffFunc {
-	return func(e deq.Event) time.Duration {
-		trueVal := float64(d) * float64(e.RequeueCount+1)
-		capped := math.Min(trueVal, float64(time.Hour))
-		return time.Duration(capped)
+// sendDelayLinear returns the send delay for an event with linear backoff.
+//
+// When sendCount is 0, a duration of 0 is returned. Otherwise, the delay is calculated as initial
+// doubled (sendCount - 1) times.
+//
+// The maximum backoff is capped at one hour to prevent overflow.
+func sendDelayLinear(initial time.Duration, sendCount int) time.Duration {
+	if sendCount == 0 {
+		return 0
 	}
+
+	trueVal := float64(initial) * float64(sendCount+1)
+	capped := math.Min(trueVal, float64(time.Hour))
+	return time.Duration(capped)
+}
+
+// sendDelayConstant returns the send delay for an event with no backoff.
+//
+// When sendCount is 0, a duration of 0 is returned. Otherwise sendDelayConstant acts as an identity
+// function, and simply returns d.
+func sendDelayConstant(d time.Duration, sendCount int) time.Duration {
+	if sendCount == 0 {
+		return 0
+	}
+	return d
 }

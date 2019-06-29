@@ -160,7 +160,6 @@ type {{ .Name }}Client interface {
 	New{{ .GoName }}EventIter(opts *deq.IterOptions) {{ .GoEventRef }}EventIter
 	New{{ .GoName }}IndexIter(opts *deq.IterOptions) {{ .GoEventRef }}EventIter
 	Pub{{.GoName}}Event(ctx context.Context, e *{{.GoEventRef}}Event) (*{{.GoEventRef}}Event, error)
-	Del{{.GoName}}Event(ctx context.Context, id string) error
 	{{ end -}}
 	{{ range .Methods }}
 	{{ .Name }}(ctx context.Context, e *{{.InType.GoEventRef}}Event) (*{{.OutType.GoEventRef}}Event, error)
@@ -312,9 +311,6 @@ func (c *_{{ $ServiceName }}Client) Pub{{.GoName}}Event(ctx context.Context, e *
 	return e, nil
 }
 
-func (c *_{{ $ServiceName }}Client) Del{{.GoName}}Event(ctx context.Context, id string) error {
-	return c.db.Del(ctx, c.config.{{.GoName}}Topic(), id)
-}
 {{ end -}}
 
 {{- range .Methods }}

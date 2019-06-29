@@ -52,7 +52,7 @@ func TestSub(t *testing.T) {
 
 	expected := deq.Event{
 		ID:         "test-event",
-		Topic:      "recieved",
+		Topic:      "received",
 		CreateTime: time.Now().Round(0),
 	}
 
@@ -85,7 +85,7 @@ func TestSub(t *testing.T) {
 		}
 		e := <-out
 		if !cmp.Equal(expected, e) {
-			t.Errorf("recieved event:\n%s", cmp.Diff(expected, e))
+			t.Errorf("received event:\n%s", cmp.Diff(expected, e))
 		}
 	}
 }

@@ -70,14 +70,20 @@ func protoToEvent(event *api.Event, msg Message, sub *Subscriber) Event {
 	switch event.State {
 	case api.Event_QUEUED:
 		state = deq.StateQueued
+	case api.Event_QUEUED_LINEAR:
+		state = deq.StateQueuedLinear
+	case api.Event_QUEUED_CONSTANT:
+		state = deq.StateQueuedConstant
 	case api.Event_OK:
 		state = deq.StateOK
-	case api.Event_DEQUEUED_ERROR:
-		state = deq.StateDequeuedError
 	case api.Event_INTERNAL:
 		state = deq.StateInternal
 	case api.Event_INVALID:
 		state = deq.StateInvalid
+	case api.Event_SEND_LIMIT_REACHED:
+		state = deq.StateSendLimitReached
+	case api.Event_DEQUEUED_ERROR:
+		state = deq.StateDequeuedError
 	}
 
 	return Event{
@@ -85,6 +91,6 @@ func protoToEvent(event *api.Event, msg Message, sub *Subscriber) Event {
 		Msg:          msg,
 		CreateTime:   time.Unix(0, event.CreateTime),
 		State:        state,
-		RequeueCount: int(event.RequeueCount),
+		RequeueCount: int(event.SendCount),
 	}
 }

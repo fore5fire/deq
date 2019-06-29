@@ -4,15 +4,14 @@ import (
 	"context"
 	"errors"
 	"fmt"
-	"log"
 	"sync"
 	"time"
 
 	"github.com/dgraph-io/badger"
 	"gitlab.com/katcheCode/deq"
 	"gitlab.com/katcheCode/deq/ack"
+	"gitlab.com/katcheCode/deq/deqdb/internal/data"
 	"gitlab.com/katcheCode/deq/deqopt"
-	"gitlab.com/katcheCode/deq/internal/data"
 )
 
 // Channel allows multiple listeners to coordinate processing of events.
@@ -26,11 +25,14 @@ type Channel struct {
 	done       chan struct{}
 	errMutex   sync.Mutex
 	err        error
-	db         *badger.DB
+	db         data.DB
 	store      *Store
 	sharedDone func()
 
-	backoffFunc BackoffFunc
+	initialDelay time.Duration
+	idleTimeout  time.Duration
+
+	info, debug Logger
 }
 
 // Channel returns the channel for a given name
@@ -40,27 +42,30 @@ func (s *Store) Channel(name, topic string) *Channel {
 	// DON'T FORGET TO ADD CHECK FOR FAILED CHANNEL
 
 	return &Channel{
-		name:        name,
-		topic:       topic,
-		shared:      shared,
-		done:        make(chan struct{}),
-		db:          s.db,
-		backoffFunc: ExponentialBackoff(time.Second),
-		store:       s,
-		sharedDone:  sharedDone,
+		name:         name,
+		topic:        topic,
+		shared:       shared,
+		done:         make(chan struct{}),
+		db:           s.db,
+		store:        s,
+		sharedDone:   sharedDone,
+		initialDelay: time.Second * 2,
+
+		info:  s.info,
+		debug: s.debug,
 	}
 }
 
-// BackoffFunc sets the function that determines the requeue delay for each event removed from c's
-// queue.
-//
-// The BackoffFunc for a channel defaults to an exponential backoff starting at one second,
-// equivelant to calling:
-//   c.BackoffFunc(deq.ExponentialBackoff(time.Second))
-//
-// BackoffFunc is not safe for concurrent use with any of c's methods.
-func (c *Channel) BackoffFunc(backoffFunc BackoffFunc) {
-	c.backoffFunc = backoffFunc
+// SetInitialResendDelay sets the initial send delay of an event's first resend on the channel.
+// This is used as a base value from which any backoff is applied.
+func (c *Channel) SetInitialResendDelay(delay time.Duration) {
+	c.initialDelay = delay
+}
+
+// SetIdleTimeout sets the duration of consecutive idling needed for subscriptions on the channel
+// to be cancelled automatically. Defaults to no timeout.
+func (c *Channel) SetIdleTimeout(idleTimeout time.Duration) {
+	c.idleTimeout = idleTimeout
 }
 
 // Next returns the next event in the queue.
@@ -74,6 +79,8 @@ func (c *Channel) Next(ctx context.Context) (deq.Event, error) {
 		select {
 		case <-ctx.Done():
 			return deq.Event{}, ctx.Err()
+		case <-c.done:
+			return deq.Event{}, ErrChannelClosed
 		case e := <-c.shared.out:
 			if e == nil {
 				return deq.Event{}, c.Err()
@@ -82,32 +89,67 @@ func (c *Channel) Next(ctx context.Context) (deq.Event, error) {
 			defer txn.Discard()
 
 			// TODO: don't allow deleted events to get sent out.
-			channel, err := getChannelEvent(txn, data.ChannelKey{
+			channel := data.ChannelPayload{
+				EventState: data.EventStateToProto(e.DefaultState),
+			}
+			err := data.GetChannelEvent(txn, &data.ChannelKey{
 				Channel: c.name,
 				Topic:   c.topic,
 				ID:      e.ID,
-			}, eventStateToProto(e.DefaultState))
-			if err != nil {
-				return deq.Event{}, err
+			}, &channel)
+			if err != nil && err != deq.ErrNotFound {
+				return deq.Event{}, fmt.Errorf("get current event state: %v", err)
 			}
 
-			if channel.EventState != data.EventState_QUEUED {
+			// var sendCount data.SendCount
+			// err = data.GetSendCount(txn, &data.SendCountKey{
+			// 	Channel: c.name,
+			// 	Topic:   c.topic,
+			// 	ID:      e.ID,
+			// }, &sendCount)
+			// if err != nil && err != deq.ErrNotFound {
+			// 	return deq.Event{}, fmt.Errorf("get current send count: %v", err)
+			// }
+
+			e.SendCount++
+			e.State = data.EventStateFromProto(channel.EventState)
+
+			var delay time.Duration
+			switch e.State {
+			default:
+				c.debug.Printf("channel %q: next: skipping non-queued event %q %q", c.name, e.Topic, e.ID)
+				// Don't send non-queued events.
 				continue
+			case deq.StateQueued:
+				delay = sendDelayExp(c.initialDelay, e.SendCount)
+				c.debug.Printf("channel %q: next: rescheduling event %q %q after 2^%d * %v = %v", c.name, e.Topic, e.ID, e.SendCount, c.initialDelay, delay)
+			case deq.StateQueuedLinear:
+				delay = sendDelayLinear(c.initialDelay, e.SendCount)
+				c.debug.Printf("channel %q: next: rescheduling event %q %q after %d * %v = %v", c.name, e.Topic, e.ID, e.SendCount, c.initialDelay, delay)
+			case deq.StateQueuedConstant:
+				delay = sendDelayConstant(c.initialDelay, e.SendCount)
+				c.debug.Printf("channel %q: next: rescheduling event %q %q after %v", c.name, e.Topic, e.ID, delay)
 			}
 
-			delay := c.backoffFunc(*e)
-			err = c.RequeueEvent(ctx, *e, delay)
+			schedule := time.Now().Add(delay)
+			err = c.shared.IncrementSendCount(ctx, e)
 			if err != nil {
 				return deq.Event{}, err
 			}
 
+			err = c.shared.ScheduleEvent(ctx, e, schedule)
+			if err != nil {
+				return deq.Event{}, err
+			}
+
+			c.debug.Printf("channel %s: next: sending event %q %q", c.name, e.Topic, e.ID)
 			return *e, nil
 		}
 	}
 }
 
-// Sub subscribes to this channel's event queue, calling handler for each event recieved. If c has
-// multiple accessor's of it's event queue, only one will recieve each event per requeue.
+// Sub subscribes to this channel's event queue, calling handler for each event received. If c has
+// multiple accessors of it's event queue, only one will receive each event per requeue.
 //
 // Sub blocks until an error occurs or the context is done. If Sub returns, it always returns an
 // error.
@@ -158,76 +200,88 @@ func (c *Channel) Sub(ctx context.Context, handler deq.SubHandler) error {
 
 			for result := range results {
 
-				if result.resp != nil {
-					_, err := c.store.Pub(ctx, *result.resp)
-					if err != nil {
-						select {
-						case errc <- err:
-						default:
+				err := func() error {
+					if result.resp != nil {
+						_, err := c.store.Pub(ctx, *result.resp)
+						if err != nil {
+							return fmt.Errorf("publish response %q %q: %v", result.resp.Topic, result.resp.ID, err)
 						}
-						continue
 					}
-				}
 
-				if result.err != nil {
-					// TODO: post error value back to DEQ.
-					log.Printf("handle channel %q topic %q event %q: %v", c.name, c.topic, result.req.ID, result.err)
-				}
+					if result.err != nil {
+						// TODO: post error value back to DEQ.
+						c.info.Printf("handle channel %q topic %q event %q: %v", c.name, c.topic, result.req.ID, result.err)
+					}
 
-				code := ack.ErrorCode(result.err)
-				var err error
-				switch code {
-				case ack.DequeueOK:
-					err = c.SetEventState(ctx, result.req.ID, deq.StateOK)
-					if err != nil {
-						err = fmt.Errorf("set event state: %v", err)
+					code := ack.ErrorCode(result.err)
+					var state deq.State
+					switch code {
+					case ack.DequeueOK:
+						state = deq.StateOK
+					case ack.Invalid:
+						state = deq.StateInvalid
+					case ack.Internal:
+						state = deq.StateInternal
+					case ack.DequeueError:
+						state = deq.StateDequeuedError
+					case ack.RequeueConstant:
+						state = deq.StateQueuedConstant
+					case ack.RequeueLinear:
+						state = deq.StateQueuedLinear
+					case ack.Requeue:
+						state = deq.StateQueued
+					case ack.NoOp:
+						return nil
+					default:
+						return fmt.Errorf("handler returned unrecognized ack.Code")
 					}
-				case ack.Invalid:
-					err = c.SetEventState(ctx, result.req.ID, deq.StateInvalid)
+
+					err := c.SetEventState(ctx, result.req.ID, state)
 					if err != nil {
-						err = fmt.Errorf("set event state: %v", err)
+						return fmt.Errorf("set event state: %v", err)
 					}
-				case ack.Internal:
-					err = c.SetEventState(ctx, result.req.ID, deq.StateInternal)
-					if err != nil {
-						err = fmt.Errorf("set event state: %v", err)
-					}
-				case ack.DequeueError:
-					err = c.SetEventState(ctx, result.req.ID, deq.StateDequeuedError)
-					if err != nil {
-						err = fmt.Errorf("set event state: %v", err)
-					}
-				case ack.RequeueConstant:
-					err = c.RequeueEvent(ctx, result.req, time.Second)
-					if err != nil {
-						err = fmt.Errorf("requeue event: %v", err)
-					}
-				case ack.RequeueLinear:
-					err = c.RequeueEvent(ctx, result.req, LinearBackoff(time.Second)(result.req))
-					if err != nil {
-						err = fmt.Errorf("requeue event: %v", err)
-					}
-				case ack.RequeueExponential:
-					err = c.RequeueEvent(ctx, result.req, ExponentialBackoff(time.Second)(result.req))
-					if err != nil {
-						err = fmt.Errorf("requeue event: %v", err)
-					}
-				default:
-					err = fmt.Errorf("handler returned unrecognized ack.Code")
-				}
+
+					return nil
+				}()
 				if err != nil {
 					select {
 					case errc <- err:
 					default:
+						// Don't block - if no one's listening, they've already returned because of another
+						// error
+						return
 					}
 				}
 			}
 		}()
 	}
 
+	// If we're using idle timeout, setup a separate context so we can periodically check on the idle
+	// state.
+	nextCtx, nextCancel := ctx, func() {}
+	defer nextCancel()
+
 	for {
-		e, err := c.Next(ctx)
+		if c.idleTimeout > 0 {
+			nextCancel()
+			nextCtx, nextCancel = context.WithTimeout(ctx, c.idleTimeout)
+		}
+
+		e, err := c.Next(nextCtx)
+		if err != nil && err == ctx.Err() {
+			// Original context was cancelled.
+			return err
+		}
+		if err != nil && err == nextCtx.Err() {
+			// The idle timeout triggered, so if the channel is idle (not just slow) then we're done.
+			if c.Idle() {
+				return nil
+			}
+			// We're not idle, so try again.
+			continue
+		}
 		if err != nil {
+			// Some non-context error occurred.
 			return err
 		}
 
@@ -236,6 +290,10 @@ func (c *Channel) Sub(ctx context.Context, handler deq.SubHandler) error {
 		case results <- Result{e, response, err}:
 		case err := <-errc:
 			return err
+		case <-ctx.Done():
+			return ctx.Err()
+		case <-c.done:
+			return ErrChannelClosed
 		}
 	}
 }
@@ -342,15 +400,15 @@ func (c *Channel) Get(ctx context.Context, event string, options ...deqopt.GetOp
 	return *e, nil
 }
 
-func (c *Channel) get(txn *badger.Txn, id string) (*deq.Event, error) {
-	return getEvent(txn, c.topic, id, c.name)
+func (c *Channel) get(txn data.Txn, id string) (*deq.Event, error) {
+	return data.GetEvent(txn, c.topic, id, c.name)
 }
 
 // GetIndex returns the event for an event's index, or ErrNotFound if none is found
-func (c *Channel) getIndex(txn *badger.Txn, index string) (*deq.Event, error) {
+func (c *Channel) getIndex(txn data.Txn, index string) (*deq.Event, error) {
 
 	var payload data.IndexPayload
-	err := getIndexPayload(txn, data.IndexKey{
+	err := data.GetIndexPayload(txn, &data.IndexKey{
 		Topic: c.topic,
 		Value: index,
 	}, &payload)
@@ -358,7 +416,7 @@ func (c *Channel) getIndex(txn *badger.Txn, index string) (*deq.Event, error) {
 		return nil, err
 	}
 
-	e, err := getEvent(txn, c.topic, payload.EventId, c.name)
+	e, err := data.GetEvent(txn, c.topic, payload.EventId, c.name)
 	if err != nil {
 		return nil, err
 	}
@@ -465,19 +523,30 @@ func (c *Channel) SetEventState(ctx context.Context, id string, state deq.State)
 		txn := c.db.NewTransaction(true)
 		defer txn.Discard()
 
-		channelEvent, err := getChannelEvent(txn, key, data.EventState_UNSPECIFIED_STATE)
+		e, err := data.GetEvent(txn, c.topic, id, c.name)
+		if err == deq.ErrNotFound {
+			return deq.ErrNotFound
+		}
+		if err != nil {
+			return fmt.Errorf("lookup event: %v", err)
+		}
+
+		wasQueued := e.State == deq.StateQueued ||
+			e.State == deq.StateQueuedLinear ||
+			e.State == deq.StateQueuedConstant
+		nowQueued := state == deq.StateQueued ||
+			state == deq.StateQueuedLinear ||
+			state == deq.StateQueuedConstant
+
+		channelEvent := data.ChannelPayload{
+			EventState: data.EventStateToProto(state),
+		}
+		err = data.SetChannelEvent(txn, &key, &channelEvent)
 		if err != nil {
 			return err
 		}
 
-		channelEvent.EventState = eventStateToProto(state)
-
-		err = setChannelEvent(txn, key, channelEvent)
-		if err != nil {
-			return err
-		}
-
-		err = txn.Commit(nil)
+		err = txn.Commit()
 		if err == badger.ErrConflict {
 			time.Sleep(time.Second / 10)
 			continue
@@ -487,6 +556,15 @@ func (c *Channel) SetEventState(ctx context.Context, id string, state deq.State)
 		}
 
 		c.shared.broadcastEventUpdated(id, state)
+
+		// If the event is just entering the queue, make sure it gets scheduled immediately.
+		// TODO: how do we want to handle send count with requeued events? Should we reset it, keep it
+		// and send immediately once, or keep it and apply the backoff immediately? Currently we are
+		// using option 2, but not much thought went into it.
+		if !wasQueued && nowQueued {
+			c.shared.in <- e
+			c.debug.Printf("event state updated: event %q %q scheduled on channel %q", e.Topic, e.ID, c.name)
+		}
 
 		return nil
 	}
@@ -505,7 +583,8 @@ func (c *Channel) SetEventState(ctx context.Context, id string, state deq.State)
 // 	EventStatusWillNotProcess
 // )
 
-// RequeueEvent adds the event back into the event queue for this channel
-func (c *Channel) RequeueEvent(ctx context.Context, e deq.Event, delay time.Duration) error {
-	return c.shared.RequeueEvent(e, delay)
-}
+var (
+	// ErrChannelClosed is returned when calling operations on a closed channel, or if an operation
+	// was ended prematurely because the channel closed.
+	ErrChannelClosed = errors.New("channel closed")
+)
