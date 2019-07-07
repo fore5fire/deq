@@ -119,6 +119,8 @@ func EventStateToProto(e deq.State) EventState {
 		return EventState_INVALID
 	case deq.StateDequeuedError:
 		return EventState_DEQUEUED_ERROR
+	case deq.StateSendLimitReached:
+		return EventState_SEND_LIMIT_EXCEEDED
 	default:
 		panic("unrecognized EventState")
 	}
