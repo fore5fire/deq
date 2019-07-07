@@ -14,6 +14,8 @@ import (
 	"syscall"
 	"time"
 
+	"gitlab.com/katcheCode/deq"
+
 	pb "gitlab.com/katcheCode/deq/api/v1/deq"
 	"gitlab.com/katcheCode/deq/cmd/deqd/internal/handler"
 	"gitlab.com/katcheCode/deq/deqdb"
@@ -49,6 +51,13 @@ var (
 
 	// keyFile is the path of the tls private key file. Required unless insecure is true.
 	keyFile = os.Getenv("DEQ_TLS_KEY_FILE")
+
+	// syncFrom is a comma seperated list of hosts that deqd will sync events to.
+	syncFrom = strings.Split(os.Getenv("DEQ_SYNC_FROM"), ",")
+	// syncTo is a comma seperated list of hosts that deqd will sync events from.
+	syncTo = strings.Split(os.Getenv("DEQ_SYNC_TO"), ",")
+	// syncInsecure indicates that deqd should sync via h2c instead of https.
+	syncInsecure = strings.ToLower(os.Getenv("DEQ_SYNC_INSECURE")) == "true"
 )
 
 func init() {
@@ -74,8 +83,8 @@ func main() {
 		listenAddress = ":8080"
 	}
 
-	// run start code in seperate function so we can both defer and os.Exit
-	err := run(dataDir, listenAddress, statsAddress, certFile, keyFile, insecure)
+	// run start code in separate function so we can both defer and os.Exit
+	err := run(dataDir, listenAddress, statsAddress, certFile, keyFile, insecure, syncTo, syncFrom, syncInsecure)
 	if err != nil {
 		log.Fatal(err)
 	}
@@ -83,7 +92,21 @@ func main() {
 	log.Println("graceful shutdown complete")
 }
 
-func run(dbDir, address, statsAddress, certFile, keyFile string, insecure bool) error {
+type SyncHost struct {
+	Protocol SyncProtocol
+	Host     string
+	Channel  string
+}
+
+type SyncProtocol int
+
+const (
+	SyncProtocolUnspecified SyncProtocol = iota
+	SyncProtoocolHTTPS2
+	SyncProtocolH2C
+)
+
+func run(dbDir, address, statsAddress, certFile, keyFile string, insecure bool, syncTo, syncFrom []SyncHost, syncInsecure bool) error {
 	ctx, cancel := context.WithCancel(context.Background())
 	defer cancel()
 
@@ -132,6 +155,20 @@ func run(dbDir, address, statsAddress, certFile, keyFile string, insecure bool) 
 		return fmt.Errorf("open database: %v", err)
 	}
 	defer store.Close()
+
+	for _, host := range syncTo {
+		if host == "" {
+			continue
+		}
+		go func() {
+			deq.SyncTo(ctx, host, store)
+		}()
+	}
+	for _, host := range syncFrom {
+		if host == "" {
+			continue
+		}
+	}
 
 	server := handler.New(store)
 
