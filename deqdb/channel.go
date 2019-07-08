@@ -434,8 +434,8 @@ func (c *Channel) BatchGet(ctx context.Context, events []string, options ...deqo
 
 	opts := deqopt.NewBatchGetOptionSet(options)
 
-	if opts.UseIndex {
-		return nil, fmt.Errorf("BatchGet with option UseIndex() is not yet implemented")
+	if opts.Await {
+		return nil, fmt.Errorf("BatchGet with option Await() is not yet implemented")
 	}
 
 	// Determine whether to get by ID or index.
