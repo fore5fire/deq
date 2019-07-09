@@ -11,6 +11,6 @@ require (
 	github.com/pkg/errors v0.8.1 // indirect
 	golang.org/x/sync v0.0.0-20181221193216-37e7f081c4d4 // indirect
 	golang.org/x/text v0.3.1-0.20180807135948-17ff2d5776d2 // indirect
-	google.golang.org/genproto v0.0.0-20190128161407-8ac453e89fca // indirect
+	google.golang.org/genproto v0.0.0-20190128161407-8ac453e89fca
 	google.golang.org/grpc v1.18.0
 )

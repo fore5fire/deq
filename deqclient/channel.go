@@ -176,6 +176,9 @@ func (c *clientChannel) Sub(ctx context.Context, handler deq.SubHandler) error {
 
 				if result.resp != nil {
 					_, err := c.client.Pub(ctx, *result.resp)
+					if err != nil && status.Code(err) != codes.Unavailable {
+						log.Printf("publish response: %v", err)
+					}
 					if err != nil {
 						select {
 						case errc <- err:
