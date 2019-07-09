@@ -458,8 +458,9 @@ func (c *Channel) BatchGet(ctx context.Context, events []string, options ...deqo
 
 	// Setup channels.
 	type Response struct {
-		Event *deq.Event
-		Err   error
+		Event    *deq.Event
+		Err      error
+		Selector string
 	}
 
 	requests := make(chan string, len(deduped))
@@ -471,21 +472,21 @@ func (c *Channel) BatchGet(ctx context.Context, events []string, options ...deqo
 			txn := c.db.NewTransaction(false)
 			defer txn.Discard()
 
-			for event := range requests {
-				e, err := get(txn, event)
+			for selector := range requests {
+				e, err := get(txn, selector)
 				if err != nil {
-					responses <- Response{Err: err}
+					responses <- Response{Err: err, Selector: selector}
 					return
 				}
 
-				responses <- Response{Event: e}
+				responses <- Response{Event: e, Selector: selector}
 			}
 		}()
 	}
 
 	// Send requests to workers.
-	for id := range deduped {
-		requests <- id
+	for selector := range deduped {
+		requests <- selector
 	}
 	close(requests)
 
@@ -503,7 +504,7 @@ func (c *Channel) BatchGet(ctx context.Context, events []string, options ...deqo
 			if resp.Err != nil {
 				return nil, resp.Err
 			}
-			result[resp.Event.ID] = *resp.Event
+			result[resp.Selector] = *resp.Event
 		case <-ctx.Done():
 			return nil, ctx.Err()
 		}
