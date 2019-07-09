@@ -534,7 +534,7 @@ func TestGetIndex(t *testing.T) {
 	}
 }
 
-func TestBatchGet(t *testing.T) {
+func TestBatchGetAllow(t *testing.T) {
 	t.Parallel()
 
 	ctx := context.Background()
@@ -594,6 +594,74 @@ func TestBatchGet(t *testing.T) {
 	defer channel.Close()
 
 	actual, err := channel.BatchGet(ctx, ids)
+	if err != nil {
+		t.Fatalf("get: %v", err)
+	}
+	if !cmp.Equal(actual, expected) {
+		t.Errorf("\n%s", cmp.Diff(expected, actual))
+	}
+}
+
+func TestBatchGetAllowNotFound(t *testing.T) {
+	t.Parallel()
+
+	ctx := context.Background()
+
+	db, discard := newTestDB(t)
+	defer discard()
+
+	pub := []deq.Event{
+		{
+			ID:           "event1",
+			Topic:        "topic",
+			CreateTime:   time.Now().Round(0),
+			DefaultState: deq.StateQueued,
+			State:        deq.StateQueued,
+		},
+		{
+			ID:           "event2",
+			Topic:        "topic",
+			CreateTime:   time.Now().Round(0),
+			DefaultState: deq.StateQueued,
+			State:        deq.StateQueued,
+		},
+		{
+			ID:           "event3",
+			Topic:        "topic",
+			CreateTime:   time.Now().Round(0),
+			DefaultState: deq.StateQueued,
+			State:        deq.StateQueued,
+		},
+		{
+			ID:           "event4",
+			Topic:        "topic",
+			CreateTime:   time.Now().Round(0),
+			DefaultState: deq.StateQueued,
+			State:        deq.StateQueued,
+		},
+	}
+
+	for _, e := range pub {
+		_, err := db.Pub(ctx, e)
+		if err != nil {
+			t.Fatalf("pub: %v", err)
+		}
+	}
+
+	expected := map[string]deq.Event{
+		"event1": pub[0],
+		"event3": pub[2],
+		"event4": pub[3],
+	}
+
+	ids := []string{
+		"event1", "event3", "event4", "event5", "event7",
+	}
+
+	channel := db.Channel("channel", pub[0].Topic)
+	defer channel.Close()
+
+	actual, err := channel.BatchGet(ctx, ids, deqopt.AllowNotFound())
 	if err != nil {
 		t.Fatalf("get: %v", err)
 	}

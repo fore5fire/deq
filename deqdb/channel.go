@@ -494,8 +494,11 @@ func (c *Channel) BatchGet(ctx context.Context, events []string, options ...deqo
 	for range deduped {
 		select {
 		case resp := <-responses:
-			if opts.AllowNotFound && resp.Err == deq.ErrNotFound {
+			if resp.Err == deq.ErrNotFound && opts.AllowNotFound {
 				continue
+			}
+			if resp.Err == deq.ErrNotFound {
+				return nil, deq.ErrNotFound
 			}
 			if resp.Err != nil {
 				return nil, resp.Err
