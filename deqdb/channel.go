@@ -208,7 +208,7 @@ func (c *Channel) Sub(ctx context.Context, handler deq.SubHandler) error {
 						}
 					}
 
-					if result.err != nil {
+					if result.err != nil && ack.ErrorCode(result.err) != ack.NoOp {
 						// TODO: post error value back to DEQ.
 						c.info.Printf("handle channel %q topic %q event %q: %v", c.name, c.topic, result.req.ID, result.err)
 					}
