@@ -13,6 +13,8 @@ import (
 	"gitlab.com/katcheCode/deq/deqdb/internal/priority"
 )
 
+const sendLimit = 40
+
 type channelKey struct {
 	name  string
 	topic string
@@ -214,7 +216,7 @@ func (s *sharedChannel) startSendCountIncrementer() {
 			continue
 		}
 
-		if s.defaultRequeueLimit != -1 && int(sendCount.SendCount) >= 40 {
+		if s.defaultRequeueLimit != -1 && int(sendCount.SendCount) >= sendLimit {
 			channelEvent := data.ChannelPayload{
 				EventState: data.EventState_SEND_LIMIT_EXCEEDED,
 			}
@@ -235,6 +237,7 @@ func (s *sharedChannel) startSendCountIncrementer() {
 			}
 			s.info.Printf("channel %q: requeue limit exceeded for topic: %q id: %q - dequeuing", s.name, s.topic, e.ID)
 			s.broadcastEventUpdated(e.ID, data.EventStateFromProto(channelEvent.EventState))
+			continue
 		}
 
 		sendCount.SendCount++

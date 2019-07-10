@@ -179,7 +179,7 @@ func (c *clientChannel) Sub(ctx context.Context, handler deq.SubHandler) error {
 				if result.resp != nil {
 					_, err := c.client.Pub(ctx, *result.resp)
 					if err != nil {
-						log.Printf("publish response %q %q: %v - will retry", result.resp.Topic, result.resp.ID, err)
+						log.Printf("publish response %q %q to %q %q: %v - will retry", result.resp.Topic, result.resp.ID, result.req.Topic, result.req.ID, err)
 						// Make sure the event is queued.
 						if ackCode != ack.Requeue && ackCode != ack.RequeueLinear && ackCode != ack.RequeueConstant {
 							ackCode = ack.Requeue
@@ -196,12 +196,11 @@ func (c *clientChannel) Sub(ctx context.Context, handler deq.SubHandler) error {
 					continue
 				}
 
-				code := codeToProto(ackCode)
 				_, err := c.deqClient.Ack(ctx, &api.AckRequest{
 					Channel: c.name,
 					Topic:   c.topic,
 					EventId: result.req.ID,
-					Code:    code,
+					Code:    codeToProto(ackCode),
 				})
 				if err != nil {
 					select {

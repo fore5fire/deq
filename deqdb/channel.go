@@ -207,9 +207,15 @@ func (c *Channel) Sub(ctx context.Context, handler deq.SubHandler) error {
 					if result.resp != nil {
 						_, err := c.store.Pub(ctx, *result.resp)
 						if err != nil {
-							log.Printf("publish response: %v - will retry", err)
-							// Make sure the event is queued.
-							if ackCode != ack.Requeue && ackCode != ack.RequeueLinear && ackCode != ack.RequeueConstant {
+							// Log the error and compensating action
+							action := "will retry"
+							reachedLimit := result.req.SendCount >= sendLimit
+							if reachedLimit {
+								action = "send limit exceeded, not retrying"
+							}
+							log.Printf("publish response: %v - %s", err, action)
+							// Make sure the event is queued unless it has reached its resend limit.
+							if ackCode != ack.Requeue && ackCode != ack.RequeueLinear && ackCode != ack.RequeueConstant && !reachedLimit {
 								ackCode = ack.Requeue
 							}
 						}
