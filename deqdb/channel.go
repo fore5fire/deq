@@ -4,6 +4,7 @@ import (
 	"context"
 	"errors"
 	"fmt"
+	"log"
 	"sync"
 	"time"
 
@@ -200,22 +201,27 @@ func (c *Channel) Sub(ctx context.Context, handler deq.SubHandler) error {
 
 			for result := range results {
 
+				ackCode := ack.ErrorCode(result.err)
+
 				err := func() error {
 					if result.resp != nil {
 						_, err := c.store.Pub(ctx, *result.resp)
 						if err != nil {
-							return fmt.Errorf("publish response %q %q: %v", result.resp.Topic, result.resp.ID, err)
+							log.Printf("publish response: %v - will retry", err)
+							// Make sure the event is queued.
+							if ackCode != ack.Requeue && ackCode != ack.RequeueLinear && ackCode != ack.RequeueConstant {
+								ackCode = ack.Requeue
+							}
 						}
 					}
 
-					if result.err != nil && ack.ErrorCode(result.err) != ack.NoOp {
+					if result.err != nil && ackCode != ack.NoOp {
 						// TODO: post error value back to DEQ.
 						c.info.Printf("handle channel %q topic %q event %q: %v", c.name, c.topic, result.req.ID, result.err)
 					}
 
-					code := ack.ErrorCode(result.err)
 					var state deq.State
-					switch code {
+					switch ackCode {
 					case ack.DequeueOK:
 						state = deq.StateOK
 					case ack.Invalid:

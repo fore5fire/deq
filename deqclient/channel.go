@@ -174,21 +174,18 @@ func (c *clientChannel) Sub(ctx context.Context, handler deq.SubHandler) error {
 
 			for result := range results {
 
+				ackCode := ack.ErrorCode(result.err)
+
 				if result.resp != nil {
 					_, err := c.client.Pub(ctx, *result.resp)
-					if err != nil && status.Code(err) != codes.Unavailable {
-						log.Printf("publish response: %v", err)
-					}
 					if err != nil {
-						select {
-						case errc <- err:
-						default:
+						log.Printf("publish response: %v - will retry", err)
+						// Make sure the event is queued.
+						if ackCode != ack.Requeue && ackCode != ack.RequeueLinear && ackCode != ack.RequeueConstant {
+							ackCode = ack.Requeue
 						}
-						continue
 					}
 				}
-
-				ackCode := ack.ErrorCode(result.err)
 
 				if result.err != nil && ackCode != ack.NoOp {
 					// TODO: post error value back to DEQ.
