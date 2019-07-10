@@ -179,7 +179,7 @@ func (c *clientChannel) Sub(ctx context.Context, handler deq.SubHandler) error {
 				if result.resp != nil {
 					_, err := c.client.Pub(ctx, *result.resp)
 					if err != nil {
-						log.Printf("publish response: %v - will retry", err)
+						log.Printf("publish response %q %q: %v - will retry", result.resp.Topic, result.resp.ID, err)
 						// Make sure the event is queued.
 						if ackCode != ack.Requeue && ackCode != ack.RequeueLinear && ackCode != ack.RequeueConstant {
 							ackCode = ack.Requeue
