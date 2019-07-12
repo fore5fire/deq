@@ -276,7 +276,7 @@ func (s *Store) Pub(ctx context.Context, e deq.Event) (deq.Event, error) {
 
 	err := validateTopic(e.Topic, false)
 	if err != nil {
-		return deq.Event{}, fmt.Errorf("e.Topic is not valid: %v", err)
+		return deq.Event{}, fmt.Errorf("validate e.Topic: %v", err)
 	}
 	if e.CreateTime.IsZero() {
 		e.CreateTime = time.Now()
@@ -385,6 +385,11 @@ func (s *Store) queueOut(e *deq.Event) {
 
 // Del deletes an event
 func (s *Store) Del(ctx context.Context, topic, id string) error {
+
+	err := validateTopic(topic, false)
+	if err != nil {
+		return fmt.Errorf("validate topic: %v", err)
+	}
 
 	txn := s.db.NewTransaction(true)
 	defer txn.Discard()

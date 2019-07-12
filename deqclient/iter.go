@@ -25,11 +25,21 @@ func (c *clientChannel) NewEventIter(opts *deq.IterOptions) deq.EventIter {
 	if opts == nil {
 		opts = &deq.IterOptions{}
 	}
+	prefetchCount := 20
+	if opts.PrefetchCount < -1 {
+		panic("opts.PrefetchCount cannot be less than -1")
+	}
+	if opts.PrefetchCount == -1 {
+		prefetchCount = 0
+	}
+	if opts.PrefetchCount > 0 {
+		prefetchCount = opts.PrefetchCount
+	}
 
 	ctx, cancel := context.WithCancel(context.Background())
 
 	it := &eventIter{
-		next:     make(chan *api.Event, opts.PrefetchCount/2),
+		next:     make(chan *api.Event, prefetchCount/2),
 		cancel:   cancel,
 		client:   c.deqClient,
 		reversed: opts.Reversed,
@@ -41,7 +51,7 @@ func (c *clientChannel) NewEventIter(opts *deq.IterOptions) deq.EventIter {
 		MinId:    opts.Min,
 		MaxId:    opts.Max,
 		Reversed: opts.Reversed,
-		PageSize: int32(opts.PrefetchCount/2 + opts.PrefetchCount%2),
+		PageSize: int32(prefetchCount/2 + opts.PrefetchCount%2),
 	})
 
 	return it

@@ -11,6 +11,102 @@ import (
 	"google.golang.org/grpc"
 )
 
+func TestEventIter(t *testing.T) {
+	ctx := context.Background()
+
+	now := time.Now()
+
+	events := []*api.Event{
+		{
+			Id:         "1",
+			Topic:      "abc",
+			CreateTime: now.UnixNano(),
+		},
+		{
+			Id:         "2",
+			Topic:      "abc",
+			CreateTime: now.UnixNano(),
+		},
+		{
+			Id:         "3",
+			Topic:      "abc",
+			CreateTime: now.UnixNano(),
+		},
+		{
+			Id:         "4",
+			Topic:      "abc",
+			CreateTime: now.UnixNano(),
+		},
+		{
+			Id:         "5",
+			Topic:      "abc",
+			CreateTime: now.UnixNano(),
+		},
+		{
+			Id:         "6",
+			Topic:      "abc",
+			CreateTime: now.UnixNano(),
+		},
+	}
+
+	expect := []deq.Event{
+		{
+			ID:         "1",
+			Topic:      "abc",
+			CreateTime: now,
+		},
+		{
+			ID:         "2",
+			Topic:      "abc",
+			CreateTime: now,
+		},
+		{
+			ID:         "3",
+			Topic:      "abc",
+			CreateTime: now,
+		},
+		{
+			ID:         "4",
+			Topic:      "abc",
+			CreateTime: now,
+		},
+		{
+			ID:         "5",
+			Topic:      "abc",
+			CreateTime: now,
+		},
+		{
+			ID:         "6",
+			Topic:      "abc",
+			CreateTime: now,
+		},
+	}
+
+	channel := &clientChannel{
+		deqClient: testIterClient{
+			events: events,
+		},
+		topic: "abc",
+		name:  "123",
+	}
+
+	iter := channel.NewEventIter(&deq.IterOptions{
+		PrefetchCount: -1,
+	})
+	defer iter.Close()
+
+	var actual []deq.Event
+	for iter.Next(ctx) {
+		actual = append(actual, iter.Event())
+	}
+	if iter.Err() != nil {
+		t.Fatalf("next: %v", iter.Err())
+	}
+	if !cmp.Equal(expect, actual) {
+		t.Errorf("\n%s", cmp.Diff(expect, actual))
+	}
+}
+
 func TestIndexIter(t *testing.T) {
 	ctx := context.Background()
 

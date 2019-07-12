@@ -34,6 +34,8 @@ type Client interface {
 	// queue on all channels. Note that this operation breaks the immutability of the database, and
 	// is intended as a tool for debugging and emergency fixes only - it is not covered by any
 	// stability guarantees and is intended to be replaced with a safe alternative in the future.
+	// If an application needs to represent deletion of an event, it is reccomended to add a `deleted`
+	// field or some other application-level data to store the object's state.
 	Del(ctx context.Context, topic, id string) error
 }
 
