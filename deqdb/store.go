@@ -428,74 +428,82 @@ func (s *Store) Del(ctx context.Context, topic, id string) error {
 	}
 
 	// Iterate over each channel and delete any with matching topic and id.
-	prefix := []byte{data.ChannelTag, data.Sep}
-	cursor := prefix
+	err = func() error {
+		prefix := []byte{data.ChannelTag, data.Sep}
+		cursor := prefix
 
-	it := txn.NewIterator(badger.IteratorOptions{
-		PrefetchValues: false,
-		Prefix:         prefix,
-	})
-	for it.Seek(prefix); it.ValidForPrefix(prefix); it.Seek(cursor) {
-		var key data.ChannelKey
-		err := data.UnmarshalChannelKey(it.Item().Key(), &key)
-		if err != nil {
-			return fmt.Errorf("unmarshal channel key: %v", err)
-		}
-		if key.Topic < topic || (key.Topic == topic && key.ID < id) {
-			// Find the topic and id for this channel
-			key.Topic = topic
-			key.ID = id
-			cursor, err = key.Marshal(cursor)
+		it := txn.NewIterator(badger.IteratorOptions{
+			PrefetchValues: false,
+			Prefix:         prefix,
+		})
+		defer it.Close()
+
+		for it.Seek(prefix); it.ValidForPrefix(prefix); it.Seek(cursor) {
+			var key data.ChannelKey
+			err := data.UnmarshalChannelKey(it.Item().Key(), &key)
 			if err != nil {
-				return fmt.Errorf("marshal channel key: %v", err)
+				return fmt.Errorf("unmarshal channel key: %v", err)
 			}
-			continue
+			if key.Topic < topic || (key.Topic == topic && key.ID < id) {
+				// Find the topic and id for this channel
+				key.Topic = topic
+				key.ID = id
+				cursor, err = key.Marshal(cursor)
+				if err != nil {
+					return fmt.Errorf("marshal channel key: %v", err)
+				}
+				continue
+			}
+			if key.Topic == topic && key.ID == id {
+				// We found a match - delete it.
+				err = txn.Delete(it.Item().Key())
+				if err != nil {
+					return err
+				}
+			}
+
+			// We've done with this channel, skip to the next one.
+			cursor = append(cursor[:2], key.Channel...)
+			// Append a 1 so the cursor is just after the current channel.
+			cursor = append(cursor, 1, data.Sep)
 		}
-		if key.Topic == topic && key.ID == id {
-			// We found a match - delete it.
-			err = txn.Delete(it.Item().Key())
+
+		// Iterate over send counts for each channel and delete any with matching topic and event.
+		prefix[0] = data.SendCountTag
+
+		for it.Seek(prefix); it.ValidForPrefix(prefix); it.Seek(cursor) {
+			var key data.SendCountKey
+			err := data.UnmarshalSendCountKey(it.Item().Key(), &key)
 			if err != nil {
-				return err
+				return fmt.Errorf("unmarshal channel key: %v", err)
 			}
-		}
-
-		// We've done with this channel, skip to the next one.
-		cursor = append(cursor[:2], key.Channel...)
-		// Append a 1 so the cursor is just after the current channel.
-		cursor = append(cursor, 1, data.Sep)
-	}
-
-	// Iterate over send counts for each channel and delete any with matching topic and event.
-	prefix[0] = data.SendCountTag
-
-	for it.Seek(prefix); it.ValidForPrefix(prefix); it.Seek(cursor) {
-		var key data.SendCountKey
-		err := data.UnmarshalSendCountKey(it.Item().Key(), &key)
-		if err != nil {
-			return fmt.Errorf("unmarshal channel key: %v", err)
-		}
-		if key.Topic < topic || (key.Topic == topic && key.ID < id) {
-			// Find the topic and id for this channel
-			key.Topic = topic
-			key.ID = id
-			cursor, err = key.Marshal(cursor)
-			if err != nil {
-				return fmt.Errorf("marshal channel key: %v", err)
+			if key.Topic < topic || (key.Topic == topic && key.ID < id) {
+				// Find the topic and id for this channel
+				key.Topic = topic
+				key.ID = id
+				cursor, err = key.Marshal(cursor)
+				if err != nil {
+					return fmt.Errorf("marshal channel key: %v", err)
+				}
+				continue
 			}
-			continue
-		}
-		if key.Topic == topic && key.ID == id {
-			// We found a match - delete it.
-			err = txn.Delete(it.Item().Key())
-			if err != nil {
-				return err
+			if key.Topic == topic && key.ID == id {
+				// We found a match - delete it.
+				err = txn.Delete(it.Item().Key())
+				if err != nil {
+					return err
+				}
 			}
-		}
 
-		// We've done with this channel, skip to the next one.
-		cursor = append(cursor[:2], key.Channel...)
-		// Append a 1 so the cursor is just after the current channel.
-		cursor = append(cursor, 1, data.Sep)
+			// We've done with this channel, skip to the next one.
+			cursor = append(cursor[:2], key.Channel...)
+			// Append a 1 so the cursor is just after the current channel.
+			cursor = append(cursor, 1, data.Sep)
+		}
+		return nil
+	}()
+	if err != nil {
+		return err
 	}
 
 	err = txn.Commit()
