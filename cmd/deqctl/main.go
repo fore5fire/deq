@@ -214,8 +214,9 @@ func main() {
 		channel.SetIdleTimeout(time.Second * 3)
 		var wg sync.WaitGroup
 		var mut sync.Mutex
-		wg.Add(10)
-		for j := 0; j < 10; j++ {
+		workers := 100
+		wg.Add(workers)
+		for j := 0; j < workers; j++ {
 			go func() {
 				defer wg.Done()
 				err := channel.Sub(ctx, func(ctx context.Context, e deq.Event) (*deq.Event, error) {
@@ -224,6 +225,7 @@ func main() {
 						return nil, fmt.Errorf("delete event: %v", err)
 					}
 					mut.Lock()
+					fmt.Printf("deleted %q", e.ID)
 					i++
 					mut.Unlock()
 					return nil, ack.Error(ack.NoOp)

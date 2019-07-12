@@ -441,7 +441,7 @@ func (s *Store) Del(ctx context.Context, topic, id string) error {
 		if err != nil {
 			return fmt.Errorf("unmarshal channel key: %v", err)
 		}
-		if key.Topic < topic || key.ID < id {
+		if key.Topic < topic || (key.Topic == topic && key.ID < id) {
 			// Find the topic and id for this channel
 			key.Topic = topic
 			key.ID = id
@@ -474,7 +474,7 @@ func (s *Store) Del(ctx context.Context, topic, id string) error {
 		if err != nil {
 			return fmt.Errorf("unmarshal channel key: %v", err)
 		}
-		if key.Topic < topic || key.ID < id {
+		if key.Topic < topic || (key.Topic == topic && key.ID < id) {
 			// Find the topic and id for this channel
 			key.Topic = topic
 			key.ID = id
