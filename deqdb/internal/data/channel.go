@@ -82,7 +82,7 @@ func UnmarshalChannelKey(buf []byte, key *ChannelKey) error {
 	return nil
 }
 
-// ChannelPrefix creates a prefix for ChannelKeys of a given topic
+// ChannelPrefix creates a prefix for ChannelKeys of a given channel
 func ChannelPrefix(channel string) ([]byte, error) {
 
 	if strings.ContainsRune(channel, 0) {
@@ -96,7 +96,7 @@ func ChannelPrefix(channel string) ([]byte, error) {
 	buf = buf[2:]
 	copy(buf, channel)
 	buf = buf[len(channel):]
-	// buf[0] = Sep
+	buf[0] = Sep
 	return ret, nil
 }
 

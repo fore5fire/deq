@@ -7,6 +7,8 @@ import (
 	"testing"
 	"time"
 
+	"github.com/dgraph-io/badger"
+
 	"github.com/google/go-cmp/cmp"
 	"gitlab.com/katcheCode/deq"
 	"gitlab.com/katcheCode/deq/deqdb/internal/data"
@@ -65,15 +67,58 @@ func TestDel(t *testing.T) {
 		Topic:        "topic",
 		CreateTime:   time.Now(),
 		DefaultState: deq.StateQueued,
-		State:        deq.StateQueued,
+		State:        deq.StateInternal,
+		SendCount:    1,
 	}
 
-	_, err := db.Pub(ctx, expected)
-	if err != nil {
-		t.Fatalf("pub: %v", err)
+	events := []deq.Event{
+		expected,
+		{
+			ID:           "event2",
+			Topic:        "topic",
+			CreateTime:   time.Now(),
+			DefaultState: deq.StateQueued,
+			State:        deq.StateInternal,
+			SendCount:    1,
+		},
+		{
+			ID:           "event1",
+			Topic:        "topic2",
+			CreateTime:   time.Now(),
+			DefaultState: deq.StateQueued,
+			State:        deq.StateInternal,
+			SendCount:    1,
+		},
 	}
 
-	err = db.Del(ctx, expected.Topic, expected.ID)
+	channels := []string{
+		"channel",
+		"channel2",
+		"channel4",
+	}
+
+	for _, e := range events {
+		_, err := db.Pub(ctx, e)
+		if err != nil {
+			t.Fatalf("pub: %v", err)
+		}
+		// Make sure the event is sent on each channel so it has send count data saved in the database.
+		for _, channel := range channels {
+			c := db.Channel(channel, e.Topic)
+			c.SetInitialResendDelay(time.Millisecond * 10)
+			e, err := c.Next(ctx)
+			if err != nil {
+				t.Fatalf("create event %q %q: ensure send count incremented: sub: %v", e.Topic, e.ID, err)
+			}
+			err = c.SetEventState(ctx, e.ID, deq.StateInternal)
+			if err != nil {
+				t.Fatalf("create event %q %q: set state: %v", e.Topic, e.ID, err)
+			}
+			c.Close()
+		}
+	}
+
+	err := db.Del(ctx, expected.Topic, expected.ID)
 	if err != nil {
 		t.Fatalf("del: %v", err)
 	}
@@ -82,11 +127,69 @@ func TestDel(t *testing.T) {
 	defer channel.Close()
 
 	_, err = channel.Get(ctx, expected.ID)
-	if err == nil {
-		t.Fatalf("returned deleted event")
-	}
-	if err != deq.ErrNotFound {
+	if err != nil && err != deq.ErrNotFound {
 		t.Fatalf("get deleted: %v", err)
+	}
+	if err == nil {
+		t.Errorf("returned deleted event")
+	}
+
+	txn := db.db.NewTransaction(false)
+
+	// Ensure channel data was deleted.
+	for i, channel := range channels {
+		// Verify channel events were deleted
+		key, err := data.ChannelKey{
+			Channel: channel,
+			Topic:   "topic",
+			ID:      "event1",
+		}.Marshal(nil)
+		if err != nil {
+			t.Fatalf("marshal channel key %d: %v", i, err)
+		}
+		_, err = txn.Get(key)
+		if err != nil && err != badger.ErrKeyNotFound {
+			t.Fatalf("get deleted channel event %d: %v", i, err)
+		}
+		if err == nil {
+			t.Errorf("get deleted channel event %d: not deleted", i)
+		}
+
+		// Verify send counts were deleted
+		sendCountKey := data.SendCountKey{
+			Channel: "channel",
+			Topic:   "topic",
+			ID:      "event1",
+		}
+		key, err = sendCountKey.Marshal(nil)
+		if err != nil {
+			t.Fatalf("marshal send count key %d: %v", i, err)
+		}
+		_, err = txn.Get(key)
+		if err != nil && err != badger.ErrKeyNotFound {
+			t.Fatalf("get deleted send count %d: %v", i, err)
+		}
+		if err == nil {
+			t.Errorf("get deleted send count %d: not deleted", i)
+		}
+	}
+
+	// Ensure other events channel data wasn't modified.
+	for _, e := range events {
+		if cmp.Equal(e, expected) {
+			continue
+		}
+		for _, channel := range channels {
+			c := db.Channel(channel, e.Topic)
+			actual, err := c.Get(ctx, e.ID)
+			if err != nil {
+				t.Fatalf("verify other event wasn't modified: get: %v", err)
+			}
+			if !cmp.Equal(e, actual) {
+				t.Errorf("verify other event wasn't modified:\n%s", cmp.Diff(e, actual))
+			}
+			c.Close()
+		}
 	}
 }
 

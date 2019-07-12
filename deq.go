@@ -24,13 +24,17 @@ type Client interface {
 	// and ID, the later events are not published and the previously published event is returned.
 	Pub(ctx context.Context, e Event) (Event, error)
 
-	// Del(ctx context.Context, topic, id string) error
-
 	// Channel returns a channel of a certain topic.
 	//
 	// A channel is active if Close has not been called on any channels returned by this method,
 	// including channels from other clients of the same database.
 	Channel(name, topic string) Channel
+
+	// Del deletes an event in the database. When an event is deleted, it is also removed from the
+	// queue on all channels. Note that this operation breaks the immutability of the database, and
+	// is intended as a tool for debugging and emergency fixes only - it is not covered by any
+	// stability guarantees and is intended to be replaced with a safe alternative in the future.
+	Del(ctx context.Context, topic, id string) error
 }
 
 // Channel is an event channel in the database.
