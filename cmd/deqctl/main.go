@@ -19,6 +19,7 @@ import (
 	"math/rand"
 	"os"
 	"strconv"
+	"strings"
 	"sync"
 	"time"
 
@@ -52,13 +53,14 @@ func main() {
 
 	var host, channel, nameOverride, dir, min, max string
 	var insecure, useIndex, all, debug, reversed bool
-	var timeout, idle int
+	var timeout, idle, workers int
 
 	flag.StringVar(&host, "host", "localhost:3000", "Specify deq host and port. Ignored if dir flag is set.")
 	flag.StringVar(&dir, "dir", "", "If set, use operate directly on the specified deq database directory instead of connecting to a deq server.")
 	flag.StringVar(&channel, "channel", strconv.FormatInt(int64(rand.Int()), 16), "Specify channel.")
 	flag.IntVar(&idle, "idle", 0, "The duration in milliseconds that the subscription waits if idle before closing. If 0, the subscription can idle indefinitely.")
-	flag.IntVar(&timeout, "timeout", 10000, "Timeout of the request in milliseconds.")
+	flag.IntVar(&timeout, "timeout", 10000, "Timeout of the request in milliseconds. If 0, the request never times out.")
+	flag.IntVar(&workers, "workers", 15, "The number of workers making concurrent requests. Must be positive.")
 	flag.BoolVar(&insecure, "insecure", false, "Disables tls")
 	flag.StringVar(&nameOverride, "tls-name-override", "", "Overrides the expected name on the server's TLS certificate.")
 	flag.BoolVar(&useIndex, "index", false, "Use the index instead of IDs for getting events")
@@ -70,8 +72,14 @@ func main() {
 
 	flag.Parse()
 
-	ctx, cancel := context.WithTimeout(context.Background(), time.Duration(timeout)*time.Millisecond)
+	var cancel func()
+	var ctx context.Context
 	defer cancel()
+	if timeout == 0 {
+		ctx, cancel = context.WithCancel(context.Background())
+	} else {
+		ctx, cancel = context.WithTimeout(context.Background(), time.Duration(timeout)*time.Millisecond)
+	}
 
 	cmd := flag.Arg(0)
 	switch cmd {
@@ -89,6 +97,8 @@ func main() {
 		}
 
 		channel := deqc.Channel(channel, topic)
+		defer channel.Close()
+
 		channel.SetIdleTimeout(time.Duration(idle) * time.Millisecond)
 		err = channel.Sub(ctx, func(ctx context.Context, e deq.Event) (*deq.Event, error) {
 			fmt.Printf("ID: %v\nIndexes: %v\nPayload: %s\n\n", e.ID, e.Indexes, base64.StdEncoding.EncodeToString(e.Payload))
@@ -116,6 +126,8 @@ func main() {
 		}
 
 		channel := deqc.Channel(channel, topic)
+		defer channel.Close()
+
 		iter := channel.NewEventIter(&deq.IterOptions{
 			Min:      min,
 			Max:      max,
@@ -153,6 +165,8 @@ func main() {
 		}
 
 		channel := deqc.Channel(channel, topic)
+		defer channel.Close()
+
 		var opts []deqopt.GetOption
 		if useIndex {
 			opts = append(opts, deqopt.UseIndex())
@@ -194,52 +208,66 @@ func main() {
 			break
 		}
 
-		// We're deleting all events on the topic. Loop through each event and delete it.
-		i := 0
-		channel := deqc.Channel(channel, topic)
-		// iter := channel.NewEventIter(nil)
-		// defer iter.Close()
-		// for iter.Next(ctx) {
-		// 	err = deqc.Del(ctx, topic, iter.Event().ID)
-		// 	if err != nil {
-		// 		fmt.Printf("delete event %q %q: %v", topic, iter.Event().ID, iter.Err())
-		// 		os.Exit(2)
-		// 	}
-		// 	i++
-		// }
-		// if iter.Err() != nil {
-		// 	fmt.Printf("%v", iter.Err())
-		// 	os.Exit(2)
-		// }
-		channel.SetIdleTimeout(time.Second * 3)
-		var wg sync.WaitGroup
-		var mut sync.Mutex
-		workers := 100
-		wg.Add(workers)
-		for j := 0; j < workers; j++ {
-			go func() {
-				defer wg.Done()
-				err := channel.Sub(ctx, func(ctx context.Context, e deq.Event) (*deq.Event, error) {
-					err = deqc.Del(ctx, topic, e.ID)
-					if err != nil {
-						return nil, fmt.Errorf("delete event: %v", err)
-					}
-					mut.Lock()
-					fmt.Printf("deleted %q", e.ID)
-					i++
-					mut.Unlock()
-					return nil, ack.Error(ack.NoOp)
-				})
-				if err != nil && status.Code(err) != codes.DeadlineExceeded {
-					fmt.Printf("sub: %v\n", err)
-					return
+		topics := strings.Split(topic, ",")
+		for _, topic := range topics {
+			func() {
+
+				// We're deleting all events on the topic. Loop through each event and delete it.
+				i := 0
+				channel := deqc.Channel(channel, topic)
+				defer channel.Close()
+
+				// iter := channel.NewEventIter(nil)
+				// defer iter.Close()
+				// for iter.Next(ctx) {
+				// 	err = deqc.Del(ctx, topic, iter.Event().ID)
+				// 	if err != nil {
+				// 		fmt.Printf("delete event %q %q: %v", topic, iter.Event().ID, iter.Err())
+				// 		os.Exit(2)
+				// 	}
+				// 	i++
+				// }
+				// if iter.Err() != nil {
+				// 	fmt.Printf("%v", iter.Err())
+				// 	os.Exit(2)
+				// }
+				channel.SetIdleTimeout(time.Second)
+				var wg sync.WaitGroup
+				var mut sync.Mutex
+				wg.Add(workers)
+				for j := 0; j < workers; j++ {
+					go func() {
+						defer wg.Done()
+						err := channel.Sub(ctx, func(ctx context.Context, e deq.Event) (*deq.Event, error) {
+							for retries := 0; retries < 5; retries++ {
+								err := deqc.Del(ctx, topic, e.ID)
+								if status.Code(err) == codes.Internal {
+									continue
+								}
+								if err != nil {
+									return nil, fmt.Errorf("delete event: %v", err)
+								}
+								mut.Lock()
+								fmt.Printf("deleted %q %q\n", topic, e.ID)
+								i++
+								mut.Unlock()
+								return nil, ack.Error(ack.NoOp)
+							}
+							fmt.Printf("%q %q exceeded retries\n", topic, e.ID)
+							return nil, ack.Error(ack.NoOp)
+						})
+						if err != nil && status.Code(err) != codes.DeadlineExceeded {
+							fmt.Printf("sub: %v\n", err)
+							return
+						}
+					}()
 				}
+
+				wg.Wait()
+
+				fmt.Printf("deleted %d events on topic %q\n", i, topic)
 			}()
 		}
-
-		wg.Wait()
-
-		fmt.Printf("deleted %d events\n", i)
 
 	case "help", "":
 		flag.Usage()
