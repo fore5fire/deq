@@ -27,6 +27,8 @@ type clientChannel struct {
 	idleTimeout  time.Duration
 }
 
+const sendLimit = 40
+
 func (c *Client) Channel(name, topic string) deq.Channel {
 	if name == "" {
 		panic("name is required")
@@ -179,7 +181,13 @@ func (c *clientChannel) Sub(ctx context.Context, handler deq.SubHandler) error {
 				if result.resp != nil {
 					_, err := c.client.Pub(ctx, *result.resp)
 					if err != nil {
-						log.Printf("publish response %q %q to %q %q on channel %q: %v - will retry", result.resp.Topic, result.resp.ID, result.req.Topic, result.req.ID, c.name, err)
+						// Log the error and compensating action
+						action := "will retry"
+						reachedLimit := result.req.SendCount >= sendLimit
+						if reachedLimit {
+							action = "send limit exceeded, not retrying"
+						}
+						log.Printf("publish response %q %q to %q %q on channel %q: %v - %s", result.resp.Topic, result.resp.ID, result.req.Topic, result.req.ID, c.name, err, action)
 						// Make sure the event is queued.
 						if ackCode != ack.Requeue && ackCode != ack.RequeueLinear && ackCode != ack.RequeueConstant {
 							ackCode = ack.Requeue
