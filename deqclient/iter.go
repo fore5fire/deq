@@ -35,6 +35,10 @@ func (c *clientChannel) NewEventIter(opts *deq.IterOptions) deq.EventIter {
 	if opts.PrefetchCount > 0 {
 		prefetchCount = opts.PrefetchCount
 	}
+	max := "\xff\xff\xff\xff"
+	if opts.Max != "" {
+		max = opts.Max
+	}
 
 	ctx, cancel := context.WithCancel(context.Background())
 
@@ -49,7 +53,7 @@ func (c *clientChannel) NewEventIter(opts *deq.IterOptions) deq.EventIter {
 		Topic:    c.topic,
 		Channel:  c.name,
 		MinId:    opts.Min,
-		MaxId:    opts.Max,
+		MaxId:    max,
 		Reversed: opts.Reversed,
 		PageSize: int32(prefetchCount/2 + opts.PrefetchCount%2),
 	})

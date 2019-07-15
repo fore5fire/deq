@@ -64,7 +64,10 @@ func NewEventIter(txn Txn, topic, channel string, opts *deq.IterOptions) (*Event
 	if err != nil {
 		return nil, fmt.Errorf("build event time topic prefix: %v", err)
 	}
-	max := opts.Max + "\xff\xff\xff\xff"
+	max := "\xff\xff\xff\xff"
+	if opts.Max != "" {
+		max = opts.Max
+	}
 
 	var start, end []byte
 	if opts.Reversed {
@@ -273,7 +276,10 @@ func NewIndexIter(txn Txn, topic, channel string, opts *deq.IterOptions) (*Index
 	if err != nil {
 		return nil, fmt.Errorf("build event time topic prefix: %v", err)
 	}
-	max := opts.Max + "\xff\xff\xff\xff"
+	max := "\xff\xff\xff\xff"
+	if opts.Max != "" {
+		max = opts.Max
+	}
 
 	var start, end []byte
 	if opts.Reversed {

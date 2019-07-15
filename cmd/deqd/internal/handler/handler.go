@@ -299,17 +299,16 @@ func (s *Handler) List(ctx context.Context, in *pb.ListRequest) (*pb.ListRespons
 	var iter deq.EventIter
 	if in.UseIndex {
 		iter = channel.NewIndexIter(opts)
-		defer iter.Close()
 	} else {
 		iter = channel.NewEventIter(opts)
-		defer iter.Close()
 	}
+	defer iter.Close()
 
-	for {
+	for ctx.Err() == nil {
 		for len(events) < pageSize && iter.Next(ctx) {
 			events = append(events, iter.Event())
 		}
-		if iter.Err() == nil {
+		if len(events) >= pageSize || iter.Err() == nil {
 			break
 		}
 		log.Printf("[WARN] List: iterate event: %v", iter.Err())

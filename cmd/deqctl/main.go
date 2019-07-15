@@ -74,12 +74,12 @@ func main() {
 
 	var cancel func()
 	var ctx context.Context
-	defer cancel()
 	if timeout == 0 {
 		ctx, cancel = context.WithCancel(context.Background())
 	} else {
 		ctx, cancel = context.WithTimeout(context.Background(), time.Duration(timeout)*time.Millisecond)
 	}
+	defer cancel()
 
 	cmd := flag.Arg(0)
 	switch cmd {
@@ -135,7 +135,7 @@ func main() {
 		})
 		defer iter.Close()
 
-		for {
+		for ctx.Err() == nil {
 			for iter.Next(ctx) {
 				e := iter.Event()
 				fmt.Printf("ID: %v\nIndexes: %v\nPayload: %s\n\n", e.ID, e.Indexes, base64.StdEncoding.EncodeToString(e.Payload))
