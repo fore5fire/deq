@@ -225,6 +225,7 @@ func main() {
 				for i := 0; i < workers; i++ {
 					go func() {
 						defer wg.Done()
+					outer:
 						for id := range ids {
 							for retries := 0; retries < 10; retries++ {
 								err = deqc.Del(ctx, topic, id)
@@ -233,13 +234,13 @@ func main() {
 								}
 								if err != nil {
 									fmt.Printf("delete event %q %q: %v", topic, id, err)
-									break
+									continue outer
 								}
 								mut.Lock()
 								delCount++
 								fmt.Printf("deleted %q %q\n", topic, id)
 								mut.Unlock()
-								break
+								continue outer
 							}
 							mut.Lock()
 							fmt.Printf("%q %q exceeded retries\n", topic, id)
@@ -248,7 +249,11 @@ func main() {
 					}()
 				}
 
-				iter := channel.NewEventIter(nil)
+				iter := channel.NewEventIter(&deq.IterOptions{
+					Min:           min,
+					Max:           max,
+					PrefetchCount: workers * 3,
+				})
 				defer iter.Close()
 				for iter.Next(ctx) {
 					ids <- iter.Event().ID

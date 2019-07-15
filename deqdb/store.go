@@ -391,12 +391,15 @@ func (s *Store) Del(ctx context.Context, topic, id string) error {
 		return fmt.Errorf("validate topic: %v", err)
 	}
 
-	txn := s.db.NewTransaction(true)
+	txn := s.db.NewTransaction(false)
 	defer txn.Discard()
+
+	writeTxn := s.db.NewTransaction(true)
+	defer writeTxn.Discard()
 
 	// TODO: refactor this, we really don't need the whole event, just
 	// the create time
-	e, err := data.GetEvent(txn, topic, id, "")
+	e, err := data.GetEvent(writeTxn, topic, id, "")
 	if err != nil {
 		return err
 	}
@@ -418,11 +421,11 @@ func (s *Store) Del(ctx context.Context, topic, id string) error {
 		return fmt.Errorf("marshal event key: %v", err)
 	}
 
-	err = txn.Delete(eventTimeKey)
+	err = writeTxn.Delete(eventTimeKey)
 	if err != nil {
 		return fmt.Errorf("delete event time: %v", err)
 	}
-	err = txn.Delete(eventKey)
+	err = writeTxn.Delete(eventKey)
 	if err != nil {
 		return fmt.Errorf("delete event key: %v", err)
 	}
@@ -456,7 +459,7 @@ func (s *Store) Del(ctx context.Context, topic, id string) error {
 			}
 			if key.Topic == topic && key.ID == id {
 				// We found a match - delete it.
-				err = txn.Delete(it.Item().Key())
+				err = writeTxn.Delete(it.Item().Key())
 				if err != nil {
 					return err
 				}
@@ -489,7 +492,7 @@ func (s *Store) Del(ctx context.Context, topic, id string) error {
 			}
 			if key.Topic == topic && key.ID == id {
 				// We found a match - delete it.
-				err = txn.Delete(it.Item().Key())
+				err = writeTxn.Delete(it.Item().Key())
 				if err != nil {
 					return err
 				}
@@ -506,7 +509,7 @@ func (s *Store) Del(ctx context.Context, topic, id string) error {
 		return err
 	}
 
-	err = txn.Commit()
+	err = writeTxn.Commit()
 	if err != nil {
 		return err
 	}
