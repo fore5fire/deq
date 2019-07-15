@@ -213,59 +213,55 @@ func main() {
 			func() {
 
 				// We're deleting all events on the topic. Loop through each event and delete it.
-				i := 0
+				delCount := 0
 				channel := deqc.Channel(channel, topic)
 				defer channel.Close()
 
-				// iter := channel.NewEventIter(nil)
-				// defer iter.Close()
-				// for iter.Next(ctx) {
-				// 	err = deqc.Del(ctx, topic, iter.Event().ID)
-				// 	if err != nil {
-				// 		fmt.Printf("delete event %q %q: %v", topic, iter.Event().ID, iter.Err())
-				// 		os.Exit(2)
-				// 	}
-				// 	i++
-				// }
-				// if iter.Err() != nil {
-				// 	fmt.Printf("%v", iter.Err())
-				// 	os.Exit(2)
-				// }
-				channel.SetIdleTimeout(time.Second)
-				var wg sync.WaitGroup
+				ids := make(chan string, workers)
 				var mut sync.Mutex
+				var wg sync.WaitGroup
+
 				wg.Add(workers)
-				for j := 0; j < workers; j++ {
+				for i := 0; i < workers; i++ {
 					go func() {
 						defer wg.Done()
-						err := channel.Sub(ctx, func(ctx context.Context, e deq.Event) (*deq.Event, error) {
-							for retries := 0; retries < 5; retries++ {
-								err := deqc.Del(ctx, topic, e.ID)
+						for id := range ids {
+							for retries := 0; retries < 10; retries++ {
+								err = deqc.Del(ctx, topic, id)
 								if status.Code(err) == codes.Internal {
 									continue
 								}
 								if err != nil {
-									return nil, fmt.Errorf("delete event: %v", err)
+									fmt.Printf("delete event %q %q: %v", topic, id, err)
+									break
 								}
 								mut.Lock()
-								fmt.Printf("deleted %q %q\n", topic, e.ID)
-								i++
+								delCount++
+								fmt.Printf("deleted %q %q\n", topic, id)
 								mut.Unlock()
-								return nil, ack.Error(ack.NoOp)
+								break
 							}
-							fmt.Printf("%q %q exceeded retries\n", topic, e.ID)
-							return nil, ack.Error(ack.NoOp)
-						})
-						if err != nil && status.Code(err) != codes.DeadlineExceeded {
-							fmt.Printf("sub: %v\n", err)
-							return
+							mut.Lock()
+							fmt.Printf("%q %q exceeded retries\n", topic, id)
+							mut.Unlock()
 						}
 					}()
 				}
 
+				iter := channel.NewEventIter(nil)
+				defer iter.Close()
+				for iter.Next(ctx) {
+					ids <- iter.Event().ID
+				}
+				if iter.Err() != nil {
+					fmt.Printf("%v", iter.Err())
+					os.Exit(2)
+				}
+				close(ids)
+
 				wg.Wait()
 
-				fmt.Printf("deleted %d events on topic %q\n", i, topic)
+				fmt.Printf("deleted %d events on topic %q\n", delCount, topic)
 			}()
 		}
 

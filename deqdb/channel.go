@@ -213,7 +213,7 @@ func (c *Channel) Sub(ctx context.Context, handler deq.SubHandler) error {
 							if reachedLimit {
 								action = "send limit exceeded, not retrying"
 							}
-							log.Printf("publish response: %v - %s", err, action)
+							log.Printf("publish response %q %q to %q %q on channel %q: %v - %s", result.resp.Topic, result.resp.ID, result.req.Topic, result.req.ID, c.name, err, action)
 							// Make sure the event is queued unless it has reached its resend limit.
 							if ackCode != ack.Requeue && ackCode != ack.RequeueLinear && ackCode != ack.RequeueConstant && !reachedLimit {
 								ackCode = ack.Requeue
