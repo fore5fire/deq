@@ -96,7 +96,7 @@ func (sub *Subscriber) Sub(ctx context.Context, m Message, handler HandlerFunc) 
 		}
 
 		wg.Add(1)
-		go func() {
+		go func(event *api.Event) {
 			defer wg.Done()
 
 			msg := reflect.New(msgType.Elem()).Interface().(Message)
@@ -114,8 +114,10 @@ func (sub *Subscriber) Sub(ctx context.Context, m Message, handler HandlerFunc) 
 				}
 				return
 			}
-
 			code := handler.HandleEvent(protoToEvent(event, msg, sub))
+			if event.SendCount >= 40 && (code == ack.Requeue || code == ack.RequeueLinear || code == ack.RequeueConstant) {
+				return
+			}
 
 			_, err = sub.client.Ack(ctx, &api.AckRequest{
 				Channel: sub.opts.Channel,
@@ -128,7 +130,7 @@ func (sub *Subscriber) Sub(ctx context.Context, m Message, handler HandlerFunc) 
 				log.Printf("deq: event %s handled: ack: %v", event.Id, err)
 				return
 			}
-		}()
+		}(event)
 	}
 }
 

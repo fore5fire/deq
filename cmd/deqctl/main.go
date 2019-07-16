@@ -29,9 +29,7 @@ import (
 	"gitlab.com/katcheCode/deq/deqdb"
 	"gitlab.com/katcheCode/deq/deqopt"
 	"google.golang.org/grpc"
-	"google.golang.org/grpc/codes"
 	"google.golang.org/grpc/credentials"
-	"google.golang.org/grpc/status"
 )
 
 func main() {
@@ -177,7 +175,7 @@ func main() {
 			os.Exit(2)
 		}
 
-		fmt.Printf("id: %v, topic: %s\nindexes: %v\n %s\n\n", e.ID, e.Topic, e.Indexes, e.Payload)
+		fmt.Printf("id: %v, topic: %s\nstate: %v, send count: %d\nindexes: %v\n %s\n\n", e.ID, e.Topic, e.State, e.SendCount, e.Indexes, e.Payload)
 
 	case "delete":
 		topic := flag.Arg(1)
@@ -208,46 +206,44 @@ func main() {
 			break
 		}
 
+		events := make(chan deq.Event, workers)
+		var mut sync.Mutex
+		var wg sync.WaitGroup
+		delCounts := make(map[string]int)
+
+		wg.Add(workers)
+		for i := 0; i < workers; i++ {
+			go func() {
+				defer wg.Done()
+				for e := range events {
+					// for retries := 0; retries < 10; retries++ {
+					err = deqc.Del(ctx, e.Topic, e.ID)
+					// if status.Code(err) == codes.Internal {
+					// 	continue
+					// }
+					if err != nil {
+						fmt.Printf("delete event %q %q: %v\n", e.Topic, e.ID, err)
+						continue
+					}
+					mut.Lock()
+					delCounts[e.Topic]++
+					fmt.Printf("deleted %q %q\n", e.Topic, e.ID)
+					mut.Unlock()
+				}
+				// mut.Lock()
+				// fmt.Printf("%q %q exceeded retries\n", topic, id)
+				// mut.Unlock()
+				// }
+			}()
+		}
+
 		topics := strings.Split(topic, ",")
 		for _, topic := range topics {
 			func() {
 
 				// We're deleting all events on the topic. Loop through each event and delete it.
-				delCount := 0
 				channel := deqc.Channel(channel, topic)
 				defer channel.Close()
-
-				ids := make(chan string, workers)
-				var mut sync.Mutex
-				var wg sync.WaitGroup
-
-				wg.Add(workers)
-				for i := 0; i < workers; i++ {
-					go func() {
-						defer wg.Done()
-					outer:
-						for id := range ids {
-							for retries := 0; retries < 10; retries++ {
-								err = deqc.Del(ctx, topic, id)
-								if status.Code(err) == codes.Internal {
-									continue
-								}
-								if err != nil {
-									fmt.Printf("delete event %q %q: %v", topic, id, err)
-									continue outer
-								}
-								mut.Lock()
-								delCount++
-								fmt.Printf("deleted %q %q\n", topic, id)
-								mut.Unlock()
-								continue outer
-							}
-							mut.Lock()
-							fmt.Printf("%q %q exceeded retries\n", topic, id)
-							mut.Unlock()
-						}
-					}()
-				}
 
 				iter := channel.NewEventIter(&deq.IterOptions{
 					Min:           min,
@@ -256,18 +252,21 @@ func main() {
 				})
 				defer iter.Close()
 				for iter.Next(ctx) {
-					ids <- iter.Event().ID
+					events <- iter.Event()
 				}
 				if iter.Err() != nil {
 					fmt.Printf("%v", iter.Err())
 					os.Exit(2)
 				}
-				close(ids)
 
-				wg.Wait()
-
-				fmt.Printf("deleted %d events on topic %q\n", delCount, topic)
 			}()
+		}
+
+		close(events)
+		wg.Wait()
+
+		for _, topic := range topics {
+			fmt.Printf("deleted %d events on topic %q\n", delCounts[topic], topic)
 		}
 
 	case "help", "":
