@@ -48,6 +48,8 @@ var defaultChannelState = ChannelPayload{
 	EventState: EventState_QUEUED,
 }
 
+// TODO: prevent writing empty indexes.
+
 // GetEvent gets an event from the database by ID.
 //
 // If the event does not exist in the database, GetEvent returns deq.ErrNotFound
@@ -189,9 +191,10 @@ func WriteEvent(txn Txn, e *deq.Event) error {
 			Topic: e.Topic,
 			Value: index,
 		}
+		// log.Printf("[DEBUG] WriteEvent %d: write index %d: using key %+v", i, indexKey)
 
-		// Check if index is in use. Only overwrite if newer, or if create time is the same if the event
-		// id hash is greater.
+		// Check if index is in use. Only overwrite if newer, or if create time is the same then if the
+		// event id hash is greater.
 		var existing IndexPayload
 		err := GetIndexPayload(txn, &indexKey, &existing)
 		if err != nil && err != deq.ErrNotFound {

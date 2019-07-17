@@ -419,14 +419,20 @@ func (c *Channel) get(txn data.Txn, id string) (*deq.Event, error) {
 // GetIndex returns the event for an event's index, or ErrNotFound if none is found
 func (c *Channel) getIndex(txn data.Txn, index string) (*deq.Event, error) {
 
-	var payload data.IndexPayload
-	err := data.GetIndexPayload(txn, &data.IndexKey{
+	key := data.IndexKey{
 		Topic: c.topic,
 		Value: index,
-	}, &payload)
+	}
+
+	c.debug.Printf("channel %q topic %q: getIndex %q: getting payload for key %+v", key)
+
+	var payload data.IndexPayload
+	err := data.GetIndexPayload(txn, &key, &payload)
 	if err != nil {
 		return nil, err
 	}
+
+	c.debug.Printf("channel %q topic %q: getIndex %q: got IndexPayload %+v", c.name, c.topic, index, payload)
 
 	e, err := data.GetEvent(txn, c.topic, payload.EventId, c.name)
 	if err != nil {

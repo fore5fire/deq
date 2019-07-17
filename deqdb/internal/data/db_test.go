@@ -115,6 +115,73 @@ func TestWriteEvent(t *testing.T) {
 	}
 }
 
+func TestWriteEventWithIndexes(t *testing.T) {
+
+	db := NewInMemoryDB()
+	defer db.Close()
+
+	txn := db.NewTransaction(true)
+	defer txn.Discard()
+
+	expected := &deq.Event{
+		Topic:      "topic",
+		ID:         "event1",
+		CreateTime: time.Now(),
+		Payload:    []byte{1, 2, 3},
+		// Should make State start as deq.StateDequeuedOK
+		DefaultState: deq.StateOK,
+		// Should be ignored.
+		State: deq.StateInvalid,
+		Indexes: []string{
+			"abc",
+			"123",
+			"qwerty",
+		},
+	}
+
+	// Write the event
+	err := WriteEvent(txn, expected)
+	if err != nil {
+		t.Fatal("write event: ", err)
+	}
+
+	expected.State = deq.StateOK
+
+	// Verify the event itself
+	actual, err := GetEvent(txn, expected.Topic, expected.ID, "channel")
+	if err != nil {
+		t.Fatalf("get event on channel: %v", err)
+	}
+	if !cmp.Equal(actual, expected) {
+		t.Errorf("\n%s", cmp.Diff(expected, actual))
+	}
+
+	// Verify the index payloads were created
+	expectPayload := &IndexPayload{
+		EventId:    expected.ID,
+		CreateTime: expected.CreateTime.UnixNano(),
+	}
+
+	for i, index := range expected.Indexes {
+		actualPayload := new(IndexPayload)
+		err = GetIndexPayload(txn, &IndexKey{
+			Topic: expected.Topic,
+			Value: index,
+		}, actualPayload)
+		if err != nil {
+			t.Fatalf("get index payload %d: %v", i, err)
+		}
+		if !cmp.Equal(expectPayload, actualPayload) {
+			t.Errorf("get index payload %d:\n%v", i, cmp.Diff(expectPayload, actualPayload))
+		}
+	}
+
+	err = txn.Commit()
+	if err != nil {
+		t.Error("commit: ", err)
+	}
+}
+
 func BenchmarkWriteEvent(b *testing.B) {
 
 	dir, err := ioutil.TempDir("", "test-write-event")

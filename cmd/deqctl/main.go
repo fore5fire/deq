@@ -126,17 +126,23 @@ func main() {
 		channel := deqc.Channel(channel, topic)
 		defer channel.Close()
 
-		iter := channel.NewEventIter(&deq.IterOptions{
+		opts := &deq.IterOptions{
 			Min:      min,
 			Max:      max,
 			Reversed: reversed,
-		})
+		}
+		var iter deq.EventIter
+		if useIndex {
+			iter = channel.NewIndexIter(opts)
+		} else {
+			iter = channel.NewEventIter(opts)
+		}
 		defer iter.Close()
 
 		for ctx.Err() == nil {
 			for iter.Next(ctx) {
 				e := iter.Event()
-				fmt.Printf("ID: %v\nIndexes: %v\nPayload: %s\n\n", e.ID, e.Indexes, base64.StdEncoding.EncodeToString(e.Payload))
+				printEvent(e)
 			}
 			if iter.Err() == nil {
 				break
@@ -175,7 +181,7 @@ func main() {
 			os.Exit(2)
 		}
 
-		fmt.Printf("id: %v, topic: %s\nstate: %v, send count: %d\nindexes: %v\n %s\n\n", e.ID, e.Topic, e.State, e.SendCount, e.Indexes, e.Payload)
+		printEvent(e)
 
 	case "delete":
 		topic := flag.Arg(1)
@@ -324,4 +330,8 @@ func open(dir, host, nameOverride string, insecure, debug bool) (deq.Client, err
 		return nil, fmt.Errorf("dial host %s: %v", host, err)
 	}
 	return deqclient.New(conn), nil
+}
+
+func printEvent(e deq.Event) {
+	fmt.Printf("id: %v, topic: %s\nstate: %v, send count: %d\nindexes: %v\npayload: %s\n\n", e.ID, e.Topic, e.State, e.SendCount, e.Indexes, base64.StdEncoding.EncodeToString(e.Payload))
 }
