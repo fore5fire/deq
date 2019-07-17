@@ -424,7 +424,7 @@ func (c *Channel) getIndex(txn data.Txn, index string) (*deq.Event, error) {
 		Value: index,
 	}
 
-	c.debug.Printf("channel %q topic %q: getIndex %q: getting payload for key %+v", key)
+	c.debug.Printf("channel %q topic %q: getIndex %q: getting payload for key %+v", key, c.topic, index, key)
 
 	var payload data.IndexPayload
 	err := data.GetIndexPayload(txn, &key, &payload)
