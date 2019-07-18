@@ -60,7 +60,7 @@ func DB(ctx context.Context, db data.DB, currentVersion string) error {
 			return fmt.Errorf("upgrade from 1.1.0 to 1.2.0: %v", err)
 		}
 
-		currentVersion = "1.2.1"
+		currentVersion = "1.2.0"
 	}
 
 	if currentVersion == "1.2.0" {
@@ -190,5 +190,5 @@ const (
 	// VersionKey is the key the current database version is stored under.
 	VersionKey = "___DEQ_DB_VERSION___"
 	// CodeVersion is the database version the running code expects.
-	CodeVersion = "1.2.0"
+	CodeVersion = "1.2.1"
 )
