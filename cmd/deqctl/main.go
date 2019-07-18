@@ -57,7 +57,7 @@ func main() {
 	flag.StringVar(&dir, "dir", "", "If set, use operate directly on the specified deq database directory instead of connecting to a deq server.")
 	flag.StringVar(&channel, "channel", strconv.FormatInt(int64(rand.Int()), 16), "Specify channel.")
 	flag.IntVar(&idle, "idle", 0, "The duration in milliseconds that the subscription waits if idle before closing. If 0, the subscription can idle indefinitely.")
-	flag.IntVar(&timeout, "timeout", 10000, "Timeout of the request in milliseconds. If 0, the request never times out.")
+	flag.IntVar(&timeout, "timeout", 0, "Timeout of the request in milliseconds. If 0 (the default), the request never times out.")
 	flag.IntVar(&workers, "workers", 15, "The number of workers making concurrent requests. Must be positive.")
 	flag.BoolVar(&insecure, "insecure", false, "Disables tls")
 	flag.StringVar(&nameOverride, "tls-name-override", "", "Overrides the expected name on the server's TLS certificate.")

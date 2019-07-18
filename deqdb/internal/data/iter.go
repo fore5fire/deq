@@ -352,7 +352,7 @@ func (iter *IndexIter) Next(ctx context.Context) bool {
 
 	e, err := GetEvent(iter.txn, key.Topic, payload.EventId, iter.channel)
 	if err != nil {
-		iter.err = err
+		iter.err = fmt.Errorf("get event %q %q: %v", key.Topic, payload.EventId, err)
 		return false
 	}
 
