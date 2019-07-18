@@ -51,14 +51,14 @@ func deleteOrphanedIndexes(ctx context.Context, db data.DB) error {
 			}
 
 			var indexPayload data.IndexPayload
-			err = data.GetIndexPayload(writeTxn, &key, &indexPayload)
+			err = data.GetIndexPayload(txn, &key, &indexPayload)
 			if err != nil {
 				return fmt.Errorf("get index payload: %v", err)
 			}
 
 			// Lookup event for index
 			var eventPayload data.EventPayload
-			err = data.GetEventPayload(writeTxn, &data.EventKey{
+			err = data.GetEventPayload(txn, &data.EventKey{
 				Topic:      key.Topic,
 				ID:         indexPayload.EventId,
 				CreateTime: time.Unix(0, indexPayload.CreateTime),
