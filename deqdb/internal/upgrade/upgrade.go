@@ -9,6 +9,7 @@ import (
 	"github.com/dgraph-io/badger"
 	"gitlab.com/katcheCode/deq/deqdb/internal/data"
 	"gitlab.com/katcheCode/deq/deqdb/internal/upgrade/v1_1_0"
+	"gitlab.com/katcheCode/deq/deqdb/internal/upgrade/v1_2_0"
 )
 
 // DB upgrades a store's db to the current version.
@@ -64,7 +65,10 @@ func DB(ctx context.Context, db data.DB, currentVersion string) error {
 
 	if currentVersion == "1.2.0" {
 		log.Printf("[INFO] upgrading db from 1.2.0 to 1.2.1")
-		err := v_1_2_0.UpgradeToV1_2_1(ctx, db)
+		err := v1_2_0.UpgradeToV1_2_1(ctx, db)
+		if err != nil {
+			return fmt.Errorf("upgrade from 1.2.0 to 1.2.1: %v", err)
+		}
 		currentVersion = "1.2.1"
 	}
 
