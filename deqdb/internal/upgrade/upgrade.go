@@ -60,7 +60,7 @@ func DB(ctx context.Context, db data.DB, currentVersion string) error {
 			return fmt.Errorf("upgrade from 1.1.0 to 1.2.0: %v", err)
 		}
 
-		currentVersion = "1.2.0"
+		currentVersion = "1.2.1"
 	}
 
 	if currentVersion == "1.2.0" {
