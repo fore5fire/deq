@@ -3,12 +3,9 @@ package data
 import (
 	"bytes"
 	"errors"
-	fmt "fmt"
 	"strings"
 
-	"github.com/dgraph-io/badger"
 	proto "github.com/gogo/protobuf/proto"
-	"gitlab.com/katcheCode/deq"
 )
 
 // IndexKey is a key for custom indexes of events. It can be marshalled and used in a key-value
@@ -16,39 +13,32 @@ import (
 //
 // The marshalled format of an IndexKey is:
 // IndexTag + Sep + Topic + Sep + Type + Sep + Value
-type IndexKeyV1_0_0 struct {
+type IndexKey struct {
 	// Topic must not contain the null character
 	Topic string
 	// Value must not contain the null character.
 	Value string
-	ID    string
 }
 
-func (key *IndexKeyV1_0_0) isKey() {}
+func (key IndexKey) isKey() {}
 
 // Size returns the length of this key's marshalled data. The result is only
 // valid until the key is modified.
-func (key *IndexKeyV1_0_0) Size() int {
-	return len(key.Topic) + len(key.Value) + len(key.ID) + 4
+func (key IndexKey) Size() int {
+	return len(key.Topic) + len(key.Value) + 3
 }
 
 // Marshal marshals a key into a byte slice, prefixed according to the key's type.
 //
 // If buf is nil or has insufficient capacity, a new buffer is allocated. Marshal returns the
-// slize that index was marshalled to.
-func (key *IndexKeyV1_0_0) Marshal(buf []byte) ([]byte, error) {
+// slice that index was marshalled to.
+func (key IndexKey) Marshal(buf []byte) ([]byte, error) {
 
 	if key.Topic == "" {
 		return nil, errors.New("Topic is required")
 	}
-	if key.ID == "" {
-		return nil, errors.New("ID is required")
-	}
 	if strings.ContainsRune(key.Topic, 0) {
 		return nil, errors.New("Topic cannot contain null character")
-	}
-	if strings.ContainsRune(key.Value, 0) {
-		return nil, errors.New("Value cannot contain null character")
 	}
 
 	size := key.Size()
@@ -58,26 +48,24 @@ func (key *IndexKeyV1_0_0) Marshal(buf []byte) ([]byte, error) {
 		buf = buf[:0]
 	}
 
-	buf = append(buf, IndexTagV1_0_0, Sep)
+	buf = append(buf, IndexTag, Sep)
 	buf = append(buf, key.Topic...)
 	buf = append(buf, Sep)
 	buf = append(buf, key.Value...)
-	buf = append(buf, Sep)
-	buf = append(buf, key.ID...)
 	return buf, nil
 }
 
-func (key *IndexKeyV1_0_0) NewValue() proto.Message {
+func (key IndexKey) NewValue() proto.Message {
 	return new(IndexPayload)
 }
 
 // UnmarshalIndexKey unmarshals a key marshaled by key.Marshal()
-func UnmarshalIndexKeyV1_0_0(buf []byte, key *IndexKeyV1_0_0) error {
+func UnmarshalIndexKey(buf []byte, key *IndexKey) error {
 	i := bytes.IndexByte(buf, Sep)
 	if i == -1 {
 		return errors.New("parse tag: null terminator not found")
 	}
-	var comparisonTag = [...]byte{IndexTagV1_0_0}
+	var comparisonTag = [...]byte{IndexTag}
 	if !bytes.Equal(buf[:i], comparisonTag[:]) {
 		return errors.New("buf does not contain an IndexKey")
 	}
@@ -85,61 +73,37 @@ func UnmarshalIndexKeyV1_0_0(buf []byte, key *IndexKeyV1_0_0) error {
 	if j == -1 {
 		return errors.New("parse Topic: null terminator not found")
 	}
-	k := bytes.IndexByte(buf[j+1:], Sep) + j + 1
-	if k == -1 {
-		return errors.New("parse Type: null terminator not found")
-	}
 
 	key.Topic = string(buf[i+1 : j])
-	key.Value = string(buf[j+1 : k])
-	key.ID = string(buf[k+1:])
+	key.Value = string(buf[j+1:])
+
 	return nil
 }
 
-// GetIndexPayload gets an IndexPayload from the database by its IndexKey.
-//
-// If the IndexPayload doesn't exist in the database, deq.ErrNotFound is returned.
-func GetIndexPayload(txn Txn, key *IndexKey, dst *IndexPayload) error {
-
-	rawkey, err := key.Marshal(nil)
-	if err != nil {
-		return fmt.Errorf("marshal index: %v", err)
+// IndexPrefixTopic creates a prefix for IndexKeys of a given topic.
+func IndexPrefixTopic(topic string) ([]byte, error) {
+	if strings.ContainsRune(topic, 0) {
+		return nil, errors.New("Topic cannot contain null character")
 	}
+	ret := make([]byte, 0, len(topic)+3)
+	ret = append(ret, IndexTag, Sep)
+	ret = append(ret, topic...)
+	ret = append(ret, Sep)
 
-	item, err := txn.Get(rawkey)
-	if err == badger.ErrKeyNotFound {
-		return deq.ErrNotFound
-	}
-	if err != nil {
-		return err
-	}
-
-	return item.Value(func(val []byte) error {
-		err := proto.Unmarshal(val, dst)
-		if err != nil {
-			return fmt.Errorf("unmarshal payload: %v", err)
-		}
-		return nil
-	})
+	return ret, nil
 }
 
-// WriteIndex writes an IndexPayload to the database at the provided key.
+// IndexCursorAfterTopic returns an IndexKey cursor just after all index entries of the given topic.
 //
-// Normally, WriteIndex should not be used directly. Instead, indexes can be written by including
-// them in an event passed to WriteEvent.
-func WriteIndex(txn Txn, key *IndexKey, payload *IndexPayload) error {
-	rawkey, err := key.Marshal(nil)
-	if err != nil {
-		return fmt.Errorf("marshal index: %v", err)
+// Pass topic as "\xff\xff\xff\xff" for a cursor after indexes in the last topic.
+func IndexCursorAfterTopic(topic string) ([]byte, error) {
+	if strings.ContainsRune(topic, 0) {
+		return nil, errors.New("Topic cannot contain null character")
 	}
-	buf, err := proto.Marshal(payload)
-	if err != nil {
-		return fmt.Errorf("marshal payload: %v", err)
-	}
-	err = txn.Set(rawkey, buf)
-	if err != nil {
-		return err
-	}
+	ret := make([]byte, 0, len(topic)+7)
+	ret = append(ret, IndexTag, Sep)
+	ret = append(ret, topic...)
+	ret = append(ret, Sep, 0xff, 0xff, 0xff, 0xff)
 
-	return nil
+	return ret, nil
 }

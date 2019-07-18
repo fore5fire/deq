@@ -69,6 +69,7 @@ func TestDel(t *testing.T) {
 		DefaultState: deq.StateQueued,
 		State:        deq.StateInternal,
 		SendCount:    1,
+		Indexes:      []string{"abc", "123", "qwerty"},
 	}
 
 	events := []deq.Event{
@@ -76,10 +77,11 @@ func TestDel(t *testing.T) {
 		{
 			ID:           "event2",
 			Topic:        "topic",
-			CreateTime:   time.Now(),
+			CreateTime:   expected.CreateTime.Add(time.Millisecond),
 			DefaultState: deq.StateQueued,
 			State:        deq.StateInternal,
 			SendCount:    1,
+			Indexes:      []string{"abc", "def"},
 		},
 		{
 			ID:           "event1",
@@ -88,6 +90,7 @@ func TestDel(t *testing.T) {
 			DefaultState: deq.StateQueued,
 			State:        deq.StateInternal,
 			SendCount:    1,
+			Indexes:      []string{"123"},
 		},
 	}
 
@@ -190,6 +193,43 @@ func TestDel(t *testing.T) {
 			}
 			c.Close()
 		}
+	}
+
+	// Verify uncovered indexes were deleted.
+	for _, index := range []string{"123", "qwerty"} {
+		key, err := data.IndexKey{
+			Topic: expected.Topic,
+			Value: index,
+		}.Marshal(nil)
+		if err != nil {
+			t.Fatalf("marshal index key: %v", err)
+		}
+
+		_, err = txn.Get(key)
+		if err != nil && err != badger.ErrKeyNotFound {
+			t.Fatalf("get index: %v", err)
+		}
+		if err == nil {
+			t.Errorf("got index for deleted event")
+		}
+	}
+
+	expectedIndexPayload := &data.IndexPayload{
+		EventId:    events[1].ID,
+		CreateTime: events[1].CreateTime.UnixNano(),
+	}
+
+	// Verify covered indexes were not deleted.
+	actualIndexPayload := new(data.IndexPayload)
+	err = data.GetIndexPayload(txn, &data.IndexKey{
+		Topic: expected.Topic,
+		Value: "abc",
+	}, actualIndexPayload)
+	if err != nil {
+		t.Fatalf("get covered index: %v", err)
+	}
+	if !cmp.Equal(expectedIndexPayload, actualIndexPayload) {
+		t.Errorf("verify covered index: %v", cmp.Diff(expectedIndexPayload, actualIndexPayload))
 	}
 }
 

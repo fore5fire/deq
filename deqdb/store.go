@@ -391,15 +391,12 @@ func (s *Store) Del(ctx context.Context, topic, id string) error {
 		return fmt.Errorf("validate topic: %v", err)
 	}
 
-	txn := s.db.NewTransaction(false)
+	txn := s.db.NewTransaction(true)
 	defer txn.Discard()
-
-	writeTxn := s.db.NewTransaction(true)
-	defer writeTxn.Discard()
 
 	// TODO: refactor this, we really don't need the whole event, just
 	// the create time
-	e, err := data.GetEvent(writeTxn, topic, id, "")
+	e, err := data.GetEvent(txn, topic, id, "")
 	if err != nil {
 		return err
 	}
@@ -421,21 +418,49 @@ func (s *Store) Del(ctx context.Context, topic, id string) error {
 		return fmt.Errorf("marshal event key: %v", err)
 	}
 
-	err = writeTxn.Delete(eventTimeKey)
+	err = txn.Delete(eventTimeKey)
 	if err != nil {
 		return fmt.Errorf("delete event time: %v", err)
 	}
-	err = writeTxn.Delete(eventKey)
+	err = txn.Delete(eventKey)
 	if err != nil {
 		return fmt.Errorf("delete event key: %v", err)
 	}
+
+	// Delete any indexes that haven't been covered.
+	for _, index := range e.Indexes {
+		indexKey := data.IndexKey{
+			Topic: topic,
+			Value: index,
+		}
+		var indexPayload data.IndexPayload
+		err = data.GetIndexPayload(txn, &indexKey, &indexPayload)
+		if err != nil && err != deq.ErrNotFound {
+			return fmt.Errorf("check index %q for newer event: %v", index, err)
+		}
+		if err == deq.ErrNotFound || indexPayload.EventId != id {
+			// Index points to a newer event (which might have been deleted already). Nothing to do.
+			continue
+		}
+		buf, err := indexKey.Marshal(nil)
+		if err != nil {
+			return fmt.Errorf("marshal key for index %q: %v", index, err)
+		}
+		err = txn.Delete(buf)
+		if err != nil {
+			return fmt.Errorf("delete index %q: %v", index, err)
+		}
+	}
+
+	readTxn := s.db.NewTransaction(false)
+	defer readTxn.Discard()
 
 	// Iterate over each channel and delete any with matching topic and id.
 	err = func() error {
 		prefix := []byte{data.ChannelTag, data.Sep}
 		cursor := prefix
 
-		it := txn.NewIterator(badger.IteratorOptions{
+		it := readTxn.NewIterator(badger.IteratorOptions{
 			PrefetchValues: false,
 			Prefix:         prefix,
 		})
@@ -459,7 +484,7 @@ func (s *Store) Del(ctx context.Context, topic, id string) error {
 			}
 			if key.Topic == topic && key.ID == id {
 				// We found a match - delete it.
-				err = writeTxn.Delete(it.Item().Key())
+				err = txn.Delete(it.Item().Key())
 				if err != nil {
 					return err
 				}
@@ -492,7 +517,7 @@ func (s *Store) Del(ctx context.Context, topic, id string) error {
 			}
 			if key.Topic == topic && key.ID == id {
 				// We found a match - delete it.
-				err = writeTxn.Delete(it.Item().Key())
+				err = txn.Delete(it.Item().Key())
 				if err != nil {
 					return err
 				}
@@ -509,7 +534,7 @@ func (s *Store) Del(ctx context.Context, topic, id string) error {
 		return err
 	}
 
-	err = writeTxn.Commit()
+	err = txn.Commit()
 	if err != nil {
 		return err
 	}

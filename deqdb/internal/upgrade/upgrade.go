@@ -62,6 +62,12 @@ func DB(ctx context.Context, db data.DB, currentVersion string) error {
 		currentVersion = "1.2.0"
 	}
 
+	if currentVersion == "1.2.0" {
+		log.Printf("[INFO] upgrading db from 1.2.0 to 1.2.1")
+		err := v_1_2_0.UpgradeToV1_2_1(ctx, db)
+		currentVersion = "1.2.1"
+	}
+
 	if currentVersion != CodeVersion {
 		return fmt.Errorf("unsupported on-disk version: %s", currentVersion)
 	}
