@@ -577,3 +577,104 @@ func (s *Store) garbageCollect(interval time.Duration) {
 		}
 	}
 }
+
+// VerifyEvents verifies all events in the database, optionally deleting any invalid data.
+func (s *Store) VerifyEvents(ctx context.Context, deleteInvalid bool) error {
+	txn := s.db.NewTransaction(deleteInvalid)
+	defer txn.Discard()
+
+	opts := badger.DefaultIteratorOptions
+	opts.Prefix = []byte{data.IndexTag}
+	err := func() error {
+		it := txn.NewIterator(opts)
+		defer it.Close()
+
+		for it.Rewind(); it.Valid(); it.Next() {
+			if ctx.Err() != nil {
+				return ctx.Err()
+			}
+
+			item := it.Item()
+
+			delete := func() error {
+				key := item.KeyCopy(nil)
+				err := txn.Delete(key)
+				if err == nil {
+					return nil
+				}
+				if err != badger.ErrTxnTooBig {
+					return fmt.Errorf("delete index key %q: %v", item.Key(), err)
+				}
+				// Transaction is too big - commit it and open a new one.
+				it.Close()
+				if err := txn.Commit(); err != nil {
+					return fmt.Errorf("commit deleted events: %v", err)
+				}
+				txn = s.db.NewTransaction(true)
+				it = txn.NewIterator(opts)
+				it.Seek(key)
+				if err := txn.Delete(item.Key()); err != nil {
+					return fmt.Errorf("delete index key %q: %v", item.Key(), err)
+				}
+				return nil
+			}
+
+			var key data.IndexKey
+			err := data.UnmarshalIndexKey(item.Key(), &key)
+			if err != nil {
+				s.info.Printf("verify events: unmarshal index key %q: %v", item.Key(), err)
+				if !deleteInvalid {
+					continue
+				}
+				if err := delete(); err != nil {
+					return err
+				}
+				continue
+			}
+
+			var val data.IndexPayload
+			err = data.GetIndexPayload(txn, &key, &val)
+			if err != nil {
+				s.info.Printf("verify events: get index payload for key %v: %v", key, err)
+				if !deleteInvalid {
+					continue
+				}
+				if err := delete(); err != nil {
+					return err
+				}
+				continue
+			}
+
+			var event data.EventPayload
+			eventKey := data.EventKey{
+				Topic:      key.Topic,
+				CreateTime: time.Unix(0, val.CreateTime),
+				ID:         val.EventId,
+			}
+			err = data.GetEventPayload(txn, &eventKey, &event)
+			if err != nil {
+				s.info.Printf("verify events: get event for index %v: %v", key, err)
+				if !deleteInvalid {
+					continue
+				}
+				if err := delete(); err != nil {
+					return err
+				}
+				continue
+			}
+
+			s.debug.Printf("verify events: index %v is valid", key)
+		}
+
+		return nil
+	}()
+	if err != nil {
+		return err
+	}
+
+	if err := txn.Commit(); err != nil {
+		return err
+	}
+
+	return nil
+}

@@ -39,18 +39,19 @@ func main() {
 		fmt.Println("Usage: deqctl [flags] COMMAND")
 		fmt.Println("")
 		fmt.Println("Available Commands:")
-		fmt.Println("list: print events for a topic.")
-		fmt.Println("sub: print events for a topic as they are published.")
-		fmt.Println("topics: print all topics. Equivalent to list deq.events.Topic")
-		fmt.Println("get: get an event.")
-		fmt.Println("delete: delete an event.")
+		fmt.Println("list: Print events for a topic.")
+		fmt.Println("sub: Print events for a topic as they are published.")
+		fmt.Println("topics: Print all topics. Equivalent to list deq.events.Topic")
+		fmt.Println("get: Get an event.")
+		fmt.Println("delete: Delete an event.")
+		fmt.Println("verify: Verify the database integrity. Only valid when a local database is opened using -dir.")
 		fmt.Println("")
 		fmt.Println("Available Flags:")
 		flag.PrintDefaults()
 	}
 
 	var host, channel, nameOverride, dir, min, max string
-	var insecure, useIndex, all, debug, reversed bool
+	var insecure, useIndex, all, debug, reversed, deleteInvalid bool
 	var timeout, idle, workers int
 
 	flag.StringVar(&host, "host", "localhost:3000", "Specify deq host and port. Ignored if dir flag is set.")
@@ -59,14 +60,15 @@ func main() {
 	flag.IntVar(&idle, "idle", 0, "The duration in milliseconds that the subscription waits if idle before closing. If 0, the subscription can idle indefinitely.")
 	flag.IntVar(&timeout, "timeout", 0, "Timeout of the request in milliseconds. If 0 (the default), the request never times out.")
 	flag.IntVar(&workers, "workers", 15, "The number of workers making concurrent requests. Must be positive.")
-	flag.BoolVar(&insecure, "insecure", false, "Disables tls")
+	flag.BoolVar(&insecure, "insecure", false, "Disables tls.")
 	flag.StringVar(&nameOverride, "tls-name-override", "", "Overrides the expected name on the server's TLS certificate.")
-	flag.BoolVar(&useIndex, "index", false, "Use the index instead of IDs for getting events")
-	flag.BoolVar(&all, "all", false, "Delete all events of the topic")
+	flag.BoolVar(&useIndex, "index", false, "Use the index instead of IDs for getting events.")
+	flag.BoolVar(&all, "all", false, "Delete all events of the topic.")
 	flag.BoolVar(&debug, "debug", false, "Enable debug logging.")
 	flag.StringVar(&min, "min", "", "Only list events with ID greater than or equal to min.")
 	flag.StringVar(&max, "max", "", "Only list events with ID less than or equal to max.")
 	flag.BoolVar(&reversed, "reverse", false, "List events from highest to lowest ID.")
+	flag.BoolVar(&deleteInvalid, "delete-invalid", false, "Delete invalid events.")
 
 	flag.Parse()
 
@@ -81,6 +83,30 @@ func main() {
 
 	cmd := flag.Arg(0)
 	switch cmd {
+	case "verify":
+		if dir == "" {
+			fmt.Printf("-dir is required for verify.")
+			os.Exit(1)
+		}
+
+		opts := deqdb.Options{
+			Dir:         dir,
+			KeepCorrupt: true,
+		}
+		if debug {
+			opts.Debug = log.New(os.Stdout, "DEBUG: ", log.LstdFlags)
+		}
+		db, err := deqdb.Open(opts)
+		if err != nil {
+			fmt.Printf("open database: %v\n", err)
+			os.Exit(1)
+		}
+
+		err = db.VerifyEvents(ctx, deleteInvalid)
+		if err != nil {
+			fmt.Printf("verify events: %v", err)
+		}
+
 	case "sub":
 		topic := flag.Arg(1)
 		if topic == "" {
