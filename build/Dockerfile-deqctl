@@ -2,5 +2,5 @@ FROM scratch
 
 ENV PATH /bin
 COPY ca-certificates.crt /etc/ssl/certs/ca-certificates.crt
-COPY deqd /bin/deqctl
+COPY deqctl /bin/deqctl
 ENTRYPOINT ["/bin/deqctl"]
