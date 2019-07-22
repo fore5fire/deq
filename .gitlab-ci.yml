@@ -8,9 +8,10 @@ build-server:
   stage: build
   image: golang:1.12.7-alpine
   variables:
-    CGO_ENABLED: "0"
+    CGO_ENABLED: '0'
     GOOS: linux
-    GOMAXPROCS: "128"
+    GOARCH: amd64
+    GOMAXPROCS: '128'
   artifacts:
     paths:
     - build/deqd
@@ -31,7 +32,7 @@ build-server:
 #   script:
 #     - go test gitlab.com/charterpay/deqd/cmd/deqd_tests
 
-deploy-server:
+deploy-deqd:
   stage: deploy
   image: docker
   variables:
@@ -42,3 +43,15 @@ deploy-server:
   - echo "$CI_JOB_TOKEN" | docker login -u gitlab-ci-token --password-stdin $CI_REGISTRY
   - docker build -t $CI_REGISTRY_IMAGE:$CI_COMMIT_REF_NAME build/
   - docker push $CI_REGISTRY_IMAGE:$CI_COMMIT_REF_NAME
+
+deploy-deqctl:
+  stage: deploy
+  image: docker
+  variables:
+    DOCKER_DRIVER: overlay2
+  services:
+    - docker:dind
+  script:
+  - echo "$CI_JOB_TOKEN" | docker login -u gitlab-ci-token --password-stdin $CI_REGISTRY
+  - docker build -t $CI_REGISTRY_IMAGE/deqctl:$CI_COMMIT_REF_NAME -f build/Dockerfile-deqctl build/
+  - docker push $CI_REGISTRY_IMAGE/deqctl:$CI_COMMIT_REF_NAME
