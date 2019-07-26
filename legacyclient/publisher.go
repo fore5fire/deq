@@ -3,6 +3,7 @@ package legacyclient
 import (
 	"context"
 	"fmt"
+	"reflect"
 	"time"
 
 	"github.com/gogo/protobuf/proto"
@@ -48,10 +49,15 @@ func (p *Publisher) Pub(ctx context.Context, e Event) (Event, error) {
 		createTime = e.CreateTime.UnixNano()
 	}
 
+	topic := proto.MessageName(e.Msg)
+	if topic == "" {
+		return Event{}, fmt.Errorf("message type %q has not been registered with protobuf", reflect.TypeOf(e.Msg))
+	}
+
 	event, err := p.client.Pub(ctx, &api.PubRequest{
 		Event: &api.Event{
 			Id:         e.ID,
-			Topic:      proto.MessageName(e.Msg),
+			Topic:      topic,
 			CreateTime: createTime,
 			Payload:    payload,
 		},

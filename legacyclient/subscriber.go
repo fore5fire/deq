@@ -66,6 +66,9 @@ func (f HandlerFunc) HandleEvent(e Event) ack.Code {
 func (sub *Subscriber) Sub(ctx context.Context, m Message, handler HandlerFunc) error {
 
 	msgName := proto.MessageName(m)
+	if msgName == "" {
+		return fmt.Errorf("message type %q has not been registered with protobuf", reflect.TypeOf(m))
+	}
 	msgType := proto.MessageType(msgName)
 
 	stream, err := sub.client.Sub(ctx, &api.SubRequest{
@@ -140,10 +143,15 @@ func (sub *Subscriber) Sub(ctx context.Context, m Message, handler HandlerFunc) 
 // into `result`, such that `e.Msg == result`.
 func (sub *Subscriber) Get(ctx context.Context, eventID string, result Message) (e Event, err error) {
 
+	topic := proto.MessageName(result)
+	if topic == "" {
+		return Event{}, fmt.Errorf("message type %q has not been registered with protobuf", reflect.TypeOf(result))
+	}
+
 	event, err := sub.client.Get(ctx, &api.GetRequest{
 		Event:   eventID,
 		Channel: sub.opts.Channel,
-		Topic:   proto.MessageName(result),
+		Topic:   topic,
 	})
 	if err != nil {
 		return Event{}, err
@@ -164,10 +172,16 @@ func (sub *Subscriber) Get(ctx context.Context, eventID string, result Message) 
 // The message topic is inferred from the type of `result`. The event payload is also deserialized
 // into `result`, such that `e.Msg == result`.
 func (sub *Subscriber) Await(ctx context.Context, eventID string, result Message) (Event, error) {
+
+	topic := proto.MessageName(result)
+	if topic == "" {
+		return Event{}, fmt.Errorf("message type %q has not been registered with protobuf", reflect.TypeOf(result))
+	}
+
 	e, err := sub.client.Get(ctx, &api.GetRequest{
 		Event:   eventID,
 		Channel: sub.opts.Channel,
-		Topic:   proto.MessageName(result),
+		Topic:   topic,
 		Await:   true,
 	})
 	if err != nil {
