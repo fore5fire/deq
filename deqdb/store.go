@@ -427,6 +427,9 @@ func (s *Store) Del(ctx context.Context, topic, id string) error {
 		return fmt.Errorf("delete event key: %v", err)
 	}
 
+	readTxn := s.db.NewTransaction(false)
+	defer readTxn.Discard()
+
 	// Delete any indexes that haven't been covered.
 	for _, index := range e.Indexes {
 		indexKey := data.IndexKey{
@@ -434,7 +437,7 @@ func (s *Store) Del(ctx context.Context, topic, id string) error {
 			Value: index,
 		}
 		var indexPayload data.IndexPayload
-		err = data.GetIndexPayload(txn, &indexKey, &indexPayload)
+		err = data.GetIndexPayload(readTxn, &indexKey, &indexPayload)
 		if err != nil && err != deq.ErrNotFound {
 			return fmt.Errorf("check index %q for newer event: %v", index, err)
 		}
@@ -451,9 +454,6 @@ func (s *Store) Del(ctx context.Context, topic, id string) error {
 			return fmt.Errorf("delete index %q: %v", index, err)
 		}
 	}
-
-	readTxn := s.db.NewTransaction(false)
-	defer readTxn.Discard()
 
 	// Iterate over each channel and delete any with matching topic and id.
 	err = func() error {
