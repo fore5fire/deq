@@ -75,7 +75,7 @@ func (s *Handler) Pub(ctx context.Context, in *pb.PubRequest) (*pb.Event, error)
 		}
 	}
 
-	return eventToProto(e), nil
+	return eventToProto(e, -1), nil
 }
 
 // Sub implements DEQ.Sub
@@ -102,7 +102,7 @@ func (s *Handler) Sub(in *pb.SubRequest, stream pb.DEQ_SubServer) error {
 
 	// TODO: get error info from client
 	err := channel.Sub(stream.Context(), func(ctx context.Context, e deq.Event) (*deq.Event, error) {
-		err := stream.Send(eventToProto(e))
+		err := stream.Send(eventToProto(e, -1))
 		if err != nil && err == ctx.Err() {
 			return nil, status.FromContextError(stream.Context().Err()).Err()
 		}
@@ -220,7 +220,19 @@ func (s *Handler) Get(ctx context.Context, in *pb.GetRequest) (*pb.Event, error)
 		return nil, status.Error(codes.Internal, "")
 	}
 
-	return eventToProto(e), nil
+	selectedIndex := -1
+	if in.UseIndex {
+		for i, idx := range e.Indexes {
+			if in.Event == idx {
+				selectedIndex = i
+			}
+		}
+		if selectedIndex == -1 {
+			log.Printf("Get: lookup selected index for selector %q of event %q: not found - using -1", in.Event, e.ID)
+		}
+	}
+
+	return eventToProto(e, selectedIndex), nil
 }
 
 // BatchGet implements DEQ.BatchGet
@@ -258,7 +270,18 @@ func (s *Handler) BatchGet(ctx context.Context, in *pb.BatchGetRequest) (*pb.Bat
 
 	result := make(map[string]*pb.Event, len(events))
 	for a, e := range events {
-		result[a] = eventToProto(e)
+		selectedIndex := -1
+		if in.UseIndex {
+			for i, idx := range e.Indexes {
+				if a == idx {
+					selectedIndex = i
+				}
+			}
+			if selectedIndex == -1 {
+				log.Printf("BatchGet: lookup selected index for selector %q of event %q: not found - using -1", a, e.ID)
+			}
+		}
+		result[a] = eventToProto(e, selectedIndex)
 	}
 
 	return &pb.BatchGetResponse{
@@ -287,7 +310,7 @@ func (s *Handler) List(ctx context.Context, in *pb.ListRequest) (*pb.ListRespons
 	channel := s.store.Channel(in.Channel, in.Topic)
 	defer channel.Close()
 
-	events := make([]deq.Event, 0, pageSize)
+	events := make([]*pb.Event, 0, pageSize)
 
 	opts := &deq.IterOptions{
 		Reversed:      in.Reversed,
@@ -296,6 +319,7 @@ func (s *Handler) List(ctx context.Context, in *pb.ListRequest) (*pb.ListRespons
 		PrefetchCount: pageSize,
 	}
 
+	var last string
 	var iter deq.EventIter
 	if in.UseIndex {
 		iter = channel.NewIndexIter(opts)
@@ -306,21 +330,36 @@ func (s *Handler) List(ctx context.Context, in *pb.ListRequest) (*pb.ListRespons
 
 	for ctx.Err() == nil {
 		for len(events) < pageSize && iter.Next(ctx) {
-			events = append(events, iter.Event())
+			e := iter.Event()
+			selectedIndex := -1
+
+			if in.UseIndex {
+				selector := iter.Selector()
+				for i, idx := range e.Indexes {
+					if selector == idx {
+						selectedIndex = i
+					}
+				}
+				if selectedIndex == -1 {
+					log.Printf("List: lookup selected index for selector %q of event %q: not found - using -1", selector, e.ID)
+				}
+			}
+
+			events = append(events, eventToProto(iter.Event(), selectedIndex))
 		}
 		if len(events) >= pageSize || iter.Err() == nil {
+			last = ""
 			break
 		}
 		log.Printf("[WARN] List: iterate event: %v", iter.Err())
 	}
 
-	results := make([]*pb.Event, len(events))
-	for i, e := range events {
-		results[i] = eventToProto(e)
+	if last != "" {
+		last = last + "\x00"
 	}
 
 	return &pb.ListResponse{
-		Events: results,
+		Events: events,
 	}, nil
 }
 
@@ -346,16 +385,17 @@ func (s *Handler) Del(ctx context.Context, in *pb.DelRequest) (*pb.Empty, error)
 	return &pb.Empty{}, nil
 }
 
-func eventToProto(e deq.Event) *pb.Event {
+func eventToProto(e deq.Event, selectedIndex int) *pb.Event {
 	return &pb.Event{
-		Id:           e.ID,
-		Topic:        e.Topic,
-		Payload:      e.Payload,
-		Indexes:      e.Indexes,
-		CreateTime:   e.CreateTime.UnixNano(),
-		DefaultState: stateToProto(e.DefaultState),
-		State:        stateToProto(e.State),
-		SendCount:    int32(e.SendCount),
+		Id:            e.ID,
+		Topic:         e.Topic,
+		Payload:       e.Payload,
+		Indexes:       e.Indexes,
+		CreateTime:    e.CreateTime.UnixNano(),
+		DefaultState:  stateToProto(e.DefaultState),
+		State:         stateToProto(e.State),
+		SendCount:     int32(e.SendCount),
+		SelectedIndex: int32(selectedIndex),
 	}
 }
 

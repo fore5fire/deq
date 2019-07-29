@@ -30,25 +30,28 @@ func TestList(t *testing.T) {
 
 	expect := []*api.Event{
 		{
-			Id:           "1",
-			Topic:        "test-topic",
-			CreateTime:   now,
-			DefaultState: api.Event_QUEUED,
-			State:        api.Event_QUEUED,
+			Id:            "1",
+			Topic:         "test-topic",
+			CreateTime:    now,
+			DefaultState:  api.Event_QUEUED,
+			State:         api.Event_QUEUED,
+			SelectedIndex: -1,
 		},
 		{
-			Id:           "2",
-			Topic:        "test-topic",
-			CreateTime:   now,
-			DefaultState: api.Event_QUEUED,
-			State:        api.Event_QUEUED,
+			Id:            "2",
+			Topic:         "test-topic",
+			CreateTime:    now,
+			DefaultState:  api.Event_QUEUED,
+			State:         api.Event_QUEUED,
+			SelectedIndex: -1,
 		},
 		{
-			Id:           "3",
-			Topic:        "test-topic",
-			CreateTime:   now,
-			DefaultState: api.Event_QUEUED,
-			State:        api.Event_QUEUED,
+			Id:            "3",
+			Topic:         "test-topic",
+			CreateTime:    now,
+			DefaultState:  api.Event_QUEUED,
+			State:         api.Event_QUEUED,
+			SelectedIndex: -1,
 		},
 	}
 

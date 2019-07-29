@@ -117,31 +117,37 @@ func TestIndexIter(t *testing.T) {
 			Id:         "1",
 			Topic:      "abc",
 			CreateTime: now.UnixNano(),
+			Indexes:    []string{"1"},
 		},
 		{
 			Id:         "2",
 			Topic:      "abc",
 			CreateTime: now.UnixNano(),
+			Indexes:    []string{"2"},
 		},
 		{
 			Id:         "3",
 			Topic:      "abc",
 			CreateTime: now.UnixNano(),
+			Indexes:    []string{"3"},
 		},
 		{
 			Id:         "4",
 			Topic:      "abc",
 			CreateTime: now.UnixNano(),
+			Indexes:    []string{"4"},
 		},
 		{
 			Id:         "5",
 			Topic:      "abc",
 			CreateTime: now.UnixNano(),
+			Indexes:    []string{"5"},
 		},
 		{
 			Id:         "6",
 			Topic:      "abc",
 			CreateTime: now.UnixNano(),
+			Indexes:    []string{"6"},
 		},
 	}
 
@@ -150,31 +156,37 @@ func TestIndexIter(t *testing.T) {
 			ID:         "1",
 			Topic:      "abc",
 			CreateTime: now,
+			Indexes:    []string{"1"},
 		},
 		{
 			ID:         "2",
 			Topic:      "abc",
 			CreateTime: now,
+			Indexes:    []string{"2"},
 		},
 		{
 			ID:         "3",
 			Topic:      "abc",
 			CreateTime: now,
+			Indexes:    []string{"3"},
 		},
 		{
 			ID:         "4",
 			Topic:      "abc",
 			CreateTime: now,
+			Indexes:    []string{"4"},
 		},
 		{
 			ID:         "5",
 			Topic:      "abc",
 			CreateTime: now,
+			Indexes:    []string{"5"},
 		},
 		{
 			ID:         "6",
 			Topic:      "abc",
 			CreateTime: now,
+			Indexes:    []string{"6"},
 		},
 	}
 
@@ -188,6 +200,201 @@ func TestIndexIter(t *testing.T) {
 
 	iter := channel.NewIndexIter(&deq.IterOptions{
 		PrefetchCount: -1,
+	})
+	defer iter.Close()
+
+	var actual []deq.Event
+	for iter.Next(ctx) {
+		actual = append(actual, iter.Event())
+	}
+	if iter.Err() != nil {
+		t.Fatalf("next: %v", iter.Err())
+	}
+	if !cmp.Equal(expect, actual) {
+		t.Errorf("\n%s", cmp.Diff(expect, actual))
+	}
+}
+
+func TestReverseIndexIter(t *testing.T) {
+	ctx := context.Background()
+
+	now := time.Now()
+
+	events := []*api.Event{
+		{
+			Id:         "1",
+			Topic:      "abc",
+			CreateTime: now.UnixNano(),
+			Indexes:    []string{"1"},
+		},
+		{
+			Id:         "2",
+			Topic:      "abc",
+			CreateTime: now.UnixNano(),
+			Indexes:    []string{"2"},
+		},
+		{
+			Id:         "3",
+			Topic:      "abc",
+			CreateTime: now.UnixNano(),
+			Indexes:    []string{"3"},
+		},
+		{
+			Id:         "4",
+			Topic:      "abc",
+			CreateTime: now.UnixNano(),
+			Indexes:    []string{"4"},
+		},
+		{
+			Id:         "5",
+			Topic:      "abc",
+			CreateTime: now.UnixNano(),
+			Indexes:    []string{"5"},
+		},
+		{
+			Id:         "6",
+			Topic:      "abc",
+			CreateTime: now.UnixNano(),
+			Indexes:    []string{"6"},
+		},
+	}
+
+	expect := []deq.Event{
+		{
+			ID:         "6",
+			Topic:      "abc",
+			CreateTime: now,
+			Indexes:    []string{"6"},
+		},
+		{
+			ID:         "5",
+			Topic:      "abc",
+			CreateTime: now,
+			Indexes:    []string{"5"},
+		},
+		{
+			ID:         "4",
+			Topic:      "abc",
+			CreateTime: now,
+			Indexes:    []string{"4"},
+		},
+		{
+			ID:         "3",
+			Topic:      "abc",
+			CreateTime: now,
+			Indexes:    []string{"3"},
+		},
+		{
+			ID:         "2",
+			Topic:      "abc",
+			CreateTime: now,
+			Indexes:    []string{"2"},
+		},
+		{
+			ID:         "1",
+			Topic:      "abc",
+			CreateTime: now,
+			Indexes:    []string{"1"},
+		},
+	}
+
+	channel := &clientChannel{
+		deqClient: testIterClient{
+			events: events,
+		},
+		topic: "abc",
+		name:  "123",
+	}
+
+	iter := channel.NewIndexIter(&deq.IterOptions{
+		PrefetchCount: -1,
+		Reversed:      true,
+	})
+	defer iter.Close()
+
+	var actual []deq.Event
+	for iter.Next(ctx) {
+		actual = append(actual, iter.Event())
+	}
+	if iter.Err() != nil {
+		t.Fatalf("next: %v", iter.Err())
+	}
+	if !cmp.Equal(expect, actual) {
+		t.Errorf("\n%s", cmp.Diff(expect, actual))
+	}
+}
+
+func TestIndexIterBounds(t *testing.T) {
+	ctx := context.Background()
+
+	now := time.Now()
+
+	events := []*api.Event{
+		{
+			Id:         "1",
+			Topic:      "abc",
+			CreateTime: now.UnixNano(),
+			Indexes:    []string{"1"},
+		},
+		{
+			Id:         "2",
+			Topic:      "abc",
+			CreateTime: now.UnixNano(),
+			Indexes:    []string{"2"},
+		},
+		{
+			Id:         "3",
+			Topic:      "abc",
+			CreateTime: now.UnixNano(),
+			Indexes:    []string{"3"},
+		},
+		{
+			Id:         "4",
+			Topic:      "abc",
+			CreateTime: now.UnixNano(),
+			Indexes:    []string{"4"},
+		},
+		{
+			Id:         "5",
+			Topic:      "abc",
+			CreateTime: now.UnixNano(),
+			Indexes:    []string{"5"},
+		},
+		{
+			Id:         "6",
+			Topic:      "abc",
+			CreateTime: now.UnixNano(),
+			Indexes:    []string{"6"},
+		},
+	}
+
+	expect := []deq.Event{
+		{
+			ID:         "3",
+			Topic:      "abc",
+			CreateTime: now,
+			Indexes:    []string{"3"},
+		},
+		{
+			ID:         "4",
+			Topic:      "abc",
+			CreateTime: now,
+			Indexes:    []string{"4"},
+		},
+	}
+
+	channel := &clientChannel{
+		deqClient: testIterClient{
+			events: events,
+		},
+		topic: "abc",
+		name:  "123",
+	}
+
+	iter := channel.NewIndexIter(&deq.IterOptions{
+		PrefetchCount: -1,
+		Min:           "3",
+		Max:           "40",
 	})
 	defer iter.Close()
 
@@ -223,17 +430,29 @@ func (c testIterClient) List(ctx context.Context, in *api.ListRequest, opts ...g
 	}
 	end := len(c.events)
 	for i, e := range c.events {
-		if e.Id > in.MaxId {
+		if e.Id >= in.MaxId {
 			end = i
 			break
 		}
 	}
 
 	if start+pageSize < end {
-		end = start + pageSize
+		if in.Reversed {
+			start = end - pageSize
+		} else {
+			end = start + pageSize
+		}
 	}
 
-	return &api.ListResponse{
+	resp := &api.ListResponse{
 		Events: c.events[start:end],
-	}, nil
+	}
+
+	if in.Reversed {
+		for i, j := 0, len(resp.Events)-1; i < j; i, j = i+1, j-1 {
+			resp.Events[i], resp.Events[j] = resp.Events[j], resp.Events[i]
+		}
+	}
+
+	return resp, nil
 }

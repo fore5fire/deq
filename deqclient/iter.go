@@ -2,14 +2,20 @@ package deqclient
 
 import (
 	"context"
+	"errors"
 	"sync"
 
 	"gitlab.com/katcheCode/deq"
 	api "gitlab.com/katcheCode/deq/api/v1/deq"
 )
 
+type selectedEvent struct {
+	Event    *api.Event
+	Selector string
+}
+
 type eventIter struct {
-	next    chan *api.Event
+	next    chan selectedEvent
 	current deq.Event
 	client  api.DEQClient
 
@@ -18,6 +24,7 @@ type eventIter struct {
 	err    error
 
 	reversed bool
+	selector string
 }
 
 func (c *clientChannel) NewEventIter(opts *deq.IterOptions) deq.EventIter {
@@ -25,16 +32,19 @@ func (c *clientChannel) NewEventIter(opts *deq.IterOptions) deq.EventIter {
 	if opts == nil {
 		opts = &deq.IterOptions{}
 	}
-	prefetchCount := 20
-	if opts.PrefetchCount < -1 {
+
+	var prefetchCount int
+	switch {
+	case opts.PrefetchCount < -1:
 		panic("opts.PrefetchCount cannot be less than -1")
-	}
-	if opts.PrefetchCount == -1 {
+	case opts.PrefetchCount == -1:
 		prefetchCount = 0
-	}
-	if opts.PrefetchCount > 0 {
+	case opts.PrefetchCount == 0:
+		prefetchCount = 20
+	default:
 		prefetchCount = opts.PrefetchCount
 	}
+
 	max := "\xff\xff\xff\xff"
 	if opts.Max != "" {
 		max = opts.Max
@@ -43,10 +53,11 @@ func (c *clientChannel) NewEventIter(opts *deq.IterOptions) deq.EventIter {
 	ctx, cancel := context.WithCancel(context.Background())
 
 	it := &eventIter{
-		next:     make(chan *api.Event, prefetchCount/2),
+		next:     make(chan selectedEvent, prefetchCount/2),
 		cancel:   cancel,
 		client:   c.deqClient,
 		reversed: opts.Reversed,
+		err:      errors.New("iteration not started"),
 	}
 
 	go it.loadEvents(ctx, &api.ListRequest{
@@ -55,7 +66,7 @@ func (c *clientChannel) NewEventIter(opts *deq.IterOptions) deq.EventIter {
 		MinId:    opts.Min,
 		MaxId:    max,
 		Reversed: opts.Reversed,
-		PageSize: int32(prefetchCount/2 + opts.PrefetchCount%2),
+		PageSize: int32(prefetchCount/2+prefetchCount%2) + 1,
 	})
 
 	return it
@@ -67,28 +78,31 @@ func (c *clientChannel) NewIndexIter(opts *deq.IterOptions) deq.EventIter {
 		opts = &deq.IterOptions{}
 	}
 
-	max := "\uffff"
-	if opts.Max != "" {
-		max = opts.Max
+	var prefetchCount int
+	switch {
+	case opts.PrefetchCount < -1:
+		panic("opts.PrefetchCount cannot be less than -1")
+	case opts.PrefetchCount == -1:
+		prefetchCount = 0
+	case opts.PrefetchCount == 0:
+		prefetchCount = 5
+	default:
+		prefetchCount = opts.PrefetchCount
 	}
 
-	prefetchCount := 20
-	if opts.PrefetchCount < -1 {
-		panic("opts.PrefetchCount cannot be less than -1")
-	}
-	if opts.PrefetchCount == -1 {
-		prefetchCount = 0
-	}
-	if opts.PrefetchCount > 0 {
-		prefetchCount = opts.PrefetchCount
+	max := "\xff\xff\xff\xff"
+	if opts.Max != "" {
+		max = opts.Max
 	}
 
 	ctx, cancel := context.WithCancel(context.Background())
 
 	it := &eventIter{
-		next:   make(chan *api.Event, (prefetchCount)/2),
-		cancel: cancel,
-		client: c.deqClient,
+		next:     make(chan selectedEvent, (prefetchCount)/2),
+		cancel:   cancel,
+		client:   c.deqClient,
+		reversed: opts.Reversed,
+		err:      errors.New("iteration not started"),
 	}
 
 	go it.loadEvents(ctx, &api.ListRequest{
@@ -98,19 +112,22 @@ func (c *clientChannel) NewIndexIter(opts *deq.IterOptions) deq.EventIter {
 		MaxId:    max,
 		Reversed: opts.Reversed,
 		UseIndex: true,
-		PageSize: int32((prefetchCount+1)/2 + (prefetchCount+1)%2),
+		PageSize: int32(prefetchCount/2+prefetchCount%2) + 1,
 	})
 
 	return it
 }
 
 func (it *eventIter) Next(ctx context.Context) bool {
+	it.err = nil
+
 	select {
-	case e, ok := <-it.next:
+	case next, ok := <-it.next:
 		if !ok {
 			return false
 		}
-		it.current = eventFromProto(e)
+		it.current = eventFromProto(next.Event)
+		it.selector = next.Selector
 		return true
 	case <-ctx.Done():
 		it.setErr(ctx.Err())
@@ -119,7 +136,17 @@ func (it *eventIter) Next(ctx context.Context) bool {
 }
 
 func (it *eventIter) Event() deq.Event {
+	if it.err != nil {
+		panic("Event() is only valid when Err() returns nil")
+	}
 	return it.current
+}
+
+func (it *eventIter) Selector() string {
+	if it.err != nil {
+		panic("Selector() is only valid when Err() returns nil")
+	}
+	return it.selector
 }
 
 func (it *eventIter) Err() error {
@@ -159,7 +186,11 @@ func (it *eventIter) loadEvents(ctx context.Context, request *api.ListRequest) {
 		}
 
 		// Set bounds to return results just after the last id of the last page.
-		last := list.Events[len(list.Events)-1].Id
+		lastEvent := list.Events[len(list.Events)-1]
+		last := lastEvent.Id
+		if req.UseIndex {
+			last = lastEvent.Indexes[lastEvent.SelectedIndex]
+		}
 		if it.reversed {
 			req.MaxId = last
 		} else {
@@ -167,11 +198,20 @@ func (it *eventIter) loadEvents(ctx context.Context, request *api.ListRequest) {
 		}
 
 		for _, e := range list.Events {
+
+			selector := e.Id
+			if req.UseIndex {
+				selector = e.Indexes[e.SelectedIndex]
+			}
+
 			select {
 			case <-ctx.Done():
 				it.setErr(ctx.Err())
 				return
-			case it.next <- e:
+			case it.next <- selectedEvent{
+				Event:    e,
+				Selector: selector,
+			}:
 			}
 		}
 	}

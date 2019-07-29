@@ -2,9 +2,12 @@ package data
 
 import (
 	"context"
+	"io/ioutil"
+	"os"
 	"testing"
 	"time"
 
+	"github.com/dgraph-io/badger"
 	"github.com/google/go-cmp/cmp"
 	"gitlab.com/katcheCode/deq"
 )
@@ -406,6 +409,103 @@ func TestIndexIterLimits(t *testing.T) {
 	t.Parallel()
 
 	ctx := context.Background()
+	dir, err := ioutil.TempDir("", "")
+	if err != nil {
+		t.Fatalf("make badger dir: %v", err)
+	}
+	defer os.RemoveAll(dir)
+
+	bdb, err := badger.Open(badger.DefaultOptions(dir))
+	if err != nil {
+		t.Fatalf("open badger db: %v", err)
+	}
+	defer bdb.Close()
+
+	db := DBFromBadger(bdb)
+
+	txn := db.NewTransaction(true)
+	defer txn.Discard()
+
+	createTime := time.Now()
+
+	created := []*deq.Event{
+		{
+			ID:         "event2",
+			Topic:      "topic1",
+			CreateTime: createTime,
+			Indexes:    []string{"index3"},
+		},
+		{
+			ID:         "event1",
+			Topic:      "topic2",
+			CreateTime: createTime,
+			Indexes:    []string{"index2"},
+		},
+		{
+			ID:         "event3",
+			Topic:      "topic1",
+			CreateTime: createTime,
+			Indexes:    []string{"index1"},
+		},
+		{
+			ID:         "event4",
+			Topic:      "topic1",
+			CreateTime: createTime,
+			Indexes:    []string{"index1"},
+		},
+		{
+			ID:         "event1",
+			Topic:      "topic1",
+			CreateTime: createTime,
+			Indexes:    []string{"index9"},
+		},
+	}
+
+	for _, e := range created {
+		err := WriteEvent(txn, e)
+		if err != nil {
+			t.Fatalf("write event: %v", err)
+		}
+	}
+
+	expected := []deq.Event{
+		{
+			ID:           "event2",
+			Topic:        "topic1",
+			Indexes:      []string{"index3"},
+			CreateTime:   createTime,
+			DefaultState: deq.StateQueued,
+			State:        deq.StateQueued,
+		},
+	}
+
+	var actual []deq.Event
+
+	iter, err := NewIndexIter(txn, "topic1", "channel1", &deq.IterOptions{
+		Min: "index10",
+		Max: "index50",
+	})
+	if err != nil {
+		t.Fatalf("create iter: %v", err)
+	}
+	defer iter.Close()
+
+	for iter.Next(ctx) {
+		actual = append(actual, iter.Event())
+	}
+	if iter.Err() != nil {
+		t.Fatalf("iterate: %v", iter.Err())
+	}
+
+	if !cmp.Equal(actual, expected) {
+		t.Errorf("\n%s", cmp.Diff(expected, actual))
+	}
+}
+
+func TestReverseIndexIterLimits(t *testing.T) {
+	t.Parallel()
+
+	ctx := context.Background()
 
 	db := NewInMemoryDB()
 	defer db.Close()
@@ -469,8 +569,9 @@ func TestIndexIterLimits(t *testing.T) {
 	var actual []deq.Event
 
 	iter, err := NewIndexIter(txn, "topic1", "channel1", &deq.IterOptions{
-		Min: "index10",
-		Max: "index50",
+		Min:      "index10",
+		Max:      "index50",
+		Reversed: true,
 	})
 	if err != nil {
 		t.Fatalf("create iter: %v", err)

@@ -3,6 +3,7 @@ package data
 import (
 	"bytes"
 	"context"
+	"errors"
 	"fmt"
 	"time"
 
@@ -196,7 +197,18 @@ func (iter *EventIter) Next(ctx context.Context) bool {
 // error occurred retrieving the current event, but there may still be more events available as long
 // as iter.Next returns true.
 func (iter *EventIter) Event() deq.Event {
+	if iter.err != nil {
+		panic("Event() is only valid when Err() returns nil")
+	}
 	return iter.current
+}
+
+// Selector returns the ID that was iterated. Equivalent to iter.Event().ID
+func (iter *EventIter) Selector() string {
+	if iter.err != nil {
+		panic("Selector() is only valid when Err() returns nil")
+	}
+	return iter.current.ID
 }
 
 // Err returns an error that occurred during a call to Next.
@@ -247,6 +259,7 @@ type IndexIter struct {
 	end      []byte
 	channel  string
 	reversed bool
+	selector string
 }
 
 // NewIndexIter creates a new IndexIter that iterates events on the topic and channel of c.
@@ -281,13 +294,10 @@ func NewIndexIter(txn Txn, topic, channel string, opts *deq.IterOptions) (*Index
 		max = opts.Max
 	}
 
-	var start, end []byte
+	start := append(append([]byte(nil), prefix...), opts.Min...)
+	end := append(prefix, max...)
 	if opts.Reversed {
-		start = append(prefix, max...)
-		end = append(append(end, prefix...), opts.Min...)
-	} else {
-		start = append(append(start, prefix...), opts.Min...)
-		end = append(prefix, max...)
+		start, end = end, start
 	}
 
 	it := txn.NewIterator(badger.IteratorOptions{
@@ -305,6 +315,7 @@ func NewIndexIter(txn Txn, topic, channel string, opts *deq.IterOptions) (*Index
 		it:       it,
 		end:      end,
 		channel:  channel,
+		err:      errors.New("iteration not started"),
 	}, nil
 }
 
@@ -357,14 +368,26 @@ func (iter *IndexIter) Next(ctx context.Context) bool {
 	}
 
 	iter.current = *e
+	iter.selector = key.Value
 
 	return true
+}
+
+// Selector returns the event ID or index that was found in iteration.
+func (iter *IndexIter) Selector() string {
+	if iter.err != nil {
+		panic("Selector() is only valid when Err() returns nil")
+	}
+	return iter.selector
 }
 
 // Event returns the current topic of iter.
 //
 // Call Next to advance the current event. Next should be called at least once before Event.
 func (iter *IndexIter) Event() deq.Event {
+	if iter.err != nil {
+		panic("Event() is only valid when Err() returns nil")
+	}
 	return iter.current
 }
 
@@ -391,3 +414,6 @@ func (iter *IndexIter) Err() error {
 func (iter *IndexIter) Close() {
 	iter.it.Close()
 }
+
+var _ deq.EventIter = &EventIter{}
+var _ deq.EventIter = &IndexIter{}
