@@ -341,7 +341,7 @@ func (s *Handler) List(ctx context.Context, in *pb.ListRequest) (*pb.ListRespons
 					}
 				}
 				if selectedIndex == -1 {
-					log.Printf("List: lookup selected index for selector %q of event %q: not found - using -1", selector, e.ID)
+					log.Printf("[WARN] List: lookup selected index for selector %q of event %q: not found - using -1", selector, e.ID)
 				}
 			}
 

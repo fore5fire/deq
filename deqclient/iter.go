@@ -199,8 +199,10 @@ func (it *eventIter) loadEvents(ctx context.Context, request *api.ListRequest) {
 
 		for _, e := range list.Events {
 
-			selector := e.Id
-			if req.UseIndex {
+			var selector string
+			if !req.UseIndex {
+				selector = e.Id
+			} else if e.SelectedIndex != -1 {
 				selector = e.Indexes[e.SelectedIndex]
 			}
 

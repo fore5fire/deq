@@ -662,6 +662,23 @@ func (s *Store) VerifyEvents(ctx context.Context, deleteInvalid bool) error {
 				}
 				continue
 			}
+			var found bool
+			for _, idx := range event.Indexes {
+				if idx == key.Value {
+					found = true
+					break
+				}
+			}
+			if !found {
+				s.info.Printf("verify events: index %q points to event %q %q but is not an index of that event", key.Value, eventKey.Topic, eventKey.ID)
+				if !deleteInvalid {
+					continue
+				}
+				if err := delete(); err != nil {
+					return err
+				}
+				continue
+			}
 
 			s.debug.Printf("verify events: index %v is valid", key)
 		}
