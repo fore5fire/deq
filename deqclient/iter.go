@@ -3,6 +3,7 @@ package deqclient
 import (
 	"context"
 	"errors"
+	"fmt"
 	"sync"
 
 	"gitlab.com/katcheCode/deq"
@@ -189,6 +190,10 @@ func (it *eventIter) loadEvents(ctx context.Context, request *api.ListRequest) {
 		lastEvent := list.Events[len(list.Events)-1]
 		last := lastEvent.Id
 		if req.UseIndex {
+			if lastEvent.SelectedIndex == -1 {
+				it.setErr(fmt.Errorf("last event of page %q missing selected index", lastEvent.Id))
+				return
+			}
 			last = lastEvent.Indexes[lastEvent.SelectedIndex]
 		}
 		if it.reversed {
