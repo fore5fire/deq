@@ -180,5 +180,5 @@ const (
 	// VersionKey is the key the current database version is stored under.
 	VersionKey = "___DEQ_DB_VERSION___"
 	// CodeVersion is the database version the running code expects.
-	CodeVersion = "1.2.0"
+	CodeVersion = "1.2.1"
 )
