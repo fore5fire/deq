@@ -51,15 +51,15 @@ func DB(ctx context.Context, db data.DB, currentVersion string) error {
 		currentVersion = "1.1.0"
 	}
 
-	// Upgrade 1.1.0 to 1.2.0
+	// Upgrade 1.1.0 to 1.2.1
 	if currentVersion == "1.1.0" {
-		log.Printf("[INFO] upgrading db from 1.1.0 to 1.2.0")
+		log.Printf("[INFO] upgrading db from 1.1.0 to 1.2.1")
 		err := v1_1_0.UpgradeToV1_2_0(ctx, db)
 		if err != nil {
-			return fmt.Errorf("upgrade from 1.1.0 to 1.2.0: %v", err)
+			return fmt.Errorf("upgrade from 1.1.0 to 1.2.1: %v", err)
 		}
 
-		currentVersion = "1.2.0"
+		currentVersion = "1.2.1"
 	}
 
 	if currentVersion != CodeVersion {
