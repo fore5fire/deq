@@ -204,26 +204,32 @@ func (c *Channel) Sub(ctx context.Context, handler deq.SubHandler) error {
 				ackCode := ack.ErrorCode(result.err)
 
 				err := func() error {
+
+					reachedLimit := result.req.SendCount >= sendLimit
+
 					if result.resp != nil {
 						_, err := c.store.Pub(ctx, *result.resp)
 						if err != nil {
 							// Log the error and compensating action
 							action := "will retry"
-							reachedLimit := result.req.SendCount >= sendLimit
 							if reachedLimit {
 								action = "send limit exceeded, not retrying"
 							}
 							log.Printf("publish response %q %q to %q %q on channel %q: %v - %s", result.resp.Topic, result.resp.ID, result.req.Topic, result.req.ID, c.name, err, action)
 							// Make sure the event is queued unless it has reached its resend limit.
-							if ackCode != ack.Requeue && ackCode != ack.RequeueLinear && ackCode != ack.RequeueConstant && !reachedLimit {
-								ackCode = ack.Requeue
-							}
+							ackCode = ack.Requeue
 						}
 					}
 
 					if result.err != nil && ackCode != ack.NoOp {
 						// TODO: post error value back to DEQ.
 						c.info.Printf("handle channel %q topic %q event %q: %v", c.name, c.topic, result.req.ID, result.err)
+					}
+
+					// TODO: figure out a better way to avoid requeue looping (maybe requeue differentiate on the server between requeuing and resetting the send count? Or allow raising the requeue limit per event?)
+					// If the send limit has been reached, don't requeue it.
+					if reachedLimit && (ackCode == ack.Requeue || ackCode == ack.RequeueLinear || ackCode == ack.RequeueConstant) {
+						return nil
 					}
 
 					var state deq.State
