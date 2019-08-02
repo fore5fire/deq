@@ -367,18 +367,11 @@ func (iter *IndexIter) Next(ctx context.Context) bool {
 		return false
 	}
 
+	e.Selector = key.Value
+	e.SelectorVersion = payload.Version
 	iter.current = *e
-	iter.selector = key.Value
 
 	return true
-}
-
-// Selector returns the event ID or index that was found in iteration.
-func (iter *IndexIter) Selector() string {
-	if iter.err != nil {
-		panic("Selector() is only valid when Err() returns nil")
-	}
-	return iter.selector
 }
 
 // Event returns the current topic of iter.

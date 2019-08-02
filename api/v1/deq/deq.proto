@@ -54,6 +54,9 @@ message Event {
   // The index for which the event was selected. -1 if the event was selected by ID.
   sint32 selected_index = 9;
 
+  // The version of the ID or index used to select the event.
+  int64 selector_version = 10;
+
   enum State {
     UNSPECIFIED_STATE = 0;
     // QUEUED indicates the event is queued on the channel with exponential backoff.

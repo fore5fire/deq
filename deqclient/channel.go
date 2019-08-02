@@ -75,7 +75,17 @@ func (c *clientChannel) Get(ctx context.Context, event string, options ...deqopt
 		return deq.Event{}, err
 	}
 
-	return eventFromProto(e), nil
+	var selector string
+	if !opts.UseIndex {
+		selector = e.Id
+	} else if e.SelectedIndex > -1 {
+		selector = e.Indexes[e.SelectedIndex]
+	}
+
+	return eventFromProto(selectedEvent{
+		Event:    e,
+		Selector: selector,
+	}), nil
 }
 
 func (c *clientChannel) BatchGet(ctx context.Context, ids []string, options ...deqopt.BatchGetOption) (map[string]deq.Event, error) {
@@ -99,7 +109,18 @@ func (c *clientChannel) BatchGet(ctx context.Context, ids []string, options ...d
 
 	result := make(map[string]deq.Event, len(resp.Events))
 	for id, e := range resp.Events {
-		result[id] = eventFromProto(e)
+
+		var selector string
+		if !opts.UseIndex {
+			selector = e.Id
+		} else if e.SelectedIndex > -1 {
+			selector = e.Indexes[e.SelectedIndex]
+		}
+
+		result[id] = eventFromProto(selectedEvent{
+			Event:    e,
+			Selector: selector,
+		})
 	}
 
 	return result, nil
@@ -235,7 +256,10 @@ func (c *clientChannel) Sub(ctx context.Context, handler deq.SubHandler) error {
 			return err
 		}
 
-		event := eventFromProto(e)
+		event := eventFromProto(selectedEvent{
+			Event:    e,
+			Selector: e.Id,
+		})
 
 		response, err := handler(ctx, event)
 		select {
@@ -263,7 +287,10 @@ func (c *clientChannel) Next(ctx context.Context) (deq.Event, error) {
 		return deq.Event{}, err
 	}
 
-	return eventFromProto(e), nil
+	return eventFromProto(selectedEvent{
+		Event:    e,
+		Selector: e.Id,
+	}), nil
 }
 
 func (c *clientChannel) RequeueEvent(ctx context.Context, e deq.Event, delay time.Duration) error {

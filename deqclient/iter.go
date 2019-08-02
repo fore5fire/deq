@@ -127,7 +127,7 @@ func (it *eventIter) Next(ctx context.Context) bool {
 		if !ok {
 			return false
 		}
-		it.current = eventFromProto(next.Event)
+		it.current = eventFromProto(next)
 		it.selector = next.Selector
 		return true
 	case <-ctx.Done():
@@ -141,13 +141,6 @@ func (it *eventIter) Event() deq.Event {
 		panic("Event() is only valid when Err() returns nil")
 	}
 	return it.current
-}
-
-func (it *eventIter) Selector() string {
-	if it.err != nil {
-		panic("Selector() is only valid when Err() returns nil")
-	}
-	return it.selector
 }
 
 func (it *eventIter) Err() error {

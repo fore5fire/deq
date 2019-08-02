@@ -88,7 +88,10 @@ func (c *Client) Pub(ctx context.Context, e deq.Event) (deq.Event, error) {
 		return deq.Event{}, err
 	}
 
-	return eventFromProto(event), nil
+	return eventFromProto(selectedEvent{
+		Event:    event,
+		Selector: event.Id,
+	}), nil
 }
 
 // Del deletes a previously published event.
@@ -153,23 +156,25 @@ func eventStateToProto(state deq.State) api.Event_State {
 	}
 }
 
-func eventFromProto(e *api.Event) deq.Event {
+func eventFromProto(e selectedEvent) deq.Event {
 
 	// If CreateTime is a zero as a unix timestamp, don't convert it because time.Time{}.UnixNano() != 0
 	var createTime time.Time
-	if e.CreateTime != 0 {
-		createTime = time.Unix(0, e.CreateTime)
+	if e.Event.CreateTime != 0 {
+		createTime = time.Unix(0, e.Event.CreateTime)
 	}
 
 	return deq.Event{
-		ID:           e.Id,
-		Topic:        e.Topic,
-		Payload:      e.Payload,
-		CreateTime:   createTime,
-		Indexes:      e.Indexes,
-		DefaultState: eventStateFromProto(e.DefaultState),
-		State:        eventStateFromProto(e.State),
-		SendCount:    int(e.SendCount),
+		ID:              e.Event.Id,
+		Topic:           e.Event.Topic,
+		Payload:         e.Event.Payload,
+		CreateTime:      createTime,
+		Indexes:         e.Event.Indexes,
+		DefaultState:    eventStateFromProto(e.Event.DefaultState),
+		State:           eventStateFromProto(e.Event.State),
+		SendCount:       int(e.Event.SendCount),
+		Selector:        e.Selector,
+		SelectorVersion: e.Event.SelectorVersion,
 	}
 }
 
@@ -182,13 +187,14 @@ func eventToProto(e deq.Event) *api.Event {
 	}
 
 	return &api.Event{
-		Id:           e.ID,
-		Topic:        e.Topic,
-		Payload:      e.Payload,
-		CreateTime:   createTime,
-		Indexes:      e.Indexes,
-		DefaultState: eventStateToProto(e.DefaultState),
-		State:        eventStateToProto(e.State),
-		SendCount:    int32(e.SendCount),
+		Id:              e.ID,
+		Topic:           e.Topic,
+		Payload:         e.Payload,
+		CreateTime:      createTime,
+		Indexes:         e.Indexes,
+		DefaultState:    eventStateToProto(e.DefaultState),
+		State:           eventStateToProto(e.State),
+		SendCount:       int32(e.SendCount),
+		SelectorVersion: e.SelectorVersion,
 	}
 }

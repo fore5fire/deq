@@ -222,13 +222,9 @@ func (s *Handler) Get(ctx context.Context, in *pb.GetRequest) (*pb.Event, error)
 
 	selectedIndex := -1
 	if in.UseIndex {
-		for i, idx := range e.Indexes {
-			if in.Event == idx {
-				selectedIndex = i
-			}
-		}
+		selectedIndex = getSelectedIndex(e.Selector, e.Indexes)
 		if selectedIndex == -1 {
-			log.Printf("Get: lookup selected index for selector %q of event %q: not found - using -1", in.Event, e.ID)
+			log.Printf("Get: lookup selected index for selector %q of event %q: not found - using -1", e.Selector, e.ID)
 		}
 	}
 
@@ -272,13 +268,9 @@ func (s *Handler) BatchGet(ctx context.Context, in *pb.BatchGetRequest) (*pb.Bat
 	for a, e := range events {
 		selectedIndex := -1
 		if in.UseIndex {
-			for i, idx := range e.Indexes {
-				if a == idx {
-					selectedIndex = i
-				}
-			}
+			selectedIndex = getSelectedIndex(e.Selector, e.Indexes)
 			if selectedIndex == -1 {
-				log.Printf("BatchGet: lookup selected index for selector %q of event %q: not found - using -1", a, e.ID)
+				log.Printf("BatchGet: lookup selected index for selector %q of event %q: not found - using -1", e.Selector, e.ID)
 			}
 		}
 		result[a] = eventToProto(e, selectedIndex)
@@ -331,17 +323,12 @@ func (s *Handler) List(ctx context.Context, in *pb.ListRequest) (*pb.ListRespons
 	for ctx.Err() == nil {
 		for len(events) < pageSize && iter.Next(ctx) {
 			e := iter.Event()
-			selectedIndex := -1
 
+			selectedIndex := -1
 			if in.UseIndex {
-				selector := iter.Selector()
-				for i, idx := range e.Indexes {
-					if selector == idx {
-						selectedIndex = i
-					}
-				}
+				selectedIndex = getSelectedIndex(e.Selector, e.Indexes)
 				if selectedIndex == -1 {
-					log.Printf("[WARN] List: lookup selected index for selector %q of event %q: not found - using -1", selector, e.ID)
+					log.Printf("[WARN] List: lookup selected index for selector %q of event %q: not found - using -1", e.Selector, e.ID)
 				}
 			}
 
@@ -387,15 +374,16 @@ func (s *Handler) Del(ctx context.Context, in *pb.DelRequest) (*pb.Empty, error)
 
 func eventToProto(e deq.Event, selectedIndex int) *pb.Event {
 	return &pb.Event{
-		Id:            e.ID,
-		Topic:         e.Topic,
-		Payload:       e.Payload,
-		Indexes:       e.Indexes,
-		CreateTime:    e.CreateTime.UnixNano(),
-		DefaultState:  stateToProto(e.DefaultState),
-		State:         stateToProto(e.State),
-		SendCount:     int32(e.SendCount),
-		SelectedIndex: int32(selectedIndex),
+		Id:              e.ID,
+		Topic:           e.Topic,
+		Payload:         e.Payload,
+		Indexes:         e.Indexes,
+		CreateTime:      e.CreateTime.UnixNano(),
+		DefaultState:    stateToProto(e.DefaultState),
+		State:           stateToProto(e.State),
+		SendCount:       int32(e.SendCount),
+		SelectedIndex:   int32(selectedIndex),
+		SelectorVersion: e.SelectorVersion,
 	}
 }
 
@@ -460,4 +448,13 @@ func stateToProto(s deq.State) pb.Event_State {
 	default:
 		panic("unrecognized EventState")
 	}
+}
+
+func getSelectedIndex(selector string, indexes []string) int {
+	for i, idx := range indexes {
+		if selector == idx {
+			return i
+		}
+	}
+	return -1
 }

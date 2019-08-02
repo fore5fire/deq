@@ -363,7 +363,7 @@ func (s *Store) Pub(ctx context.Context, e deq.Event) (deq.Event, error) {
 		if topicEvent != nil {
 			s.queueOut(topicEvent)
 		}
-
+		e.Selector = e.ID
 		return e, nil
 	}
 

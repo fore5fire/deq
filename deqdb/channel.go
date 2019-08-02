@@ -303,6 +303,8 @@ func (c *Channel) Sub(ctx context.Context, handler deq.SubHandler) error {
 			return err
 		}
 
+		e.Selector = e.ID
+
 		response, err := handler(ctx, e)
 		select {
 		case results <- Result{e, response, err}:
@@ -419,7 +421,14 @@ func (c *Channel) Get(ctx context.Context, event string, options ...deqopt.GetOp
 }
 
 func (c *Channel) get(txn data.Txn, id string) (*deq.Event, error) {
-	return data.GetEvent(txn, c.topic, id, c.name)
+	e, err := data.GetEvent(txn, c.topic, id, c.name)
+	if err != nil {
+		return nil, err
+	}
+
+	e.Selector = id
+
+	return e, nil
 }
 
 // GetIndex returns the event for an event's index, or ErrNotFound if none is found
@@ -445,6 +454,8 @@ func (c *Channel) getIndex(txn data.Txn, index string) (*deq.Event, error) {
 		return nil, err
 	}
 
+	e.Selector = index
+	e.SelectorVersion = payload.Version
 	return e, nil
 }
 

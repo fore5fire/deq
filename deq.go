@@ -112,7 +112,6 @@ type SubHandler func(context.Context, Event) (*Event, error)
 type EventIter interface {
 	Next(context.Context) bool
 	Event() Event
-	Selector() string
 	Err() error
 	Close()
 }
