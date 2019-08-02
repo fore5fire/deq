@@ -21,6 +21,9 @@ type FileDescriptorSetEvent struct {
 	State        deq.State
 	Indexes      []string
 
+	Selector        string
+	SelectorVersion int64
+
 	FileDescriptorSet *descriptor.FileDescriptorSet
 }
 
@@ -72,6 +75,9 @@ type FileDescriptorProtoEvent struct {
 	DefaultState deq.State
 	State        deq.State
 	Indexes      []string
+
+	Selector        string
+	SelectorVersion int64
 
 	FileDescriptorProto *descriptor.FileDescriptorProto
 }
@@ -125,6 +131,9 @@ type DescriptorProtoEvent struct {
 	State        deq.State
 	Indexes      []string
 
+	Selector        string
+	SelectorVersion int64
+
 	DescriptorProto *descriptor.DescriptorProto
 }
 
@@ -176,6 +185,9 @@ type ExtensionRangeOptionsEvent struct {
 	DefaultState deq.State
 	State        deq.State
 	Indexes      []string
+
+	Selector        string
+	SelectorVersion int64
 
 	ExtensionRangeOptions *descriptor.ExtensionRangeOptions
 }
@@ -229,6 +241,9 @@ type FieldDescriptorProtoEvent struct {
 	State        deq.State
 	Indexes      []string
 
+	Selector        string
+	SelectorVersion int64
+
 	FieldDescriptorProto *descriptor.FieldDescriptorProto
 }
 
@@ -280,6 +295,9 @@ type OneofDescriptorProtoEvent struct {
 	DefaultState deq.State
 	State        deq.State
 	Indexes      []string
+
+	Selector        string
+	SelectorVersion int64
 
 	OneofDescriptorProto *descriptor.OneofDescriptorProto
 }
@@ -333,6 +351,9 @@ type EnumDescriptorProtoEvent struct {
 	State        deq.State
 	Indexes      []string
 
+	Selector        string
+	SelectorVersion int64
+
 	EnumDescriptorProto *descriptor.EnumDescriptorProto
 }
 
@@ -384,6 +405,9 @@ type EnumValueDescriptorProtoEvent struct {
 	DefaultState deq.State
 	State        deq.State
 	Indexes      []string
+
+	Selector        string
+	SelectorVersion int64
 
 	EnumValueDescriptorProto *descriptor.EnumValueDescriptorProto
 }
@@ -437,6 +461,9 @@ type ServiceDescriptorProtoEvent struct {
 	State        deq.State
 	Indexes      []string
 
+	Selector        string
+	SelectorVersion int64
+
 	ServiceDescriptorProto *descriptor.ServiceDescriptorProto
 }
 
@@ -488,6 +515,9 @@ type MethodDescriptorProtoEvent struct {
 	DefaultState deq.State
 	State        deq.State
 	Indexes      []string
+
+	Selector        string
+	SelectorVersion int64
 
 	MethodDescriptorProto *descriptor.MethodDescriptorProto
 }
@@ -541,6 +571,9 @@ type FileOptionsEvent struct {
 	State        deq.State
 	Indexes      []string
 
+	Selector        string
+	SelectorVersion int64
+
 	FileOptions *descriptor.FileOptions
 }
 
@@ -592,6 +625,9 @@ type MessageOptionsEvent struct {
 	DefaultState deq.State
 	State        deq.State
 	Indexes      []string
+
+	Selector        string
+	SelectorVersion int64
 
 	MessageOptions *descriptor.MessageOptions
 }
@@ -645,6 +681,9 @@ type FieldOptionsEvent struct {
 	State        deq.State
 	Indexes      []string
 
+	Selector        string
+	SelectorVersion int64
+
 	FieldOptions *descriptor.FieldOptions
 }
 
@@ -696,6 +735,9 @@ type OneofOptionsEvent struct {
 	DefaultState deq.State
 	State        deq.State
 	Indexes      []string
+
+	Selector        string
+	SelectorVersion int64
 
 	OneofOptions *descriptor.OneofOptions
 }
@@ -749,6 +791,9 @@ type EnumOptionsEvent struct {
 	State        deq.State
 	Indexes      []string
 
+	Selector        string
+	SelectorVersion int64
+
 	EnumOptions *descriptor.EnumOptions
 }
 
@@ -800,6 +845,9 @@ type EnumValueOptionsEvent struct {
 	DefaultState deq.State
 	State        deq.State
 	Indexes      []string
+
+	Selector        string
+	SelectorVersion int64
 
 	EnumValueOptions *descriptor.EnumValueOptions
 }
@@ -853,6 +901,9 @@ type ServiceOptionsEvent struct {
 	State        deq.State
 	Indexes      []string
 
+	Selector        string
+	SelectorVersion int64
+
 	ServiceOptions *descriptor.ServiceOptions
 }
 
@@ -904,6 +955,9 @@ type MethodOptionsEvent struct {
 	DefaultState deq.State
 	State        deq.State
 	Indexes      []string
+
+	Selector        string
+	SelectorVersion int64
 
 	MethodOptions *descriptor.MethodOptions
 }
@@ -957,6 +1011,9 @@ type UninterpretedOptionEvent struct {
 	State        deq.State
 	Indexes      []string
 
+	Selector        string
+	SelectorVersion int64
+
 	UninterpretedOption *descriptor.UninterpretedOption
 }
 
@@ -1009,6 +1066,9 @@ type SourceCodeInfoEvent struct {
 	State        deq.State
 	Indexes      []string
 
+	Selector        string
+	SelectorVersion int64
+
 	SourceCodeInfo *descriptor.SourceCodeInfo
 }
 
@@ -1060,6 +1120,9 @@ type GeneratedCodeInfoEvent struct {
 	DefaultState deq.State
 	State        deq.State
 	Indexes      []string
+
+	Selector        string
+	SelectorVersion int64
 
 	GeneratedCodeInfo *descriptor.GeneratedCodeInfo
 }

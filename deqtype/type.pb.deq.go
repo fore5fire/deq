@@ -21,6 +21,9 @@ type TypeEvent struct {
 	State        deq.State
 	Indexes      []string
 
+	Selector        string
+	SelectorVersion int64
+
 	Type *types.Type
 }
 
@@ -72,6 +75,9 @@ type FieldEvent struct {
 	DefaultState deq.State
 	State        deq.State
 	Indexes      []string
+
+	Selector        string
+	SelectorVersion int64
 
 	Field *types.Field
 }
@@ -125,6 +131,9 @@ type EnumEvent struct {
 	State        deq.State
 	Indexes      []string
 
+	Selector        string
+	SelectorVersion int64
+
 	Enum *types.Enum
 }
 
@@ -177,6 +186,9 @@ type EnumValueEvent struct {
 	State        deq.State
 	Indexes      []string
 
+	Selector        string
+	SelectorVersion int64
+
 	EnumValue *types.EnumValue
 }
 
@@ -228,6 +240,9 @@ type OptionEvent struct {
 	DefaultState deq.State
 	State        deq.State
 	Indexes      []string
+
+	Selector        string
+	SelectorVersion int64
 
 	Option *types.Option
 }

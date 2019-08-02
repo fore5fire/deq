@@ -21,6 +21,9 @@ type TimestampEvent struct {
 	State        deq.State
 	Indexes      []string
 
+	Selector        string
+	SelectorVersion int64
+
 	Timestamp *types.Timestamp
 }
 

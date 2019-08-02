@@ -21,6 +21,9 @@ type DurationEvent struct {
 	State        deq.State
 	Indexes      []string
 
+	Selector        string
+	SelectorVersion int64
+
 	Duration *types.Duration
 }
 

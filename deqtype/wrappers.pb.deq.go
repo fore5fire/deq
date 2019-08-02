@@ -21,6 +21,9 @@ type DoubleValueEvent struct {
 	State        deq.State
 	Indexes      []string
 
+	Selector        string
+	SelectorVersion int64
+
 	DoubleValue *types.DoubleValue
 }
 
@@ -72,6 +75,9 @@ type FloatValueEvent struct {
 	DefaultState deq.State
 	State        deq.State
 	Indexes      []string
+
+	Selector        string
+	SelectorVersion int64
 
 	FloatValue *types.FloatValue
 }
@@ -125,6 +131,9 @@ type Int64ValueEvent struct {
 	State        deq.State
 	Indexes      []string
 
+	Selector        string
+	SelectorVersion int64
+
 	Int64Value *types.Int64Value
 }
 
@@ -176,6 +185,9 @@ type UInt64ValueEvent struct {
 	DefaultState deq.State
 	State        deq.State
 	Indexes      []string
+
+	Selector        string
+	SelectorVersion int64
 
 	UInt64Value *types.UInt64Value
 }
@@ -229,6 +241,9 @@ type Int32ValueEvent struct {
 	State        deq.State
 	Indexes      []string
 
+	Selector        string
+	SelectorVersion int64
+
 	Int32Value *types.Int32Value
 }
 
@@ -280,6 +295,9 @@ type UInt32ValueEvent struct {
 	DefaultState deq.State
 	State        deq.State
 	Indexes      []string
+
+	Selector        string
+	SelectorVersion int64
 
 	UInt32Value *types.UInt32Value
 }
@@ -333,6 +351,9 @@ type BoolValueEvent struct {
 	State        deq.State
 	Indexes      []string
 
+	Selector        string
+	SelectorVersion int64
+
 	BoolValue *types.BoolValue
 }
 
@@ -385,6 +406,9 @@ type StringValueEvent struct {
 	State        deq.State
 	Indexes      []string
 
+	Selector        string
+	SelectorVersion int64
+
 	StringValue *types.StringValue
 }
 
@@ -436,6 +460,9 @@ type BytesValueEvent struct {
 	DefaultState deq.State
 	State        deq.State
 	Indexes      []string
+
+	Selector        string
+	SelectorVersion int64
 
 	BytesValue *types.BytesValue
 }

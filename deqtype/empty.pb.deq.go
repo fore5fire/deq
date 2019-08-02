@@ -21,6 +21,9 @@ type EmptyEvent struct {
 	State        deq.State
 	Indexes      []string
 
+	Selector        string
+	SelectorVersion int64
+
 	Empty *types.Empty
 }
 

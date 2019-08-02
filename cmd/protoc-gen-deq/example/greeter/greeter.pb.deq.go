@@ -23,6 +23,9 @@ type HelloRequestEvent struct {
 	State        deq.State
 	Indexes      []string
 
+	Selector        string
+	SelectorVersion int64
+
 	HelloRequest *HelloRequest
 }
 
@@ -74,6 +77,9 @@ type HelloReplyEvent struct {
 	DefaultState deq.State
 	State        deq.State
 	Indexes      []string
+
+	Selector        string
+	SelectorVersion int64
 
 	HelloReply *HelloReply
 }
@@ -148,6 +154,9 @@ func (c *GreeterTopicConfig) EventToHelloRequestEvent(e deq.Event) (*HelloReques
 		DefaultState: e.DefaultState,
 		State:        e.State,
 		Indexes:      e.Indexes,
+		
+		Selector:        e.Selector,
+		SelectorVersion: e.SelectorVersion,
 	}, nil
 }
 
@@ -166,6 +175,9 @@ func (c *GreeterTopicConfig) HelloRequestEventToEvent(e *HelloRequestEvent) (deq
 		State:        e.State,
 		Topic:        c.HelloRequestTopic(),
 		Indexes:      e.Indexes,
+
+		Selector:        e.Selector,
+		SelectorVersion: e.SelectorVersion,
 	}, nil
 }
 
@@ -204,6 +216,9 @@ func (c *GreeterTopicConfig) EventToHelloReplyEvent(e deq.Event) (*HelloReplyEve
 		DefaultState: e.DefaultState,
 		State:        e.State,
 		Indexes:      e.Indexes,
+		
+		Selector:        e.Selector,
+		SelectorVersion: e.SelectorVersion,
 	}, nil
 }
 
@@ -222,6 +237,9 @@ func (c *GreeterTopicConfig) HelloReplyEventToEvent(e *HelloReplyEvent) (deq.Eve
 		State:        e.State,
 		Topic:        c.HelloReplyTopic(),
 		Indexes:      e.Indexes,
+
+		Selector:        e.Selector,
+		SelectorVersion: e.SelectorVersion,
 	}, nil
 }
 

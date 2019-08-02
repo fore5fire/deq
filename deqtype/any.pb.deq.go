@@ -21,6 +21,9 @@ type AnyEvent struct {
 	State        deq.State
 	Indexes      []string
 
+	Selector        string
+	SelectorVersion int64
+
 	Any *types.Any
 }
 

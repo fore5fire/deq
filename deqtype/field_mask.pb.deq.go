@@ -21,6 +21,9 @@ type FieldMaskEvent struct {
 	State        deq.State
 	Indexes      []string
 
+	Selector        string
+	SelectorVersion int64
+
 	FieldMask *types.FieldMask
 }
 

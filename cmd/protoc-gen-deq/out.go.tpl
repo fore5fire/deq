@@ -31,6 +31,9 @@ type {{.GoName}}Event struct {
 	State        deq.State
 	Indexes      []string
 
+	Selector        string
+	SelectorVersion int64
+
 	{{.GoName}} *{{.GoRef}}
 }
 
@@ -107,6 +110,9 @@ func (c *{{$ServiceName}}TopicConfig) EventTo{{.GoName}}Event(e deq.Event) (*{{.
 		DefaultState: e.DefaultState,
 		State:        e.State,
 		Indexes:      e.Indexes,
+		
+		Selector:        e.Selector,
+		SelectorVersion: e.SelectorVersion,
 	}, nil
 }
 
@@ -125,6 +131,9 @@ func (c *{{$ServiceName}}TopicConfig) {{.GoName}}EventToEvent(e *{{.GoEventRef}}
 		State:        e.State,
 		Topic:        c.{{.GoName}}Topic(),
 		Indexes:      e.Indexes,
+
+		Selector:        e.Selector,
+		SelectorVersion: e.SelectorVersion,
 	}, nil
 }
 

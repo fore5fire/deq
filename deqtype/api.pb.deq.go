@@ -21,6 +21,9 @@ type ApiEvent struct {
 	State        deq.State
 	Indexes      []string
 
+	Selector        string
+	SelectorVersion int64
+
 	Api *types.Api
 }
 
@@ -73,6 +76,9 @@ type MethodEvent struct {
 	State        deq.State
 	Indexes      []string
 
+	Selector        string
+	SelectorVersion int64
+
 	Method *types.Method
 }
 
@@ -124,6 +130,9 @@ type MixinEvent struct {
 	DefaultState deq.State
 	State        deq.State
 	Indexes      []string
+
+	Selector        string
+	SelectorVersion int64
 
 	Mixin *types.Mixin
 }

@@ -46,6 +46,9 @@ func (c *Greeter2TopicConfig) EventToHelloRequestEvent(e deq.Event) (*HelloReque
 		DefaultState: e.DefaultState,
 		State:        e.State,
 		Indexes:      e.Indexes,
+		
+		Selector:        e.Selector,
+		SelectorVersion: e.SelectorVersion,
 	}, nil
 }
 
@@ -64,6 +67,9 @@ func (c *Greeter2TopicConfig) HelloRequestEventToEvent(e *HelloRequestEvent) (de
 		State:        e.State,
 		Topic:        c.HelloRequestTopic(),
 		Indexes:      e.Indexes,
+
+		Selector:        e.Selector,
+		SelectorVersion: e.SelectorVersion,
 	}, nil
 }
 
@@ -102,6 +108,9 @@ func (c *Greeter2TopicConfig) EventToHelloReplyEvent(e deq.Event) (*HelloReplyEv
 		DefaultState: e.DefaultState,
 		State:        e.State,
 		Indexes:      e.Indexes,
+		
+		Selector:        e.Selector,
+		SelectorVersion: e.SelectorVersion,
 	}, nil
 }
 
@@ -120,6 +129,9 @@ func (c *Greeter2TopicConfig) HelloReplyEventToEvent(e *HelloReplyEvent) (deq.Ev
 		State:        e.State,
 		Topic:        c.HelloReplyTopic(),
 		Indexes:      e.Indexes,
+
+		Selector:        e.Selector,
+		SelectorVersion: e.SelectorVersion,
 	}, nil
 }
 
@@ -158,6 +170,9 @@ func (c *Greeter2TopicConfig) EventToEmptyEvent(e deq.Event) (*deqtype.EmptyEven
 		DefaultState: e.DefaultState,
 		State:        e.State,
 		Indexes:      e.Indexes,
+		
+		Selector:        e.Selector,
+		SelectorVersion: e.SelectorVersion,
 	}, nil
 }
 
@@ -176,6 +191,9 @@ func (c *Greeter2TopicConfig) EmptyEventToEvent(e *deqtype.EmptyEvent) (deq.Even
 		State:        e.State,
 		Topic:        c.EmptyTopic(),
 		Indexes:      e.Indexes,
+
+		Selector:        e.Selector,
+		SelectorVersion: e.SelectorVersion,
 	}, nil
 }
 

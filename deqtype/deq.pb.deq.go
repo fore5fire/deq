@@ -20,6 +20,9 @@ type TopicEvent struct {
 	State        deq.State
 	Indexes      []string
 
+	Selector        string
+	SelectorVersion int64
+
 	Topic *Topic
 }
 
