@@ -36,6 +36,7 @@ func TestRequeue(t *testing.T) {
 			DefaultState: deq.StateQueued,
 			CreateTime:   e.CreateTime,
 			State:        deq.StateQueued,
+			Selector:     "TestRequeueEvent",
 			SendCount:    1,
 		},
 		{
@@ -45,6 +46,7 @@ func TestRequeue(t *testing.T) {
 			DefaultState: deq.StateQueued,
 			CreateTime:   e.CreateTime,
 			State:        deq.StateQueued,
+			Selector:     "TestRequeueEvent",
 			SendCount:    2,
 		},
 		{
@@ -54,6 +56,7 @@ func TestRequeue(t *testing.T) {
 			DefaultState: deq.StateQueued,
 			CreateTime:   e.CreateTime,
 			State:        deq.StateQueuedLinear,
+			Selector:     "TestRequeueEvent",
 			SendCount:    3,
 		},
 		{
@@ -63,6 +66,7 @@ func TestRequeue(t *testing.T) {
 			DefaultState: deq.StateQueued,
 			CreateTime:   e.CreateTime,
 			State:        deq.StateQueuedLinear,
+			Selector:     "TestRequeueEvent",
 			SendCount:    4,
 		},
 		{
@@ -72,6 +76,7 @@ func TestRequeue(t *testing.T) {
 			DefaultState: deq.StateQueued,
 			CreateTime:   e.CreateTime,
 			State:        deq.StateQueuedConstant,
+			Selector:     "TestRequeueEvent",
 			SendCount:    5,
 		},
 		{
@@ -81,6 +86,7 @@ func TestRequeue(t *testing.T) {
 			DefaultState: deq.StateQueued,
 			CreateTime:   e.CreateTime,
 			State:        deq.StateQueuedConstant,
+			Selector:     "TestRequeueEvent",
 			SendCount:    6,
 		},
 		{
@@ -90,6 +96,7 @@ func TestRequeue(t *testing.T) {
 			DefaultState: deq.StateQueued,
 			CreateTime:   e.CreateTime,
 			State:        deq.StateQueuedConstant,
+			Selector:     "TestRequeueEvent",
 			SendCount:    7,
 		},
 		{
@@ -99,6 +106,7 @@ func TestRequeue(t *testing.T) {
 			DefaultState: deq.StateQueued,
 			CreateTime:   e.CreateTime,
 			State:        deq.StateQueuedConstant,
+			Selector:     "TestRequeueEvent",
 			SendCount:    8,
 		},
 		{
@@ -108,6 +116,7 @@ func TestRequeue(t *testing.T) {
 			DefaultState: deq.StateQueued,
 			CreateTime:   e.CreateTime,
 			State:        deq.StateQueuedConstant,
+			Selector:     "TestRequeueEvent",
 			SendCount:    9,
 		},
 		{
@@ -117,6 +126,7 @@ func TestRequeue(t *testing.T) {
 			DefaultState: deq.StateQueued,
 			CreateTime:   e.CreateTime,
 			State:        deq.StateQueuedConstant,
+			Selector:     "TestRequeueEvent",
 			SendCount:    10,
 		},
 	}

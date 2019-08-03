@@ -56,6 +56,7 @@ func TestSub(t *testing.T) {
 				DefaultState: deq.StateQueued,
 				State:        deq.StateQueued,
 				SendCount:    1,
+				Selector:     "before-event1",
 			},
 			{
 				ID:           "before-event2",
@@ -64,6 +65,7 @@ func TestSub(t *testing.T) {
 				DefaultState: deq.StateQueued,
 				State:        deq.StateQueued,
 				SendCount:    1,
+				Selector:     "before-event2",
 			},
 		},
 		After: []deq.Event{
@@ -91,6 +93,7 @@ func TestSub(t *testing.T) {
 				DefaultState: deq.StateQueued,
 				State:        deq.StateQueued,
 				SendCount:    1,
+				Selector:     "~after-event1",
 			},
 			{
 				ID:           "~after-event2",
@@ -99,6 +102,7 @@ func TestSub(t *testing.T) {
 				DefaultState: deq.StateQueued,
 				State:        deq.StateQueued,
 				SendCount:    1,
+				Selector:     "~after-event2",
 			},
 		},
 		ExpectedResponses: []deq.Event{
@@ -109,6 +113,7 @@ func TestSub(t *testing.T) {
 				DefaultState: deq.StateQueued,
 				State:        deq.StateQueued,
 				SendCount:    1,
+				Selector:     "before-event1",
 			},
 			{
 				ID:           "before-event2",
@@ -117,6 +122,7 @@ func TestSub(t *testing.T) {
 				DefaultState: deq.StateQueued,
 				State:        deq.StateQueued,
 				SendCount:    1,
+				Selector:     "before-event2",
 			},
 			{
 				ID:           "~after-event1",
@@ -125,6 +131,7 @@ func TestSub(t *testing.T) {
 				DefaultState: deq.StateQueued,
 				State:        deq.StateQueued,
 				SendCount:    1,
+				Selector:     "~after-event1",
 			},
 			{
 				ID:           "~after-event2",
@@ -133,6 +140,7 @@ func TestSub(t *testing.T) {
 				DefaultState: deq.StateQueued,
 				State:        deq.StateQueued,
 				SendCount:    1,
+				Selector:     "~after-event2",
 			},
 		},
 	}
@@ -272,6 +280,7 @@ func TestAwait(t *testing.T) {
 		CreateTime:   time.Now(),
 		DefaultState: deq.StateQueued,
 		State:        deq.StateQueued,
+		Selector:     "event1",
 	}
 
 	ctx, cancel := context.WithCancel(context.Background())
@@ -447,6 +456,7 @@ func TestGet(t *testing.T) {
 		ID:         "event1",
 		Topic:      "topic",
 		CreateTime: time.Now(),
+		Selector:   "event1",
 	}
 
 	_, err := db.Pub(ctx, expected)
@@ -492,29 +502,30 @@ func TestGetIndex(t *testing.T) {
 	db, discard := newTestDB(t)
 	defer discard()
 
-	expected := deq.Event{
+	expect := deq.Event{
 		ID:           "event1",
 		Topic:        "topic",
 		CreateTime:   time.Now(),
 		DefaultState: deq.StateQueued,
 		State:        deq.StateQueued,
 		Indexes:      []string{"index1", "index3"},
+		Selector:     "index1",
 	}
 
-	_, err := db.Pub(ctx, expected)
+	_, err := db.Pub(ctx, expect)
 	if err != nil {
 		t.Fatalf("pub: %v", err)
 	}
 
-	channel := db.Channel("channel", expected.Topic)
+	channel := db.Channel("channel", expect.Topic)
 	defer channel.Close()
 
 	actual, err := channel.Get(ctx, "index1", deqopt.UseIndex())
 	if err != nil {
 		t.Fatalf("get first index: %v", err)
 	}
-	if !cmp.Equal(actual, expected) {
-		t.Errorf("\n%s", cmp.Diff(expected, actual))
+	if !cmp.Equal(actual, expect) {
+		t.Errorf("\n%s", cmp.Diff(expect, actual))
 	}
 
 	actual, err = channel.Get(ctx, "index2", deqopt.UseIndex())
@@ -525,16 +536,18 @@ func TestGetIndex(t *testing.T) {
 		t.Errorf("get missing index: found event %v", actual)
 	}
 
+	expect.Selector = "index3"
+
 	actual, err = channel.Get(ctx, "index3", deqopt.UseIndex())
 	if err != nil {
 		t.Fatalf("get second index: %v", err)
 	}
-	if !cmp.Equal(actual, expected) {
-		t.Errorf("\n%s", cmp.Diff(expected, actual))
+	if !cmp.Equal(actual, expect) {
+		t.Errorf("\n%s", cmp.Diff(expect, actual))
 	}
 }
 
-func TestBatchGetAllow(t *testing.T) {
+func TestBatchGet(t *testing.T) {
 	t.Parallel()
 
 	ctx := context.Background()
@@ -549,6 +562,7 @@ func TestBatchGetAllow(t *testing.T) {
 			CreateTime:   time.Now().Round(0),
 			DefaultState: deq.StateQueued,
 			State:        deq.StateQueued,
+			Selector:     "event1",
 		},
 		{
 			ID:           "event2",
@@ -556,6 +570,7 @@ func TestBatchGetAllow(t *testing.T) {
 			CreateTime:   time.Now().Round(0),
 			DefaultState: deq.StateQueued,
 			State:        deq.StateQueued,
+			Selector:     "event2",
 		},
 		{
 			ID:           "event3",
@@ -563,6 +578,7 @@ func TestBatchGetAllow(t *testing.T) {
 			CreateTime:   time.Now().Round(0),
 			DefaultState: deq.StateQueued,
 			State:        deq.StateQueued,
+			Selector:     "event3",
 		},
 		{
 			ID:           "event4",
@@ -570,6 +586,7 @@ func TestBatchGetAllow(t *testing.T) {
 			CreateTime:   time.Now().Round(0),
 			DefaultState: deq.StateQueued,
 			State:        deq.StateQueued,
+			Selector:     "event4",
 		},
 	}
 
@@ -617,6 +634,7 @@ func TestBatchGetAllowNotFound(t *testing.T) {
 			CreateTime:   time.Now().Round(0),
 			DefaultState: deq.StateQueued,
 			State:        deq.StateQueued,
+			Selector:     "event1",
 		},
 		{
 			ID:           "event2",
@@ -624,6 +642,7 @@ func TestBatchGetAllowNotFound(t *testing.T) {
 			CreateTime:   time.Now().Round(0),
 			DefaultState: deq.StateQueued,
 			State:        deq.StateQueued,
+			Selector:     "event2",
 		},
 		{
 			ID:           "event3",
@@ -631,6 +650,7 @@ func TestBatchGetAllowNotFound(t *testing.T) {
 			CreateTime:   time.Now().Round(0),
 			DefaultState: deq.StateQueued,
 			State:        deq.StateQueued,
+			Selector:     "event3",
 		},
 		{
 			ID:           "event4",
@@ -638,6 +658,7 @@ func TestBatchGetAllowNotFound(t *testing.T) {
 			CreateTime:   time.Now().Round(0),
 			DefaultState: deq.StateQueued,
 			State:        deq.StateQueued,
+			Selector:     "event4",
 		},
 	}
 
@@ -691,12 +712,14 @@ func TestBatchGetIndex(t *testing.T) {
 			Indexes:      []string{"1"},
 		},
 		{
-			ID:           "event2",
-			Topic:        "topic",
-			CreateTime:   after,
-			DefaultState: deq.StateQueued,
-			State:        deq.StateQueued,
-			Indexes:      []string{"1"},
+			ID:              "event2",
+			Topic:           "topic",
+			CreateTime:      after,
+			DefaultState:    deq.StateQueued,
+			State:           deq.StateQueued,
+			Indexes:         []string{"1"},
+			Selector:        "1",
+			SelectorVersion: 1,
 		},
 		{
 			ID:           "event3",
@@ -705,6 +728,7 @@ func TestBatchGetIndex(t *testing.T) {
 			DefaultState: deq.StateQueued,
 			State:        deq.StateQueued,
 			Indexes:      []string{"2"},
+			Selector:     "2",
 		},
 		{
 			ID:           "event4",
@@ -713,6 +737,7 @@ func TestBatchGetIndex(t *testing.T) {
 			DefaultState: deq.StateQueued,
 			State:        deq.StateQueued,
 			Indexes:      []string{"3"},
+			Selector:     "3",
 		},
 	}
 

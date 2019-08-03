@@ -13,6 +13,7 @@ import (
 	"github.com/google/go-cmp/cmp"
 	"gitlab.com/katcheCode/deq"
 	"gitlab.com/katcheCode/deq/deqdb/internal/data"
+	"gitlab.com/katcheCode/deq/deqopt"
 )
 
 var long bool
@@ -71,6 +72,7 @@ func TestDel(t *testing.T) {
 		State:        deq.StateInternal,
 		SendCount:    1,
 		Indexes:      []string{"abc", "123", "qwerty"},
+		Selector:     "event1",
 	}
 
 	events := []deq.Event{
@@ -83,6 +85,7 @@ func TestDel(t *testing.T) {
 			State:        deq.StateInternal,
 			SendCount:    1,
 			Indexes:      []string{"abc", "def"},
+			Selector:     "event2",
 		},
 		{
 			ID:           "event1",
@@ -92,6 +95,7 @@ func TestDel(t *testing.T) {
 			State:        deq.StateInternal,
 			SendCount:    1,
 			Indexes:      []string{"123"},
+			Selector:     "event1",
 		},
 	}
 
@@ -218,6 +222,7 @@ func TestDel(t *testing.T) {
 	expectedIndexPayload := &data.IndexPayload{
 		EventId:    events[1].ID,
 		CreateTime: events[1].CreateTime.UnixNano(),
+		Version:    1,
 	}
 
 	// Verify covered indexes were not deleted.
@@ -249,6 +254,7 @@ func TestPub(t *testing.T) {
 		DefaultState: deq.StateQueued,
 		State:        deq.StateQueued,
 		SendCount:    1,
+		Selector:     "event1",
 	}
 
 	channel := db.Channel("channel", expected.Topic)
@@ -347,6 +353,7 @@ func TestPubDuplicate(t *testing.T) {
 		DefaultState: deq.StateQueued,
 		State:        deq.StateQueued,
 		SendCount:    1,
+		Selector:     "event1",
 	}
 
 	channel := db.Channel("channel", want.Topic)
@@ -451,6 +458,132 @@ outer:
 
 	if len(missed) > 0 {
 		t.Fatalf("Missed messages: %v", missed)
+	}
+}
+
+func TestIndexVersion(t *testing.T) {
+
+	ctx := context.Background()
+
+	db, close := newTestDB(t)
+	defer close()
+
+	txn := db.db.NewTransaction(true)
+	defer txn.Discard()
+
+	now := time.Now()
+
+	events := []*deq.Event{
+		{
+			Topic:      "topic",
+			ID:         "event1",
+			CreateTime: now,
+			Indexes: []string{
+				"abc",
+				"123",
+				"qwerty",
+			},
+		},
+		{
+			Topic:      "topic",
+			ID:         "event2",
+			CreateTime: now.Add(time.Second),
+			Indexes: []string{
+				"123",
+			},
+		},
+		{
+			Topic:      "topic",
+			ID:         "event3",
+			CreateTime: now.Add(time.Second * 2),
+			Indexes: []string{
+				"def",
+				"123",
+				"qwerty",
+			},
+		},
+		{
+			Topic:      "topic2",
+			ID:         "event4",
+			CreateTime: now.Add(time.Second * 3),
+			Indexes: []string{
+				"abc",
+				"123",
+				"qwerty",
+			},
+		},
+	}
+
+	expect := []deq.Event{
+		{
+			Topic:        "topic",
+			ID:           "event1",
+			CreateTime:   now,
+			DefaultState: deq.StateQueued,
+			State:        deq.StateQueued,
+			Indexes: []string{
+				"abc",
+				"123",
+				"qwerty",
+			},
+			Selector:        "abc",
+			SelectorVersion: 0,
+		},
+		{
+			Topic:        "topic",
+			ID:           "event3",
+			CreateTime:   now.Add(time.Second * 2),
+			DefaultState: deq.StateQueued,
+			State:        deq.StateQueued,
+			Indexes: []string{
+				"def",
+				"123",
+				"qwerty",
+			},
+			Selector:        "123",
+			SelectorVersion: 2,
+		},
+		{
+			Topic:        "topic",
+			ID:           "event3",
+			CreateTime:   now.Add(time.Second * 2),
+			DefaultState: deq.StateQueued,
+			State:        deq.StateQueued,
+			Indexes: []string{
+				"def",
+				"123",
+				"qwerty",
+			},
+			Selector:        "qwerty",
+			SelectorVersion: 1,
+		},
+	}
+
+	// Write the events
+	for _, e := range events {
+		err := data.WriteEvent(txn, e)
+		if err != nil {
+			t.Fatal("write event: ", err)
+		}
+	}
+
+	err := txn.Commit()
+	if err != nil {
+		t.Fatalf("commit: %v", err)
+	}
+
+	channel := db.Channel("channel", "topic")
+	defer channel.Close()
+
+	// Check the events by index.
+	for _, expect := range expect {
+		actual, err := channel.Get(ctx, expect.Selector, deqopt.UseIndex())
+		if err != nil {
+			t.Fatalf("get event by index %q: %v", expect.Selector, err)
+		}
+		if !cmp.Equal(actual, expect) {
+			t.Errorf("get event by index %q:\n%s", expect.Selector, cmp.Diff(expect, actual))
+		}
 	}
 }
 

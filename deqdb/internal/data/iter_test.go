@@ -265,14 +265,17 @@ func TestIndexIter(t *testing.T) {
 			CreateTime:   firstTime,
 			DefaultState: deq.StateQueued,
 			State:        deq.StateQueued,
+			Selector:     "index0",
 		},
 		{
-			ID:           "event4",
-			Topic:        "topic1",
-			Indexes:      []string{"index1"},
-			CreateTime:   secondTime,
-			DefaultState: deq.StateQueued,
-			State:        deq.StateQueued,
+			ID:              "event4",
+			Topic:           "topic1",
+			Indexes:         []string{"index1"},
+			CreateTime:      secondTime,
+			DefaultState:    deq.StateQueued,
+			State:           deq.StateQueued,
+			Selector:        "index1",
+			SelectorVersion: 1,
 		},
 		{
 			ID:           "event2",
@@ -281,6 +284,7 @@ func TestIndexIter(t *testing.T) {
 			CreateTime:   firstTime,
 			DefaultState: deq.StateQueued,
 			State:        deq.StateQueued,
+			Selector:     "index3",
 		},
 		{
 			ID:           "event3",
@@ -289,6 +293,7 @@ func TestIndexIter(t *testing.T) {
 			CreateTime:   firstTime,
 			DefaultState: deq.StateQueued,
 			State:        deq.StateQueued,
+			Selector:     "index4",
 		},
 	}
 
@@ -372,14 +377,17 @@ func TestIndexIterReversed(t *testing.T) {
 			CreateTime:   createTime,
 			DefaultState: deq.StateQueued,
 			State:        deq.StateQueued,
+			Selector:     "index3",
 		},
 		{
-			ID:           "event4",
-			Topic:        "topic1",
-			Indexes:      []string{"index1"},
-			CreateTime:   createTime,
-			DefaultState: deq.StateQueued,
-			State:        deq.StateQueued,
+			ID:              "event4",
+			Topic:           "topic1",
+			Indexes:         []string{"index1"},
+			CreateTime:      createTime,
+			DefaultState:    deq.StateQueued,
+			State:           deq.StateQueued,
+			Selector:        "index1",
+			SelectorVersion: 1,
 		},
 	}
 
@@ -476,6 +484,7 @@ func TestIndexIterLimits(t *testing.T) {
 			CreateTime:   createTime,
 			DefaultState: deq.StateQueued,
 			State:        deq.StateQueued,
+			Selector:     "index3",
 		},
 	}
 
@@ -563,6 +572,7 @@ func TestReverseIndexIterLimits(t *testing.T) {
 			CreateTime:   createTime,
 			DefaultState: deq.StateQueued,
 			State:        deq.StateQueued,
+			Selector:     "index3",
 		},
 	}
 

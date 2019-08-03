@@ -143,6 +143,8 @@ func (c *Channel) Next(ctx context.Context) (deq.Event, error) {
 				return deq.Event{}, err
 			}
 
+			e.Selector = e.ID
+
 			c.debug.Printf("channel %s: next: sending event %q %q", c.name, e.Topic, e.ID)
 			return *e, nil
 		}
@@ -302,8 +304,6 @@ func (c *Channel) Sub(ctx context.Context, handler deq.SubHandler) error {
 			// Some non-context error occurred.
 			return err
 		}
-
-		e.Selector = e.ID
 
 		response, err := handler(ctx, e)
 		select {

@@ -195,6 +195,7 @@ func WriteEvent(txn Txn, e *deq.Event) error {
 
 		// Check if index is in use. Only overwrite if newer, or if create time is the same then if the
 		// event id hash is greater.
+		var version int64
 		var existing IndexPayload
 		err := GetIndexPayload(txn, &indexKey, &existing)
 		if err != nil && err != deq.ErrNotFound {
@@ -203,10 +204,14 @@ func WriteEvent(txn Txn, e *deq.Event) error {
 		if err == nil && !shouldUpdateIndex(&existing, e) {
 			continue
 		}
+		if err == nil {
+			version = existing.Version + 1
+		}
 
 		err = WriteIndex(txn, &indexKey, &IndexPayload{
 			EventId:    e.ID,
 			CreateTime: e.CreateTime.UnixNano(),
+			Version:    version,
 		})
 		if err != nil {
 			return err

@@ -67,6 +67,7 @@ func TestSyncTo(t *testing.T) {
 				DefaultState: deq.StateQueued,
 				State:        deq.StateQueued,
 				SendCount:    1,
+				Selector:     "after-event1",
 			},
 			{
 				ID:           "after-event2",
@@ -75,6 +76,7 @@ func TestSyncTo(t *testing.T) {
 				DefaultState: deq.StateQueued,
 				State:        deq.StateQueued,
 				SendCount:    1,
+				Selector:     "after-event2",
 			},
 			{
 				ID:           "before-event1",
@@ -83,6 +85,7 @@ func TestSyncTo(t *testing.T) {
 				DefaultState: deq.StateQueued,
 				State:        deq.StateQueued,
 				SendCount:    1,
+				Selector:     "before-event1",
 			},
 			{
 				ID:           "before-event2",
@@ -91,6 +94,7 @@ func TestSyncTo(t *testing.T) {
 				DefaultState: deq.StateQueued,
 				State:        deq.StateQueued,
 				SendCount:    1,
+				Selector:     "before-event2",
 			},
 		},
 	}
