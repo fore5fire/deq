@@ -268,18 +268,16 @@ func (s *sharedChannel) IncrementSendCount(ctx context.Context, e *deq.Event) er
 }
 
 // ScheduleEvent schedules an event to be sent no earlier than t.
-func (s *sharedChannel) ScheduleEvent(ctx context.Context, e *deq.Event, t time.Time) error {
-	select {
-	case <-ctx.Done():
-		return ctx.Err()
-	case <-s.done:
-		return nil
-	case s.scheduled <- schedule{
-		Event: e,
-		Time:  t,
-	}:
-		return nil
-	}
+func (s *sharedChannel) ScheduleEvent(e *deq.Event, t time.Time) {
+	go func() {
+		select {
+		case <-s.done:
+		case s.scheduled <- schedule{
+			Event: e,
+			Time:  t,
+		}:
+		}
+	}()
 }
 
 // ScheduleEvent attempts to schedule an event to be sent no earlier than t. If there is no

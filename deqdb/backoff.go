@@ -53,5 +53,8 @@ func sendDelayConstant(d time.Duration, sendCount int) time.Duration {
 }
 
 func randomSendDelay(min, max time.Duration) time.Duration {
+	if min >= max {
+		return max
+	}
 	return time.Duration(rand.Int63n(int64(max-min))) + min
 }

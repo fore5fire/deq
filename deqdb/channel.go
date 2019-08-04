@@ -140,10 +140,7 @@ func (c *Channel) Next(ctx context.Context) (deq.Event, error) {
 				return deq.Event{}, err
 			}
 
-			err = c.shared.ScheduleEvent(ctx, e, schedule)
-			if err != nil {
-				return deq.Event{}, err
-			}
+			c.shared.ScheduleEvent(e, schedule)
 
 			e.Selector = e.ID
 
