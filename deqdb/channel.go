@@ -115,22 +115,24 @@ func (c *Channel) Next(ctx context.Context) (deq.Event, error) {
 			e.SendCount++
 			e.State = data.EventStateFromProto(channel.EventState)
 
-			var delay time.Duration
+			var delayFunc sendDelayFunc
 			switch e.State {
 			default:
 				c.debug.Printf("channel %q: next: skipping non-queued event %q %q", c.name, e.Topic, e.ID)
 				// Don't send non-queued events.
 				continue
 			case deq.StateQueued:
-				delay = sendDelayExp(c.initialDelay, e.SendCount)
-				c.debug.Printf("channel %q: next: rescheduling event %q %q after 2^%d * %v = %v", c.name, e.Topic, e.ID, e.SendCount, c.initialDelay, delay)
+				delayFunc = sendDelayExp
 			case deq.StateQueuedLinear:
-				delay = sendDelayLinear(c.initialDelay, e.SendCount)
-				c.debug.Printf("channel %q: next: rescheduling event %q %q after %d * %v = %v", c.name, e.Topic, e.ID, e.SendCount, c.initialDelay, delay)
+				delayFunc = sendDelayLinear
 			case deq.StateQueuedConstant:
-				delay = sendDelayConstant(c.initialDelay, e.SendCount)
-				c.debug.Printf("channel %q: next: rescheduling event %q %q after %v", c.name, e.Topic, e.ID, delay)
+				delayFunc = sendDelayConstant
 			}
+
+			max := delayFunc(c.initialDelay, e.SendCount)
+			min := delayFunc(c.initialDelay, e.SendCount-1)
+			delay := randomSendDelay(min, max)
+			c.debug.Printf("channel %q: next: rescheduling event %q %q after %v", c.name, e.Topic, e.ID, delay)
 
 			schedule := time.Now().Add(delay)
 			err = c.shared.IncrementSendCount(ctx, e)
