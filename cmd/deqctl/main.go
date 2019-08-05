@@ -104,7 +104,7 @@ func main() {
 
 		err = db.VerifyEvents(ctx, deleteInvalid)
 		if err != nil {
-			fmt.Printf("verify events: %v", err)
+			fmt.Printf("verify events: %v\n", err)
 		}
 
 	case "sub":
@@ -232,7 +232,7 @@ func main() {
 			// We're just deleting a single event.
 			err = deqc.Del(ctx, topic, id)
 			if err != nil {
-				fmt.Printf("%v", err)
+				fmt.Printf("%v\n", err)
 				os.Exit(2)
 			}
 			break
@@ -287,7 +287,7 @@ func main() {
 					events <- iter.Event()
 				}
 				if iter.Err() != nil {
-					fmt.Printf("%v", iter.Err())
+					fmt.Printf("%v\n", iter.Err())
 					os.Exit(2)
 				}
 
