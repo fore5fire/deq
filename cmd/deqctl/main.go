@@ -359,5 +359,5 @@ func open(dir, host, nameOverride string, insecure, debug bool) (deq.Client, err
 }
 
 func printEvent(e deq.Event) {
-	fmt.Printf("id: %v, topic: %s\nstate: %v, send count: %d\nindexes: %v\npayload: %s\n\n", e.ID, e.Topic, e.State, e.SendCount, e.Indexes, base64.StdEncoding.EncodeToString(e.Payload))
+	fmt.Printf("id: %v\n topic: %s\nstate: %v\nsend count: %d\nselector: %s\nselector version: %d\nindexes: %v\npayload: %s\n\n", e.ID, e.Topic, e.State, e.SendCount, e.Selector, e.SelectorVersion, e.Indexes, base64.StdEncoding.EncodeToString(e.Payload))
 }
