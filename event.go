@@ -100,3 +100,8 @@ func (s State) String() string {
 		return "UnrecognizedState"
 	}
 }
+
+// MarshalYAML returns the string value of the event for use in marshalling YAML documents.
+func (s State) MarshalYAML() (interface{}, error) {
+	return s.String(), nil
+}
