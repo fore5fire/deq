@@ -36,17 +36,18 @@ func main() {
 	rand.Seed(time.Now().UnixNano())
 
 	flag.Usage = func() {
-		fmt.Println("Usage: deqctl [flags] COMMAND")
-		fmt.Println("")
-		fmt.Println("Available Commands:")
-		fmt.Println("list: Print events for a topic.")
-		fmt.Println("sub: Print events for a topic as they are published.")
-		fmt.Println("topics: Print all topics. Equivalent to list deq.events.Topic")
-		fmt.Println("get: Get an event.")
-		fmt.Println("delete: Delete an event.")
-		fmt.Println("verify: Verify the database integrity. Only valid when a local database is opened using -dir.")
-		fmt.Println("")
-		fmt.Println("Available Flags:")
+		w := flag.CommandLine.Output()
+		fmt.Fprintln(w, "Usage: deqctl [flags] COMMAND")
+		fmt.Fprintln(w, "")
+		fmt.Fprintln(w, "Available Commands:")
+		fmt.Fprintln(w, "list: Print events for a topic.")
+		fmt.Fprintln(w, "sub: Print events for a topic as they are published.")
+		fmt.Fprintln(w, "topics: Print all topics. Equivalent to list deq.events.Topic")
+		fmt.Fprintln(w, "get: Get an event.")
+		fmt.Fprintln(w, "delete: Delete an event.")
+		fmt.Fprintln(w, "verify: Verify the database integrity. Only valid when a local database is opened using -dir.")
+		fmt.Fprintln(w, "")
+		fmt.Fprintln(w, "Available Flags:")
 		flag.PrintDefaults()
 	}
 
@@ -85,7 +86,7 @@ func main() {
 	switch cmd {
 	case "verify":
 		if dir == "" {
-			fmt.Printf("-dir is required for verify.")
+			fmt.Fprintf(os.Stderr, "-dir is required for verify.")
 			os.Exit(1)
 		}
 
@@ -110,13 +111,13 @@ func main() {
 	case "sub":
 		topic := flag.Arg(1)
 		if topic == "" {
-			fmt.Printf("topic is required")
+			fmt.Fprintf(os.Stderr, "topic is required")
 			os.Exit(1)
 		}
 
 		deqc, err := open(dir, host, nameOverride, insecure, debug)
 		if err != nil {
-			fmt.Printf("dial: %v\n", err)
+			fmt.Fprintf(os.Stderr, "dial: %v\n", err)
 			os.Exit(1)
 		}
 
@@ -129,7 +130,7 @@ func main() {
 			return nil, ack.Error(ack.NoOp)
 		})
 		if err != nil {
-			fmt.Printf("subscribe: %v\n", err)
+			fmt.Fprintf(os.Stderr, "subscribe: %v\n", err)
 			os.Exit(2)
 		}
 
@@ -139,13 +140,13 @@ func main() {
 			topic = "deq.events.Topic"
 		}
 		if topic == "" {
-			fmt.Printf("topic is required")
+			fmt.Fprintf(os.Stderr, "topic is required")
 			os.Exit(1)
 		}
 
 		deqc, err := open(dir, host, nameOverride, insecure, debug)
 		if err != nil {
-			fmt.Printf("dial: %v\n", err)
+			fmt.Fprintf(os.Stderr, "dial: %v\n", err)
 			os.Exit(1)
 		}
 
@@ -173,24 +174,24 @@ func main() {
 			if iter.Err() == nil {
 				break
 			}
-			fmt.Printf("iterate: %v\n", iter.Err())
+			fmt.Fprintf(os.Stderr, "iterate: %v\n", iter.Err())
 		}
 
 	case "get":
 		topic := flag.Arg(1)
 		event := flag.Arg(2)
 		if topic == "" {
-			fmt.Printf("topic is required\n")
+			fmt.Fprintf(os.Stderr, "topic is required\n")
 			os.Exit(1)
 		}
 		if event == "" {
-			fmt.Printf("event is required\n")
+			fmt.Fprintf(os.Stderr, "event is required\n")
 			os.Exit(1)
 		}
 
 		deqc, err := open(dir, host, nameOverride, insecure, debug)
 		if err != nil {
-			fmt.Printf("dial: %v\n", err)
+			fmt.Fprintf(os.Stderr, "dial: %v\n", err)
 			os.Exit(1)
 		}
 
@@ -203,7 +204,7 @@ func main() {
 		}
 		e, err := channel.Get(ctx, event, opts...)
 		if err != nil {
-			fmt.Printf("get: %v\n", err)
+			fmt.Fprintf(os.Stderr, "get: %v\n", err)
 			os.Exit(2)
 		}
 
@@ -212,19 +213,19 @@ func main() {
 	case "delete":
 		topic := flag.Arg(1)
 		if topic == "" {
-			fmt.Printf("topic is required.\n")
+			fmt.Fprintf(os.Stderr, "topic is required.\n")
 			os.Exit(1)
 		}
 
 		id := flag.Arg(2)
 		if id == "" && !all || id != "" && all {
-			fmt.Printf("exactly one of argument <id> or flag -all is required.\n")
+			fmt.Fprintf(os.Stderr, "exactly one of argument <id> or flag -all is required.\n")
 			os.Exit(1)
 		}
 
 		deqc, err := open(dir, host, nameOverride, insecure, debug)
 		if err != nil {
-			fmt.Printf("dial: %v\n", err)
+			fmt.Fprintf(os.Stderr, "dial: %v\n", err)
 			os.Exit(1)
 		}
 
@@ -232,7 +233,7 @@ func main() {
 			// We're just deleting a single event.
 			err = deqc.Del(ctx, topic, id)
 			if err != nil {
-				fmt.Printf("%v\n", err)
+				fmt.Fprintf(os.Stderr, "%v\n", err)
 				os.Exit(2)
 			}
 			break
@@ -287,7 +288,7 @@ func main() {
 					events <- iter.Event()
 				}
 				if iter.Err() != nil {
-					fmt.Printf("%v\n", iter.Err())
+					fmt.Fprintf(os.Stderr, "%v\n", iter.Err())
 					os.Exit(2)
 				}
 
@@ -302,9 +303,10 @@ func main() {
 		}
 
 	case "help", "":
+		flag.CommandLine.SetOutput(os.Stdout)
 		flag.Usage()
 	default:
-		fmt.Printf("Error: unknown command %s\n\n", cmd)
+		fmt.Fprintf(os.Stderr, "Error: unknown command %s\n\n", cmd)
 		flag.Usage()
 	}
 
