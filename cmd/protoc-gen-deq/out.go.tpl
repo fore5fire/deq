@@ -182,6 +182,10 @@ type _{{ .Name }}Client struct {
 }
 
 func New{{ .Name }}Client(db deq.Client, channel string, config *{{$ServiceName}}TopicConfig) {{.Name}}Client {
+	if channel == "" {
+		panic("channel is required")
+	}
+	
 	return &_{{.Name}}Client{
 		db: db,
 		channel: channel,

@@ -286,6 +286,10 @@ type _GreeterClient struct {
 }
 
 func NewGreeterClient(db deq.Client, channel string, config *GreeterTopicConfig) GreeterClient {
+	if channel == "" {
+		panic("channel is required")
+	}
+	
 	return &_GreeterClient{
 		db: db,
 		channel: channel,
