@@ -431,7 +431,7 @@ func (c *_GreeterClient) PubHelloRequestEvent(ctx context.Context, e *HelloReque
 
 	deqEvent, err = c.db.Pub(ctx, deqEvent)
 	if err != nil {
-		return nil, fmt.Errorf("pub: %v", err)
+		return nil, err
 	}
 
 	e, err = c.config.EventToHelloRequestEvent(deqEvent)
@@ -527,7 +527,7 @@ func (c *_GreeterClient) PubHelloReplyEvent(ctx context.Context, e *HelloReplyEv
 
 	deqEvent, err = c.db.Pub(ctx, deqEvent)
 	if err != nil {
-		return nil, fmt.Errorf("pub: %v", err)
+		return nil, err
 	}
 
 	e, err = c.config.EventToHelloReplyEvent(deqEvent)

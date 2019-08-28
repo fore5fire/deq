@@ -87,6 +87,7 @@ func TestHelloReplyIter(t *testing.T) {
 			CreateTime:   now,
 			DefaultState: deq.StateQueued,
 			State:        deq.StateQueued,
+			Selector:     "1",
 			Indexes:      []string{"1"},
 			HelloReply: &HelloReply{
 				Message: "Hello again world!",
@@ -97,6 +98,7 @@ func TestHelloReplyIter(t *testing.T) {
 			CreateTime:   now,
 			DefaultState: deq.StateQueued,
 			State:        deq.StateQueued,
+			Selector:     "8",
 			Indexes:      []string{"9", "8"},
 			HelloReply: &HelloReply{
 				Message: "Hello world!",
@@ -107,6 +109,7 @@ func TestHelloReplyIter(t *testing.T) {
 			CreateTime:   now,
 			DefaultState: deq.StateQueued,
 			State:        deq.StateQueued,
+			Selector:     "9",
 			Indexes:      []string{"9", "8"},
 			HelloReply: &HelloReply{
 				Message: "Hello world!",

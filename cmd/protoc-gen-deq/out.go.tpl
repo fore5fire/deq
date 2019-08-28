@@ -313,7 +313,7 @@ func (c *_{{ $ServiceName }}Client) Pub{{.GoName}}Event(ctx context.Context, e *
 
 	deqEvent, err = c.db.Pub(ctx, deqEvent)
 	if err != nil {
-		return nil, fmt.Errorf("pub: %v", err)
+		return nil, err
 	}
 
 	e, err = c.config.EventTo{{.GoName}}Event(deqEvent)
