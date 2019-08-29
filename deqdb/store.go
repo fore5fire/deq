@@ -286,6 +286,7 @@ func (s *Store) Pub(ctx context.Context, e deq.Event) (deq.Event, error) {
 	}
 	e.State = e.DefaultState
 	e.SendCount = 0
+	e.CreateTime = e.CreateTime.Round(time.Nanosecond)
 
 	for i := 0; i < 3; i++ {
 		txn := s.db.NewTransaction(true)
@@ -320,13 +321,30 @@ func (s *Store) Pub(ctx context.Context, e deq.Event) (deq.Event, error) {
 		// Write the event to disk.
 		err = data.WriteEvent(txn, &e)
 		if err == deq.ErrAlreadyExists {
-			// Suppress the error if the new and existing events have matching payloads.
+			// Suppress the error if the new and existing events have matching payloads, indexes, and
+			// create times.
 			existing, err := data.GetEvent(txn, e.Topic, e.ID, "")
 			if err != nil {
 				return deq.Event{}, deqerr.Errorf(deqerr.Internal, "get existing event: %v", err)
 			}
 			if !bytes.Equal(existing.Payload, e.Payload) {
 				return deq.Event{}, deq.ErrAlreadyExists
+			}
+			if e.CreateTime != existing.CreateTime {
+				return deq.Event{}, deq.ErrAlreadyExists
+			}
+			if len(existing.Indexes) != len(e.Indexes) {
+				return deq.Event{}, deq.ErrAlreadyExists
+			}
+			indexes := make(map[string]struct{}, len(existing.Indexes))
+			for _, idx := range existing.Indexes {
+				indexes[idx] = struct{}{}
+			}
+			for _, idx := range e.Indexes {
+				_, ok := indexes[idx]
+				if !ok {
+					return deq.Event{}, deq.ErrAlreadyExists
+				}
 			}
 			return *existing, nil
 		}

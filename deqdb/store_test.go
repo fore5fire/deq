@@ -346,14 +346,19 @@ func TestPubDuplicate(t *testing.T) {
 	db, discard := newTestDB(t)
 	defer discard()
 
+	now := time.Now()
+
 	want := deq.Event{
 		ID:           "event1",
 		Topic:        "topic",
-		CreateTime:   time.Now(),
+		CreateTime:   now,
 		DefaultState: deq.StateQueued,
 		State:        deq.StateQueued,
-		SendCount:    1,
 		Selector:     "event1",
+		Indexes: []string{
+			"index1",
+			"index2",
+		},
 	}
 
 	channel := db.Channel("channel", want.Topic)
@@ -379,7 +384,64 @@ func TestPubDuplicate(t *testing.T) {
 	}
 	want.Payload = nil
 
-	got, err := channel.Next(context.Background())
+	got, err := channel.Get(context.Background(), want.ID)
+	if err != nil {
+		t.Fatalf("get next: %v", err)
+	}
+	if !cmp.Equal(want, got) {
+		t.Errorf("get next:\n%s", cmp.Diff(want, got))
+	}
+
+	// Publish and verify event with same id and different create time
+	want.CreateTime = time.Now()
+	_, err = db.Pub(ctx, want)
+	if err != deq.ErrAlreadyExists {
+		t.Fatalf("modified duplicate pub: %v", err)
+	}
+	want.CreateTime = now
+
+	got, err = channel.Get(context.Background(), want.ID)
+	if err != nil {
+		t.Fatalf("get next: %v", err)
+	}
+	if !cmp.Equal(want, got) {
+		t.Errorf("get next:\n%s", cmp.Diff(want, got))
+	}
+
+	// Publish and verify event with same id and different indexes
+	want.Indexes = nil
+	_, err = db.Pub(ctx, want)
+	if err != deq.ErrAlreadyExists {
+		t.Fatalf("modified duplicate pub: %v", err)
+	}
+	want.Indexes = []string{
+		"index1",
+		"index2",
+	}
+
+	got, err = channel.Get(context.Background(), want.ID)
+	if err != nil {
+		t.Fatalf("get next: %v", err)
+	}
+	if !cmp.Equal(want, got) {
+		t.Errorf("get next:\n%s", cmp.Diff(want, got))
+	}
+
+	// Publish and verify duplicate event with indexes in a different order
+	want.Indexes = []string{
+		"index2",
+		"index1",
+	}
+	_, err = db.Pub(ctx, want)
+	if err != nil {
+		t.Fatalf("modified duplicate pub: %v", err)
+	}
+	want.Indexes = []string{
+		"index1",
+		"index2",
+	}
+
+	got, err = channel.Get(context.Background(), want.ID)
 	if err != nil {
 		t.Fatalf("get next: %v", err)
 	}
@@ -396,7 +458,7 @@ func TestMassPublish(t *testing.T) {
 	db, discard := newTestDB(t)
 	defer discard()
 
-	for i := 0; i <= 500; i++ {
+	for i := 0; i < 500; i++ {
 		id := fmt.Sprintf("%.3d", i)
 		_, err := db.Pub(ctx, deq.Event{
 			ID:      id,

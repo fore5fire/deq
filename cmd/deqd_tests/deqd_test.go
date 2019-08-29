@@ -136,8 +136,9 @@ func TestPubDuplicate(t *testing.T) {
 	}
 
 	expectedE := legacyclient.Event{
-		ID:  time.Now().String(),
-		Msg: expected[0],
+		ID:         time.Now().String(),
+		Msg:        expected[0],
+		CreateTime: time.Now(),
 	}
 
 	e, err := p.Pub(ctx, expectedE)
