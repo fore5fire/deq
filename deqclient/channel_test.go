@@ -54,6 +54,7 @@ func TestSub(t *testing.T) {
 		ID:         "test-event",
 		Topic:      "received",
 		CreateTime: time.Now().Round(0),
+		Selector:   "test-event",
 	}
 
 	in := make(chan *api.Event)

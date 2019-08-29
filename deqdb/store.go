@@ -13,7 +13,6 @@ import (
 	"bytes"
 	"context"
 	"errors"
-	"fmt"
 	"log"
 	"os"
 	"strings"
@@ -27,6 +26,7 @@ import (
 	"gitlab.com/katcheCode/deq"
 	"gitlab.com/katcheCode/deq/deqdb/internal/data"
 	"gitlab.com/katcheCode/deq/deqdb/internal/upgrade"
+	"gitlab.com/katcheCode/deq/deqerr"
 	"gitlab.com/katcheCode/deq/deqtype"
 )
 
@@ -130,7 +130,7 @@ type eventPromise struct {
 func Open(opts Options) (*Store, error) {
 
 	if opts.Dir == "" {
-		return nil, errors.New("option Dir is required")
+		return nil, deqerr.New(deqerr.Invalid, "option Dir is required")
 	}
 
 	requeueLimit := opts.DefaultRequeueLimit
@@ -163,7 +163,7 @@ func Open(opts Options) (*Store, error) {
 
 	db, err := badger.Open(badgerOpts)
 	if err != nil {
-		return nil, err
+		return nil, errFromBadger(err)
 	}
 
 	return open(data.DBFromBadger(db), requeueLimit, opts.UpgradeIfNeeded, info, debug)
@@ -186,14 +186,14 @@ func open(db data.DB, defaultRequeueLimit int, allowUpgrade bool, info, debug Lo
 
 	version, err := upgrade.StorageVersion(txn)
 	if err != nil && err != upgrade.ErrVersionUnknown {
-		return nil, fmt.Errorf("read current storage version: %v", err)
+		return nil, deqerr.Errorf(deqerr.Unavailable, "read current storage version: %v", err)
 	}
 	if err == upgrade.ErrVersionUnknown {
 		// No version on disk, should be a new database.
 		s.debug.Printf("no version found, assuming new database")
 		err := txn.Set([]byte(upgrade.VersionKey), []byte(upgrade.CodeVersion))
 		if err != nil {
-			return nil, fmt.Errorf("write version for new db: %v", err)
+			return nil, deqerr.Errorf(deqerr.Unavailable, "write version for new db: %v", err)
 		}
 		version = upgrade.CodeVersion
 	}
@@ -207,7 +207,7 @@ func open(db data.DB, defaultRequeueLimit int, allowUpgrade bool, info, debug Lo
 
 		err = upgrade.DB(context.TODO(), s.db, version)
 		if err != nil {
-			return nil, fmt.Errorf("upgrade db: %v", err)
+			return nil, deqerr.Errorf(deqerr.GetCode(err), "upgrade db: %v", err)
 		}
 	}
 
@@ -230,7 +230,7 @@ func (s *Store) Close() error {
 	defer s.sharedChannelsMu.Unlock()
 
 	if len(s.sharedChannels) > 0 {
-		return errors.New("Store.Close called before closing all channels")
+		return deqerr.New(deqerr.Invalid, "Store.Close called before closing all channels")
 	}
 
 	close(s.done)
@@ -276,7 +276,7 @@ func (s *Store) Pub(ctx context.Context, e deq.Event) (deq.Event, error) {
 
 	err := validateTopic(e.Topic, false)
 	if err != nil {
-		return deq.Event{}, fmt.Errorf("validate e.Topic: %v", err)
+		return deq.Event{}, deqerr.Errorf(deqerr.Invalid, "validate e.Topic: %v", err)
 	}
 	if e.CreateTime.IsZero() {
 		e.CreateTime = time.Now()
@@ -295,7 +295,7 @@ func (s *Store) Pub(ctx context.Context, e deq.Event) (deq.Event, error) {
 		var topicEvent *deq.Event
 		_, err = data.GetEvent(txn, "deq.events.Topic", e.Topic, "")
 		if err != nil && err != deq.ErrNotFound {
-			return deq.Event{}, fmt.Errorf("check existing topic: %v", err)
+			return deq.Event{}, deqerr.Errorf(deqerr.Internal, "check existing topic: %v", err)
 		}
 		if err == deq.ErrNotFound {
 			topic := &deqtype.Topic{
@@ -303,7 +303,7 @@ func (s *Store) Pub(ctx context.Context, e deq.Event) (deq.Event, error) {
 			}
 			payload, err := topic.Marshal()
 			if err != nil {
-				return deq.Event{}, fmt.Errorf("new topic: marshal topic payload: %v", err)
+				return deq.Event{}, deqerr.Errorf(deqerr.Internal, "new topic: marshal topic payload: %v", err)
 			}
 			topicEvent = &deq.Event{
 				ID:         e.Topic,
@@ -313,7 +313,7 @@ func (s *Store) Pub(ctx context.Context, e deq.Event) (deq.Event, error) {
 			}
 			err = data.WriteEvent(txn, topicEvent)
 			if err != nil {
-				return deq.Event{}, fmt.Errorf("new topic: write event: %v", err)
+				return deq.Event{}, deqerr.Errorf(deqerr.Unavailable, "new topic: write event: %v", err)
 			}
 		}
 
@@ -323,7 +323,7 @@ func (s *Store) Pub(ctx context.Context, e deq.Event) (deq.Event, error) {
 			// Suppress the error if the new and existing events have matching payloads.
 			existing, err := data.GetEvent(txn, e.Topic, e.ID, "")
 			if err != nil {
-				return deq.Event{}, fmt.Errorf("get existing event: %v", err)
+				return deq.Event{}, deqerr.Errorf(deqerr.Internal, "get existing event: %v", err)
 			}
 			if !bytes.Equal(existing.Payload, e.Payload) {
 				return deq.Event{}, deq.ErrAlreadyExists
@@ -345,7 +345,7 @@ func (s *Store) Pub(ctx context.Context, e deq.Event) (deq.Event, error) {
 				continue
 			}
 			if err != nil {
-				return deq.Event{}, fmt.Errorf("get conflicting event: %v", err)
+				return deq.Event{}, deqerr.Errorf(deqerr.Unavailable, "get conflicting event: %v", err)
 			}
 			if !bytes.Equal(existing.Payload, e.Payload) {
 				return deq.Event{}, deq.ErrAlreadyExists
@@ -388,7 +388,7 @@ func (s *Store) Del(ctx context.Context, topic, id string) error {
 
 	err := validateTopic(topic, false)
 	if err != nil {
-		return fmt.Errorf("validate topic: %v", err)
+		return deqerr.Errorf(deqerr.Invalid, "validate topic: %v", err)
 	}
 
 	txn := s.db.NewTransaction(true)
@@ -398,7 +398,7 @@ func (s *Store) Del(ctx context.Context, topic, id string) error {
 	// the create time
 	e, err := data.GetEvent(txn, topic, id, "")
 	if err != nil {
-		return err
+		return deqerr.Wrap(deqerr.Unavailable, err)
 	}
 
 	eventTimeKey, err := data.EventTimeKey{
@@ -406,7 +406,7 @@ func (s *Store) Del(ctx context.Context, topic, id string) error {
 		Topic: topic,
 	}.Marshal(nil)
 	if err != nil {
-		return fmt.Errorf("marshal event time key: %v", err)
+		return deqerr.Errorf(deqerr.Internal, "marshal event time key: %v", err)
 	}
 
 	eventKey, err := data.EventKey{
@@ -415,16 +415,16 @@ func (s *Store) Del(ctx context.Context, topic, id string) error {
 		CreateTime: e.CreateTime,
 	}.Marshal(nil)
 	if err != nil {
-		return fmt.Errorf("marshal event key: %v", err)
+		return deqerr.Errorf(deqerr.Internal, "marshal event key: %v", err)
 	}
 
 	err = txn.Delete(eventTimeKey)
 	if err != nil {
-		return fmt.Errorf("delete event time: %v", err)
+		return deqerr.Errorf(deqerr.Unavailable, "delete event time: %v", err)
 	}
 	err = txn.Delete(eventKey)
 	if err != nil {
-		return fmt.Errorf("delete event key: %v", err)
+		return deqerr.Errorf(deqerr.Unavailable, "delete event key: %v", err)
 	}
 
 	readTxn := s.db.NewTransaction(false)
@@ -439,7 +439,7 @@ func (s *Store) Del(ctx context.Context, topic, id string) error {
 		var indexPayload data.IndexPayload
 		err = data.GetIndexPayload(readTxn, &indexKey, &indexPayload)
 		if err != nil && err != deq.ErrNotFound {
-			return fmt.Errorf("check index %q for newer event: %v", index, err)
+			return deqerr.Errorf(deqerr.Unavailable, "check index %q for newer event: %v", index, err)
 		}
 		if err == deq.ErrNotFound || indexPayload.EventId != id {
 			// Index points to a newer event (which might have been deleted already). Nothing to do.
@@ -447,11 +447,11 @@ func (s *Store) Del(ctx context.Context, topic, id string) error {
 		}
 		buf, err := indexKey.Marshal(nil)
 		if err != nil {
-			return fmt.Errorf("marshal key for index %q: %v", index, err)
+			return deqerr.Errorf(deqerr.Internal, "marshal key for index %q: %v", index, err)
 		}
 		err = txn.Delete(buf)
 		if err != nil {
-			return fmt.Errorf("delete index %q: %v", index, err)
+			return deqerr.Errorf(deqerr.Unavailable, "delete index %q: %v", index, err)
 		}
 	}
 
@@ -470,7 +470,7 @@ func (s *Store) Del(ctx context.Context, topic, id string) error {
 			var key data.ChannelKey
 			err := data.UnmarshalChannelKey(it.Item().Key(), &key)
 			if err != nil {
-				return fmt.Errorf("unmarshal channel key: %v", err)
+				return deqerr.Errorf(deqerr.Internal, "unmarshal channel key: %v", err)
 			}
 			if key.Topic < topic || (key.Topic == topic && key.ID < id) {
 				// Find the topic and id for this channel
@@ -478,7 +478,7 @@ func (s *Store) Del(ctx context.Context, topic, id string) error {
 				key.ID = id
 				cursor, err = key.Marshal(cursor)
 				if err != nil {
-					return fmt.Errorf("marshal channel key: %v", err)
+					return deqerr.Errorf(deqerr.Internal, "marshal channel key: %v", err)
 				}
 				continue
 			}
@@ -486,7 +486,7 @@ func (s *Store) Del(ctx context.Context, topic, id string) error {
 				// We found a match - delete it.
 				err = txn.Delete(it.Item().Key())
 				if err != nil {
-					return err
+					return errFromBadger(err)
 				}
 			}
 
@@ -503,7 +503,7 @@ func (s *Store) Del(ctx context.Context, topic, id string) error {
 			var key data.SendCountKey
 			err := data.UnmarshalSendCountKey(it.Item().Key(), &key)
 			if err != nil {
-				return fmt.Errorf("unmarshal channel key: %v", err)
+				return deqerr.Errorf(deqerr.Internal, "unmarshal channel key: %v", err)
 			}
 			if key.Topic < topic || (key.Topic == topic && key.ID < id) {
 				// Find the topic and id for this channel
@@ -511,7 +511,7 @@ func (s *Store) Del(ctx context.Context, topic, id string) error {
 				key.ID = id
 				cursor, err = key.Marshal(cursor)
 				if err != nil {
-					return fmt.Errorf("marshal channel key: %v", err)
+					return deqerr.Errorf(deqerr.Internal, "marshal channel key: %v", err)
 				}
 				continue
 			}
@@ -519,7 +519,7 @@ func (s *Store) Del(ctx context.Context, topic, id string) error {
 				// We found a match - delete it.
 				err = txn.Delete(it.Item().Key())
 				if err != nil {
-					return err
+					return errFromBadger(err)
 				}
 			}
 
@@ -536,7 +536,7 @@ func (s *Store) Del(ctx context.Context, topic, id string) error {
 
 	err = txn.Commit()
 	if err != nil {
-		return err
+		return errFromBadger(err)
 	}
 
 	return nil
@@ -603,18 +603,18 @@ func (s *Store) VerifyEvents(ctx context.Context, deleteInvalid bool) error {
 					return nil
 				}
 				if err != badger.ErrTxnTooBig {
-					return fmt.Errorf("delete index key %q: %v", item.Key(), err)
+					return deqerr.Errorf(deqerr.Unavailable, "delete index key %q: %v", item.Key(), err)
 				}
 				// Transaction is too big - commit it and open a new one.
 				it.Close()
 				if err := txn.Commit(); err != nil {
-					return fmt.Errorf("commit deleted events: %v", err)
+					return deqerr.Errorf(deqerr.Unavailable, "commit deleted events: %v", err)
 				}
 				txn = s.db.NewTransaction(true)
 				it = txn.NewIterator(opts)
 				it.Seek(key)
 				if err := txn.Delete(item.Key()); err != nil {
-					return fmt.Errorf("delete index key %q: %v", item.Key(), err)
+					return deqerr.Errorf(deqerr.Unavailable, "delete index key %q: %v", item.Key(), err)
 				}
 				return nil
 			}
@@ -690,7 +690,7 @@ func (s *Store) VerifyEvents(ctx context.Context, deleteInvalid bool) error {
 	}
 
 	if err := txn.Commit(); err != nil {
-		return err
+		return errFromBadger(err)
 	}
 
 	return nil

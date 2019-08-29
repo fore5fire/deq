@@ -3,11 +3,11 @@ package deqclient
 import (
 	"context"
 	"errors"
-	"fmt"
 	"sync"
 
 	"gitlab.com/katcheCode/deq"
 	api "gitlab.com/katcheCode/deq/api/v1/deq"
+	"gitlab.com/katcheCode/deq/deqerr"
 )
 
 type selectedEvent struct {
@@ -120,7 +120,7 @@ func (c *clientChannel) NewIndexIter(opts *deq.IterOptions) deq.EventIter {
 }
 
 func (it *eventIter) Next(ctx context.Context) bool {
-	it.err = nil
+	it.setErr(nil)
 
 	select {
 	case next, ok := <-it.next:
@@ -131,7 +131,7 @@ func (it *eventIter) Next(ctx context.Context) bool {
 		it.selector = next.Selector
 		return true
 	case <-ctx.Done():
-		it.setErr(ctx.Err())
+		it.setErr(deqerr.FromContext(ctx))
 		return false
 	}
 }
@@ -171,7 +171,7 @@ func (it *eventIter) loadEvents(ctx context.Context, request *api.ListRequest) {
 
 		list, err := it.client.List(ctx, &req)
 		if err != nil {
-			it.setErr(err)
+			it.setErr(errFromGRPC(ctx, err))
 			return
 		}
 
@@ -184,7 +184,7 @@ func (it *eventIter) loadEvents(ctx context.Context, request *api.ListRequest) {
 		last := lastEvent.Id
 		if req.UseIndex {
 			if lastEvent.SelectedIndex == -1 {
-				it.setErr(fmt.Errorf("last event of page %q missing selected index", lastEvent.Id))
+				it.setErr(deqerr.Errorf(deqerr.Internal, "last event of page %q missing selected index", lastEvent.Id))
 				return
 			}
 			last = lastEvent.Indexes[lastEvent.SelectedIndex]
@@ -206,7 +206,7 @@ func (it *eventIter) loadEvents(ctx context.Context, request *api.ListRequest) {
 
 			select {
 			case <-ctx.Done():
-				it.setErr(ctx.Err())
+				it.setErr(deqerr.FromContext(ctx))
 				return
 			case it.next <- selectedEvent{
 				Event:    e,

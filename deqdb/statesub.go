@@ -5,6 +5,7 @@ import (
 	"errors"
 
 	"gitlab.com/katcheCode/deq"
+	"gitlab.com/katcheCode/deq/deqerr"
 )
 
 // EventStateSubscription allows you to get updates when a particular event's state is updated.
@@ -70,7 +71,7 @@ func (c *Channel) NewEventStateSubscription(id string) *EventStateSubscription {
 func (sub *EventStateSubscription) Next(ctx context.Context) (deq.State, error) {
 	select {
 	case <-ctx.Done():
-		return deq.StateUnspecified, ctx.Err()
+		return deq.StateUnspecified, deqerr.FromContext(ctx)
 	case state, ok := <-sub.C:
 		if !ok {
 			return deq.StateUnspecified, ErrSubscriptionClosed

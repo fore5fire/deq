@@ -2,20 +2,17 @@ package deqclient
 
 import (
 	"context"
-	"fmt"
 	"io"
 	"log"
 	"strings"
 	"sync"
 	"time"
 
-	"gitlab.com/katcheCode/deq/deqopt"
-
 	"gitlab.com/katcheCode/deq"
 	"gitlab.com/katcheCode/deq/ack"
 	api "gitlab.com/katcheCode/deq/api/v1/deq"
-	"google.golang.org/grpc/codes"
-	"google.golang.org/grpc/status"
+	"gitlab.com/katcheCode/deq/deqerr"
+	"gitlab.com/katcheCode/deq/deqopt"
 )
 
 type clientChannel struct {
@@ -68,11 +65,8 @@ func (c *clientChannel) Get(ctx context.Context, event string, options ...deqopt
 		Await:    opts.Await,
 		UseIndex: opts.UseIndex,
 	})
-	if status.Code(err) == codes.NotFound {
-		return deq.Event{}, deq.ErrNotFound
-	}
 	if err != nil {
-		return deq.Event{}, err
+		return deq.Event{}, errFromGRPC(ctx, err)
 	}
 
 	var selector string
@@ -93,7 +87,7 @@ func (c *clientChannel) BatchGet(ctx context.Context, ids []string, options ...d
 	opts := deqopt.NewBatchGetOptionSet(options)
 
 	if opts.Await {
-		return nil, fmt.Errorf("BatchGet with option Await() is not yet implemented")
+		return nil, deqerr.New(deqerr.Invalid, "BatchGet with option Await() is not yet implemented")
 	}
 
 	resp, err := c.deqClient.BatchGet(ctx, &api.BatchGetRequest{
@@ -104,7 +98,7 @@ func (c *clientChannel) BatchGet(ctx context.Context, ids []string, options ...d
 		AllowNotFound: opts.AllowNotFound,
 	})
 	if err != nil {
-		return nil, err
+		return nil, errFromGRPC(ctx, err)
 	}
 
 	result := make(map[string]deq.Event, len(resp.Events))
@@ -147,11 +141,8 @@ func (c *clientChannel) SetEventState(ctx context.Context, id string, state deq.
 		EventId: id,
 		Code:    code,
 	})
-	if status.Code(err) == codes.NotFound {
-		return deq.ErrNotFound
-	}
 	if err != nil {
-		return err
+		return errFromGRPC(ctx, err)
 	}
 
 	return nil
@@ -169,7 +160,7 @@ func (c *clientChannel) Sub(ctx context.Context, handler deq.SubHandler) error {
 		IdleTimeoutMilliseconds: int32(c.idleTimeout.Nanoseconds() / int64(time.Millisecond)),
 	})
 	if err != nil {
-		return err
+		return errFromGRPC(ctx, err)
 	}
 
 	errc := make(chan error, 1)
@@ -238,7 +229,7 @@ func (c *clientChannel) Sub(ctx context.Context, handler deq.SubHandler) error {
 				})
 				if err != nil {
 					select {
-					case errc <- err:
+					case errc <- errFromGRPC(ctx, err):
 					default:
 					}
 					continue
@@ -253,7 +244,7 @@ func (c *clientChannel) Sub(ctx context.Context, handler deq.SubHandler) error {
 			return nil
 		}
 		if err != nil {
-			return err
+			return errFromGRPC(ctx, err)
 		}
 
 		event := eventFromProto(selectedEvent{
@@ -267,7 +258,7 @@ func (c *clientChannel) Sub(ctx context.Context, handler deq.SubHandler) error {
 		case err := <-errc:
 			return err
 		case <-ctx.Done():
-			return ctx.Err()
+			return deqerr.FromContext(ctx)
 		}
 	}
 }
@@ -279,12 +270,12 @@ func (c *clientChannel) Next(ctx context.Context) (deq.Event, error) {
 		Follow:  true,
 	})
 	if err != nil {
-		return deq.Event{}, err
+		return deq.Event{}, errFromGRPC(ctx, err)
 	}
 
 	e, err := stream.Recv()
 	if err != nil {
-		return deq.Event{}, err
+		return deq.Event{}, errFromGRPC(ctx, err)
 	}
 
 	return eventFromProto(selectedEvent{
@@ -300,11 +291,8 @@ func (c *clientChannel) RequeueEvent(ctx context.Context, e deq.Event, delay tim
 		EventId: e.ID,
 		Code:    api.AckCode_REQUEUE,
 	})
-	if status.Code(err) == codes.NotFound {
-		return deq.ErrNotFound
-	}
 	if err != nil {
-		return err
+		return errFromGRPC(ctx, err)
 	}
 
 	return nil

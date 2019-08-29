@@ -6,9 +6,9 @@ package deq
 
 import (
 	"context"
-	"errors"
 	"time"
 
+	"gitlab.com/katcheCode/deq/deqerr"
 	"gitlab.com/katcheCode/deq/deqopt"
 )
 
@@ -129,13 +129,11 @@ type IterOptions struct {
 
 var (
 	// ErrNotFound is returned when a requested event doesn't exist in the database
-	ErrNotFound = errors.New("event not found")
+	ErrNotFound = deqerr.New(deqerr.NotFound, "not found")
 	// ErrAlreadyExists is returned when creating an event with a key that is in use
-	ErrAlreadyExists = errors.New("already exists")
+	ErrAlreadyExists = deqerr.New(deqerr.Dup, "already exists")
 	// ErrVersionMismatch is returned when opening a database with an incorrect format.
-	ErrVersionMismatch = errors.New("version mismatch")
-	// ErrInternal is returned when an internal error occurs
-	ErrInternal = errors.New("internal error")
+	ErrVersionMismatch = deqerr.New(deqerr.Internal, "version mismatch")
 	// ErrIterationComplete is returned after an iterator has returned it's last element.
-	ErrIterationComplete = errors.New("iteration complete")
+	ErrIterationComplete = deqerr.New(deqerr.NotFound, "iteration complete")
 )

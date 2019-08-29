@@ -54,31 +54,37 @@ func TestEventIter(t *testing.T) {
 			ID:         "1",
 			Topic:      "abc",
 			CreateTime: now,
+			Selector:   "1",
 		},
 		{
 			ID:         "2",
 			Topic:      "abc",
 			CreateTime: now,
+			Selector:   "2",
 		},
 		{
 			ID:         "3",
 			Topic:      "abc",
 			CreateTime: now,
+			Selector:   "3",
 		},
 		{
 			ID:         "4",
 			Topic:      "abc",
 			CreateTime: now,
+			Selector:   "4",
 		},
 		{
 			ID:         "5",
 			Topic:      "abc",
 			CreateTime: now,
+			Selector:   "5",
 		},
 		{
 			ID:         "6",
 			Topic:      "abc",
 			CreateTime: now,
+			Selector:   "6",
 		},
 	}
 
@@ -157,36 +163,42 @@ func TestIndexIter(t *testing.T) {
 			Topic:      "abc",
 			CreateTime: now,
 			Indexes:    []string{"1"},
+			Selector:   "1",
 		},
 		{
 			ID:         "2",
 			Topic:      "abc",
 			CreateTime: now,
 			Indexes:    []string{"2"},
+			Selector:   "2",
 		},
 		{
 			ID:         "3",
 			Topic:      "abc",
 			CreateTime: now,
 			Indexes:    []string{"3"},
+			Selector:   "3",
 		},
 		{
 			ID:         "4",
 			Topic:      "abc",
 			CreateTime: now,
 			Indexes:    []string{"4"},
+			Selector:   "4",
 		},
 		{
 			ID:         "5",
 			Topic:      "abc",
 			CreateTime: now,
 			Indexes:    []string{"5"},
+			Selector:   "5",
 		},
 		{
 			ID:         "6",
 			Topic:      "abc",
 			CreateTime: now,
 			Indexes:    []string{"6"},
+			Selector:   "6",
 		},
 	}
 
@@ -265,36 +277,42 @@ func TestReverseIndexIter(t *testing.T) {
 			Topic:      "abc",
 			CreateTime: now,
 			Indexes:    []string{"6"},
+			Selector:   "6",
 		},
 		{
 			ID:         "5",
 			Topic:      "abc",
 			CreateTime: now,
 			Indexes:    []string{"5"},
+			Selector:   "5",
 		},
 		{
 			ID:         "4",
 			Topic:      "abc",
 			CreateTime: now,
 			Indexes:    []string{"4"},
+			Selector:   "4",
 		},
 		{
 			ID:         "3",
 			Topic:      "abc",
 			CreateTime: now,
 			Indexes:    []string{"3"},
+			Selector:   "3",
 		},
 		{
 			ID:         "2",
 			Topic:      "abc",
 			CreateTime: now,
 			Indexes:    []string{"2"},
+			Selector:   "2",
 		},
 		{
 			ID:         "1",
 			Topic:      "abc",
 			CreateTime: now,
 			Indexes:    []string{"1"},
+			Selector:   "1",
 		},
 	}
 
@@ -374,12 +392,14 @@ func TestIndexIterBounds(t *testing.T) {
 			Topic:      "abc",
 			CreateTime: now,
 			Indexes:    []string{"3"},
+			Selector:   "3",
 		},
 		{
 			ID:         "4",
 			Topic:      "abc",
 			CreateTime: now,
 			Indexes:    []string{"4"},
+			Selector:   "4",
 		},
 	}
 

@@ -10,6 +10,7 @@ import (
 
 	"github.com/google/go-cmp/cmp"
 	"gitlab.com/katcheCode/deq"
+	"gitlab.com/katcheCode/deq/deqerr"
 	"gitlab.com/katcheCode/deq/deqopt"
 )
 
@@ -176,7 +177,7 @@ func TestSub(t *testing.T) {
 				return nil, ctx.Err()
 			}
 		})
-		if err != nil && err != ErrChannelClosed && err != ctx.Err() {
+		if err != nil && err != ErrChannelClosed && deqerr.GetCode(err) != deqerr.Canceled {
 			t.Errorf("sub TopicA: %v", err)
 		}
 	}()
@@ -196,7 +197,7 @@ func TestSub(t *testing.T) {
 				return nil, ctx.Err()
 			}
 		})
-		if err != nil && err != ErrChannelClosed && err != ctx.Err() {
+		if err != nil && err != ErrChannelClosed && deqerr.GetCode(err) != deqerr.Canceled {
 			t.Errorf("sub Response-TopicA: %v", err)
 		}
 	}()
@@ -358,7 +359,7 @@ func TestAwaitChannelTimeout(t *testing.T) {
 	if err == nil {
 		t.Fatalf("await dequeue returned without dequeue")
 	}
-	if err != ctx.Err() {
+	if deqerr.GetCode(err) != deqerr.Canceled {
 		t.Errorf("await dequeue: %v", err)
 	}
 }

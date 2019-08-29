@@ -56,6 +56,7 @@ import (
 
 	"gitlab.com/katcheCode/deq"
 	api "gitlab.com/katcheCode/deq/api/v1/deq"
+	"gitlab.com/katcheCode/deq/deqerr"
 	"google.golang.org/grpc"
 	"google.golang.org/grpc/codes"
 	"google.golang.org/grpc/status"
@@ -85,7 +86,7 @@ func (c *Client) Pub(ctx context.Context, e deq.Event) (deq.Event, error) {
 		Event: eventToProto(e),
 	})
 	if err != nil {
-		return deq.Event{}, err
+		return deq.Event{}, errFromGRPC(ctx, err)
 	}
 
 	return eventFromProto(selectedEvent{
@@ -100,11 +101,8 @@ func (c *Client) Del(ctx context.Context, topic, id string) error {
 		Topic:   topic,
 		EventId: id,
 	})
-	if status.Code(err) == codes.NotFound {
-		return deq.ErrNotFound
-	}
 	if err != nil {
-		return err
+		return errFromGRPC(ctx, err)
 	}
 
 	return nil
@@ -197,4 +195,36 @@ func eventToProto(e deq.Event) *api.Event {
 		SendCount:       int32(e.SendCount),
 		SelectorVersion: e.SelectorVersion,
 	}
+}
+
+func errFromGRPC(ctx context.Context, err error) error {
+
+	if err == nil {
+		return nil
+	}
+
+	if ctx.Err() == err {
+		return deqerr.FromContext(ctx)
+	}
+
+	var code deqerr.Code
+	switch status.Code(err) {
+	case codes.OK:
+		return nil
+	case codes.NotFound:
+		return deq.ErrNotFound
+	case codes.Unavailable:
+		code = deqerr.Unavailable
+	case codes.AlreadyExists:
+		code = deqerr.Dup
+	case codes.Internal:
+		code = deqerr.Internal
+	case codes.InvalidArgument:
+		code = deqerr.Invalid
+	case codes.Canceled, codes.DeadlineExceeded:
+		code = deqerr.Canceled
+	default:
+		code = deqerr.Unknown
+	}
+	return deqerr.Wrap(code, err)
 }

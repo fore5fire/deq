@@ -3,7 +3,6 @@ package deqdb
 import (
 	"context"
 	"errors"
-	"fmt"
 	"log"
 	"sync"
 	"time"
@@ -12,6 +11,7 @@ import (
 	"gitlab.com/katcheCode/deq"
 	"gitlab.com/katcheCode/deq/ack"
 	"gitlab.com/katcheCode/deq/deqdb/internal/data"
+	"gitlab.com/katcheCode/deq/deqerr"
 	"gitlab.com/katcheCode/deq/deqopt"
 )
 
@@ -79,7 +79,7 @@ func (c *Channel) Next(ctx context.Context) (deq.Event, error) {
 	for {
 		select {
 		case <-ctx.Done():
-			return deq.Event{}, ctx.Err()
+			return deq.Event{}, deqerr.FromContext(ctx)
 		case <-c.done:
 			return deq.Event{}, ErrChannelClosed
 		case e := <-c.shared.out:
@@ -99,7 +99,7 @@ func (c *Channel) Next(ctx context.Context) (deq.Event, error) {
 				ID:      e.ID,
 			}, &channel)
 			if err != nil && err != deq.ErrNotFound {
-				return deq.Event{}, fmt.Errorf("get current event state: %v", err)
+				return deq.Event{}, deqerr.Errorf(deqerr.Unavailable, "get current event state: %v", err)
 			}
 
 			// var sendCount data.SendCount
@@ -252,12 +252,12 @@ func (c *Channel) Sub(ctx context.Context, handler deq.SubHandler) error {
 					case ack.NoOp:
 						return nil
 					default:
-						return fmt.Errorf("handler returned unrecognized ack.Code")
+						return deqerr.Errorf(deqerr.Invalid, "handler returned unrecognized ack.Code")
 					}
 
 					err := c.SetEventState(ctx, result.req.ID, state)
 					if err != nil {
-						return fmt.Errorf("set event state: %v", err)
+						return deqerr.Errorf(deqerr.GetCode(err), "set event state: %v", err)
 					}
 
 					return nil
@@ -287,13 +287,16 @@ func (c *Channel) Sub(ctx context.Context, handler deq.SubHandler) error {
 		}
 
 		e, err := c.Next(nextCtx)
-		if err != nil && err == ctx.Err() {
+		ctxErr := deqerr.Unwrap(err)
+		if err != nil && ctxErr == ctx.Err() {
 			// Original context was cancelled.
-			return err
+			nextCancel()
+			return deqerr.FromContext(ctx)
 		}
-		if err != nil && err == nextCtx.Err() {
+		if err != nil && ctxErr == nextCtx.Err() {
 			// The idle timeout triggered, so if the channel is idle (not just slow) then we're done.
 			if c.Idle() {
+				nextCancel()
 				return nil
 			}
 			// We're not idle, so try again.
@@ -301,6 +304,7 @@ func (c *Channel) Sub(ctx context.Context, handler deq.SubHandler) error {
 		}
 		if err != nil {
 			// Some non-context error occurred.
+			nextCancel()
 			return err
 		}
 
@@ -308,10 +312,13 @@ func (c *Channel) Sub(ctx context.Context, handler deq.SubHandler) error {
 		select {
 		case results <- Result{e, response, err}:
 		case err := <-errc:
+			nextCancel()
 			return err
 		case <-ctx.Done():
-			return ctx.Err()
+			nextCancel()
+			return deqerr.FromContext(ctx)
 		case <-c.done:
+			nextCancel()
 			return ErrChannelClosed
 		}
 	}
@@ -414,15 +421,18 @@ func (c *Channel) Get(ctx context.Context, event string, options ...deqopt.GetOp
 
 	e, err = get(txn, event)
 	if err != nil {
-		return deq.Event{}, fmt.Errorf("retry get after await: %v", err)
+		return deq.Event{}, deqerr.Errorf(deqerr.Internal, "retry get after await: %v", err)
 	}
 	return *e, nil
 }
 
 func (c *Channel) get(txn data.Txn, id string) (*deq.Event, error) {
 	e, err := data.GetEvent(txn, c.topic, id, c.name)
+	if err == deq.ErrNotFound {
+		return nil, deq.ErrNotFound
+	}
 	if err != nil {
-		return nil, err
+		return nil, deqerr.Wrap(deqerr.Unavailable, err)
 	}
 
 	e.Selector = id
@@ -442,15 +452,21 @@ func (c *Channel) getIndex(txn data.Txn, index string) (*deq.Event, error) {
 
 	var payload data.IndexPayload
 	err := data.GetIndexPayload(txn, &key, &payload)
+	if err == deq.ErrNotFound {
+		return nil, deq.ErrNotFound
+	}
 	if err != nil {
-		return nil, err
+		return nil, deqerr.Wrap(deqerr.Unavailable, err)
 	}
 
 	c.debug.Printf("channel %q topic %q: getIndex %q: got IndexPayload %+v", c.name, c.topic, index, payload)
 
 	e, err := data.GetEvent(txn, c.topic, payload.EventId, c.name)
+	if err == deq.ErrNotFound {
+		return nil, deq.ErrNotFound
+	}
 	if err != nil {
-		return nil, err
+		return nil, deqerr.Wrap(deqerr.Unavailable, err)
 	}
 
 	e.Selector = index
@@ -469,7 +485,7 @@ func (c *Channel) BatchGet(ctx context.Context, events []string, options ...deqo
 	opts := deqopt.NewBatchGetOptionSet(options)
 
 	if opts.Await {
-		return nil, fmt.Errorf("BatchGet with option Await() is not yet implemented")
+		return nil, deqerr.New(deqerr.Invalid, "BatchGet with option Await() is not yet implemented")
 	}
 
 	// Determine whether to get by ID or index.
@@ -566,7 +582,7 @@ func (c *Channel) SetEventState(ctx context.Context, id string, state deq.State)
 			return deq.ErrNotFound
 		}
 		if err != nil {
-			return fmt.Errorf("lookup event: %v", err)
+			return deqerr.Errorf(deqerr.Unavailable, "lookup event: %v", err)
 		}
 
 		wasQueued := e.State == deq.StateQueued ||
@@ -581,7 +597,7 @@ func (c *Channel) SetEventState(ctx context.Context, id string, state deq.State)
 		}
 		err = data.SetChannelEvent(txn, &key, &channelEvent)
 		if err != nil {
-			return err
+			return deqerr.Wrap(deqerr.Unavailable, err)
 		}
 
 		err = txn.Commit()
@@ -590,7 +606,7 @@ func (c *Channel) SetEventState(ctx context.Context, id string, state deq.State)
 			continue
 		}
 		if err != nil {
-			return err
+			return errFromBadger(err)
 		}
 
 		c.shared.broadcastEventUpdated(id, state)
@@ -624,5 +640,5 @@ func (c *Channel) SetEventState(ctx context.Context, id string, state deq.State)
 var (
 	// ErrChannelClosed is returned when calling operations on a closed channel, or if an operation
 	// was ended prematurely because the channel closed.
-	ErrChannelClosed = errors.New("channel closed")
+	ErrChannelClosed = deqerr.New(deqerr.Invalid, "channel closed")
 )

@@ -8,6 +8,7 @@ import (
 
 	"github.com/google/go-cmp/cmp"
 	"gitlab.com/katcheCode/deq"
+	"gitlab.com/katcheCode/deq/deqerr"
 )
 
 func TestSyncTo(t *testing.T) {
@@ -121,7 +122,7 @@ func TestSyncTo(t *testing.T) {
 		defer close(done)
 
 		err := deq.SyncTo(ctx, AsClient(db2), channel)
-		if err != ctx.Err() && err != ErrChannelClosed {
+		if deqerr.GetCode(err) != deqerr.Canceled && err != ErrChannelClosed {
 			t.Errorf("sync: %v", err)
 		}
 	}()
@@ -138,7 +139,7 @@ func TestSyncTo(t *testing.T) {
 
 			return nil, nil
 		})
-		if err != ctx.Err() && err != ErrChannelClosed {
+		if deqerr.GetCode(err) != deqerr.Canceled && err != ErrChannelClosed {
 			t.Errorf("sub: %v", err)
 		}
 	}()

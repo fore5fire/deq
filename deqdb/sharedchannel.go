@@ -11,6 +11,7 @@ import (
 	"gitlab.com/katcheCode/deq"
 	"gitlab.com/katcheCode/deq/deqdb/internal/data"
 	"gitlab.com/katcheCode/deq/deqdb/internal/priority"
+	"gitlab.com/katcheCode/deq/deqerr"
 )
 
 const sendLimit = 40
@@ -259,7 +260,7 @@ func (s *sharedChannel) startSendCountIncrementer() {
 func (s *sharedChannel) IncrementSendCount(ctx context.Context, e *deq.Event) error {
 	select {
 	case <-ctx.Done():
-		return ctx.Err()
+		return deqerr.FromContext(ctx)
 	case <-s.done:
 		return nil
 	case s.inc <- e:

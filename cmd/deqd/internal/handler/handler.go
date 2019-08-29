@@ -6,6 +6,7 @@ import (
 	"time"
 
 	"gitlab.com/katcheCode/deq/ack"
+	"gitlab.com/katcheCode/deq/deqerr"
 	"gitlab.com/katcheCode/deq/deqopt"
 
 	"gitlab.com/katcheCode/deq"
@@ -59,13 +60,13 @@ func (s *Handler) Pub(ctx context.Context, in *pb.PubRequest) (*pb.Event, error)
 	}
 	if err != nil {
 		log.Printf("create event: %v", err)
-		return nil, status.Error(codes.Internal, "")
+		return nil, errFromDEQ(err)
 	}
 
 	if sub != nil {
 		for e.State == deq.StateQueued {
 			e.State, err = sub.Next(ctx)
-			if err == context.DeadlineExceeded || err == context.Canceled {
+			if deqerr.GetCode(err) == deqerr.Canceled {
 				return nil, status.FromContextError(ctx.Err()).Err()
 			}
 			if err != nil {
@@ -103,7 +104,8 @@ func (s *Handler) Sub(in *pb.SubRequest, stream pb.DEQ_SubServer) error {
 	// TODO: get error info from client
 	err := channel.Sub(stream.Context(), func(ctx context.Context, e deq.Event) (*deq.Event, error) {
 		err := stream.Send(eventToProto(e, -1))
-		if err != nil && err == ctx.Err() {
+		// TODO: should we cancel the stream instead of just ending processing for this event?
+		if deqerr.GetCode(err) == deqerr.Canceled {
 			return nil, status.FromContextError(stream.Context().Err()).Err()
 		}
 		if err != nil {
@@ -112,12 +114,12 @@ func (s *Handler) Sub(in *pb.SubRequest, stream pb.DEQ_SubServer) error {
 		}
 		return nil, ack.Error(ack.NoOp, "")
 	})
-	if err != nil && err == stream.Context().Err() {
+	if err != nil && deqerr.GetCode(err) == deqerr.Canceled {
 		return status.FromContextError(stream.Context().Err()).Err()
 	}
 	if err != nil {
 		log.Printf("Sub: %v", err)
-		return status.Error(codes.Internal, "")
+		return errFromDEQ(err)
 	}
 
 	// IdleTimeout reached
@@ -172,7 +174,7 @@ func (s *Handler) Ack(ctx context.Context, in *pb.AckRequest) (*pb.AckResponse, 
 	}
 	if err != nil {
 		log.Printf("set event %s status: %v", in.EventId, err)
-		return nil, status.Error(codes.Internal, "")
+		return nil, errFromDEQ(err)
 	}
 
 	return &pb.AckResponse{}, nil
@@ -191,7 +193,7 @@ func (s *Handler) Get(ctx context.Context, in *pb.GetRequest) (*pb.Event, error)
 		return nil, status.Error(codes.InvalidArgument, "argument channel is required")
 	}
 	if in.Await && in.UseIndex {
-		return nil, status.Error(codes.InvalidArgument, "await and use_index canoot both be true")
+		return nil, status.Error(codes.InvalidArgument, "await and use_index cannot both be true")
 	}
 
 	channel := s.store.Channel(in.Channel, in.Topic)
@@ -217,7 +219,7 @@ func (s *Handler) Get(ctx context.Context, in *pb.GetRequest) (*pb.Event, error)
 	}
 	if err != nil {
 		log.Printf("Get: get event: %v", err)
-		return nil, status.Error(codes.Internal, "")
+		return nil, errFromDEQ(err)
 	}
 
 	selectedIndex := -1
@@ -261,7 +263,7 @@ func (s *Handler) BatchGet(ctx context.Context, in *pb.BatchGetRequest) (*pb.Bat
 	}
 	if err != nil {
 		log.Printf("Get: get event by index: %v", err)
-		return nil, status.Error(codes.Internal, "")
+		return nil, errFromDEQ(err)
 	}
 
 	result := make(map[string]*pb.Event, len(events))
@@ -366,7 +368,7 @@ func (s *Handler) Del(ctx context.Context, in *pb.DelRequest) (*pb.Empty, error)
 	}
 	if err != nil {
 		log.Printf("Del: %v", err)
-		return nil, status.Error(codes.Internal, "")
+		return nil, errFromDEQ(err)
 	}
 
 	return &pb.Empty{}, nil
@@ -457,4 +459,26 @@ func getSelectedIndex(selector string, indexes []string) int {
 		}
 	}
 	return -1
+}
+
+func errFromDEQ(err error) error {
+	var code codes.Code
+	switch deqerr.GetCode(err) {
+	case deqerr.Dup:
+		code = codes.AlreadyExists
+	case deqerr.Unavailable:
+		code = codes.Unavailable
+	case deqerr.Internal:
+		code = codes.Internal
+	case deqerr.Invalid:
+		code = codes.InvalidArgument
+	case deqerr.NotFound:
+		code = codes.NotFound
+	case deqerr.Canceled:
+		code = codes.Canceled
+	default:
+		code = codes.Unknown
+	}
+
+	return status.Error(code, deqerr.GetMsg(err))
 }

@@ -4,12 +4,12 @@ import (
 	"bytes"
 	"context"
 	"errors"
-	"fmt"
 	"time"
 
 	"github.com/dgraph-io/badger"
 	"github.com/gogo/protobuf/proto"
 	"gitlab.com/katcheCode/deq"
+	"gitlab.com/katcheCode/deq/deqerr"
 )
 
 /*
@@ -63,7 +63,7 @@ func NewEventIter(txn Txn, topic, channel string, opts *deq.IterOptions) (*Event
 
 	prefix, err := EventTimePrefixTopic(topic)
 	if err != nil {
-		return nil, fmt.Errorf("build event time topic prefix: %v", err)
+		return nil, deqerr.Errorf(deqerr.Invalid, "build event time topic prefix: %v", err)
 	}
 	max := "\xff\xff\xff\xff"
 	if opts.Max != "" {
@@ -121,7 +121,7 @@ func (iter *EventIter) Next(ctx context.Context) bool {
 	var key EventTimeKey
 	err := UnmarshalTo(item.Key(), &key)
 	if err != nil {
-		iter.err = fmt.Errorf("parse event key %s: %v", item.Key(), err)
+		iter.err = deqerr.Errorf(deqerr.Internal, "parse event key %s: %v", item.Key(), err)
 		return false
 	}
 
@@ -129,12 +129,12 @@ func (iter *EventIter) Next(ctx context.Context) bool {
 	err = item.Value(func(val []byte) error {
 		err := proto.Unmarshal(val, &eTime)
 		if err != nil {
-			return fmt.Errorf("unmarshal event time: %v", err)
+			return deqerr.Errorf(deqerr.Internal, "unmarshal event time: %v", err)
 		}
 		return nil
 	})
 	if err != nil {
-		iter.err = fmt.Errorf("get item value: %v", err)
+		iter.err = deqerr.Errorf(deqerr.Unavailable, "get item value: %v", err)
 		return false
 	}
 
@@ -147,7 +147,7 @@ func (iter *EventIter) Next(ctx context.Context) bool {
 		ID:         key.ID,
 	}, &e)
 	if err != nil {
-		iter.err = fmt.Errorf("get event: %v", err)
+		iter.err = deqerr.Errorf(deqerr.Unavailable, "get event: %v", err)
 	}
 
 	channel := ChannelPayload{
@@ -162,7 +162,7 @@ func (iter *EventIter) Next(ctx context.Context) bool {
 			ID:      key.ID,
 		}, &channel)
 		if err != nil && err != deq.ErrNotFound {
-			iter.err = fmt.Errorf("get channel event: %v", err)
+			iter.err = deqerr.Errorf(deqerr.Unavailable, "get channel event: %v", err)
 			return false
 		}
 
@@ -172,7 +172,7 @@ func (iter *EventIter) Next(ctx context.Context) bool {
 			Channel: iter.channel,
 		}, &sendCount)
 		if err != nil && err != deq.ErrNotFound {
-			iter.err = fmt.Errorf("get send count: %v", err)
+			iter.err = deqerr.Errorf(deqerr.Unavailable, "get send count: %v", err)
 			return false
 		}
 	}
@@ -287,7 +287,7 @@ func NewIndexIter(txn Txn, topic, channel string, opts *deq.IterOptions) (*Index
 
 	prefix, err := IndexPrefixTopic(topic)
 	if err != nil {
-		return nil, fmt.Errorf("build event time topic prefix: %v", err)
+		return nil, deqerr.Errorf(deqerr.Invalid, "build event time topic prefix: %v", err)
 	}
 	max := "\xff\xff\xff\xff"
 	if opts.Max != "" {
@@ -343,7 +343,7 @@ func (iter *IndexIter) Next(ctx context.Context) bool {
 	var key IndexKey
 	err := UnmarshalTo(item.Key(), &key)
 	if err != nil {
-		iter.err = fmt.Errorf("parse event key %s: %v", item.Key(), err)
+		iter.err = deqerr.Errorf(deqerr.Internal, "parse event key %s: %v", item.Key(), err)
 		return false
 	}
 
@@ -352,18 +352,18 @@ func (iter *IndexIter) Next(ctx context.Context) bool {
 	err = item.Value(func(val []byte) error {
 		err = proto.Unmarshal(val, &payload)
 		if err != nil {
-			return fmt.Errorf("unmarshal index payload: %v", err)
+			return deqerr.Errorf(deqerr.Internal, "unmarshal index payload: %v", err)
 		}
 		return nil
 	})
 	if err != nil {
-		iter.err = fmt.Errorf("read index payload: %v", err)
+		iter.err = deqerr.Errorf(deqerr.Unavailable, "read index payload: %v", err)
 		return false
 	}
 
 	e, err := GetEvent(iter.txn, key.Topic, payload.EventId, iter.channel)
 	if err != nil {
-		iter.err = fmt.Errorf("get event %q %q: %v", key.Topic, payload.EventId, err)
+		iter.err = deqerr.Errorf(deqerr.Unavailable, "get event %q %q: %v", key.Topic, payload.EventId, err)
 		return false
 	}
 
