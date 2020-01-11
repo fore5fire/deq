@@ -29,6 +29,9 @@ type Channel struct {
 	db         data.DB
 	store      *Store
 	sharedDone func()
+	out        chan *deq.Event
+
+	channelTime time.Time
 
 	initialDelay time.Duration
 	idleTimeout  time.Duration
@@ -37,8 +40,14 @@ type Channel struct {
 }
 
 // Channel returns the channel for a given name
-func (s *Store) Channel(name, topic string) *Channel {
-	shared, sharedDone := s.listenSharedChannel(name, topic)
+func (s *Store) Channel(name, topic string, opts ...deqopt.ChannelOption) *Channel {
+
+	optSet := deqopt.NewChannelOptionSet(opts)
+
+	channelTime := optSet.ChannelTime
+
+	out := make(chan *deq.Event)
+	shared, sharedDone := s.listenSharedChannel(name, topic, out, channelTime)
 
 	// DON'T FORGET TO ADD CHECK FOR FAILED CHANNEL
 
@@ -51,6 +60,9 @@ func (s *Store) Channel(name, topic string) *Channel {
 		store:        s,
 		sharedDone:   sharedDone,
 		initialDelay: time.Second * 2,
+		out:          out,
+
+		channelTime: channelTime,
 
 		info:  s.info,
 		debug: s.debug,
@@ -82,7 +94,7 @@ func (c *Channel) Next(ctx context.Context) (deq.Event, error) {
 			return deq.Event{}, deqerr.FromContext(ctx)
 		case <-c.done:
 			return deq.Event{}, ErrChannelClosed
-		case e := <-c.shared.out:
+		case e := <-c.out:
 			if e == nil {
 				return deq.Event{}, c.Err()
 			}
@@ -434,6 +446,9 @@ func (c *Channel) get(txn data.Txn, id string) (*deq.Event, error) {
 	if err != nil {
 		return nil, deqerr.Wrap(deqerr.Unavailable, err)
 	}
+	if c.channelTime.Before(e.CreateTime) {
+		return nil, deq.ErrNotFound
+	}
 
 	e.Selector = id
 
@@ -451,7 +466,9 @@ func (c *Channel) getIndex(txn data.Txn, index string) (*deq.Event, error) {
 	c.debug.Printf("channel %q topic %q: getIndex %q: getting payload for key %+v", key, c.topic, index, key)
 
 	var payload data.IndexPayload
-	err := data.GetIndexPayload(txn, &key, &payload)
+	// cur := data.IndexCursorAfterValue(c.topic, index)
+	// // err := data.GetIndexPayload(txn, &key, &payload)
+	// data.NewIndexIter(txn, c.topic, )
 	if err == deq.ErrNotFound {
 		return nil, deq.ErrNotFound
 	}

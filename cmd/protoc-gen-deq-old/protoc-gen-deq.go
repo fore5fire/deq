@@ -1,4 +1,4 @@
-//go:generate go-bindata -pkg main -o tpl.go out.go.tpl
+//go:generate go run github.com/go-bindata/go-bindata/go-bindata -pkg main -o tpl.go out.go.tpl
 
 package main
 

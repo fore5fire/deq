@@ -2,7 +2,6 @@ package data
 
 import (
 	"fmt"
-	"hash/crc32"
 	"reflect"
 	"time"
 
@@ -188,31 +187,16 @@ func WriteEvent(txn Txn, e *deq.Event) error {
 
 	for _, index := range e.Indexes {
 		indexKey := IndexKey{
-			Topic: e.Topic,
-			Value: index,
+			Topic:      e.Topic,
+			Value:      index,
+			CreateTime: e.CreateTime,
+			ID:         e.ID,
 		}
 		// log.Printf("[DEBUG] WriteEvent %d: write index %d: using key %+v", i, indexKey)
 
-		// Check if index is in use. Only overwrite if newer, or if create time is the same then if the
-		// event id hash is greater.
-
 		index := IndexPayload{
-			EventId:    e.ID,
-			CreateTime: e.CreateTime.UnixNano(),
-		}
-
-		var existing IndexPayload
-		err := GetIndexPayload(txn, &indexKey, &existing)
-		if err != nil && err != deq.ErrNotFound {
-			return fmt.Errorf("lookup existing index: %v", err)
-		}
-		if err == nil && !shouldUpdateIndex(&existing, e) {
-			// Instead of updating index, write the same index with an increased version.
-			index = existing
-		}
-		if err == nil {
-			// If an index already exists, increment the version.
-			index.Version = existing.Version + 1
+			// EventId:    e.ID,
+			// CreateTime: e.CreateTime.UnixNano(),
 		}
 
 		err = WriteIndex(txn, &indexKey, &index)
@@ -260,23 +244,4 @@ func WriteEvent(txn Txn, e *deq.Event) error {
 	// }
 
 	return nil
-}
-
-func shouldUpdateIndex(existing *IndexPayload, candidate *deq.Event) bool {
-	createTime := candidate.CreateTime.UnixNano()
-
-	// Use the event with the later create time.
-	if existing.CreateTime != createTime {
-		return existing.CreateTime < createTime
-	}
-
-	// If the create times are equal, use the one with the higher crc32 hash.
-	hashExisting := crc32.ChecksumIEEE([]byte(existing.EventId))
-	hashCandidate := crc32.ChecksumIEEE([]byte(candidate.ID))
-	if hashExisting != hashCandidate {
-		return hashExisting < hashCandidate
-	}
-
-	// If there's a hash collision, just use the event with the highest ID.
-	return existing.EventId < candidate.ID
 }

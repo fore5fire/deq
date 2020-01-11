@@ -33,10 +33,6 @@ type Event struct {
 	// Selector is the ID or index used to retrieve the event.
 	// Output only.
 	Selector string
-	// SelectorVersion is the 0-indexed version number of the ID or index used to retrieve the event.
-	// SelectorVersion is always 0 for events selected by ID because an event for a particular ID
-	// cannot be updated.
-	SelectorVersion int64
 }
 
 // State is the state of an event on a specific channel.

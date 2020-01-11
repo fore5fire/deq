@@ -10,8 +10,7 @@ import (
 
 func TestMarshalEventKey(t *testing.T) {
 	expected := EventKey{
-		Topic: "abc",
-		// Round to remove monotonic clock information (which won't get serilalized)
+		Topic:      "abc",
 		CreateTime: time.Now(),
 		ID:         "def",
 	}
@@ -23,6 +22,7 @@ func TestMarshalEventKey(t *testing.T) {
 		t.Errorf("expected serialized prefix %d, got %d", EventTag, buf[0])
 	}
 
+	// Round to remove monotonic clock information (which won't get serialized)
 	expected.CreateTime = expected.CreateTime.Round(0)
 
 	var unmarshaled EventKey

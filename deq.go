@@ -28,7 +28,7 @@ type Client interface {
 	//
 	// A channel is active if Close has not been called on any channels returned by this method,
 	// including channels from other clients of the same database.
-	Channel(name, topic string) Channel
+	Channel(name, topic string, opts ...deqopt.ChannelOption) Channel
 
 	// Del deletes an event in the database. When an event is deleted, it is also removed from the
 	// queue on all channels. Note that this operation breaks the immutability of the database, and

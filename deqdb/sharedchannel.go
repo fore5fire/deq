@@ -26,13 +26,12 @@ type sharedChannel struct {
 	topic string
 	db    data.DB
 
-	subscriptions int
-
 	missedMutex sync.Mutex
 	missed      bool
 
-	in  chan *deq.Event
-	out chan *deq.Event
+	in chan *deq.Event
+	// registered out chans map to their channel times
+	out map[chan *deq.Event]time.Time
 
 	// inc is the in queue for incrementing event's send count
 	inc chan *deq.Event
@@ -63,15 +62,15 @@ type schedule struct {
 
 // addChannel adds a listener to a sharedChannel and returns the sharedChannel along with a done
 // function that must be called once the shared channel is no longer being used by the caller.
-func (s *Store) listenSharedChannel(name, topic string) (*sharedChannel, func()) {
+func (s *Store) listenSharedChannel(name, topic string, out chan *deq.Event, channelTime time.Time) (*sharedChannel, func()) {
 	key := channelKey{name, topic}
 
 	var shared *sharedChannel
 	done := func() {
 		s.sharedChannelsMu.Lock()
 
-		shared.subscriptions--
-		if shared.subscriptions == 0 {
+		delete(shared.out, out)
+		if len(shared.out) == 0 {
 			close(shared.done)
 			close(shared.inc)
 			delete(s.sharedChannels, key)
@@ -80,17 +79,13 @@ func (s *Store) listenSharedChannel(name, topic string) (*sharedChannel, func())
 
 		s.sharedChannelsMu.Unlock()
 	}
-	defer func() {
-		s.sharedChannelsMu.Lock()
-		defer s.sharedChannelsMu.Unlock()
-		shared.subscriptions++
-	}()
 
 	s.sharedChannelsMu.Lock()
 	defer s.sharedChannelsMu.Unlock()
 
 	shared, ok := s.sharedChannels[key]
 	if ok {
+		shared.out[out] = channelTime
 		return shared, done
 	}
 
@@ -99,14 +94,16 @@ func (s *Store) listenSharedChannel(name, topic string) (*sharedChannel, func())
 		topic: topic,
 		db:    s.db,
 
-		in:  make(chan *deq.Event, 20),
-		out: make(chan *deq.Event, 20),
+		in: make(chan *deq.Event, 20),
 
 		inc:       make(chan *deq.Event, 50),
 		scheduled: make(chan schedule, 20),
 
 		stateSubs: make(map[string]map[*EventStateSubscription]struct{}),
 		done:      make(chan struct{}),
+		out: map[chan *deq.Event]time.Time{
+			out: channelTime,
+		},
 
 		defaultRequeueLimit: s.defaultRequeueLimit,
 
@@ -350,17 +347,23 @@ func (s *sharedChannel) start() {
 			// We've got a new event, lets publish it
 			case e := <-s.in:
 				s.debug.Printf("channel %q: preparing scheduled event %q %q", s.name, e.Topic, e.ID)
-				s.setIdle(false)
-				select {
-				case <-s.done:
-					return
-				case s.out <- e:
-					s.debug.Printf("channel %q: prepared scheduled event %q %q", s.name, e.Topic, e.ID)
-					cursor, _ = data.EventKey{
-						Topic:      e.Topic,
-						CreateTime: e.CreateTime,
-						ID:         e.ID,
-					}.Marshal(nil)
+				for out, t := range s.out {
+					if !t.IsZero() && t.Before(e.CreateTime) {
+						continue
+					}
+					s.setIdle(false)
+					select {
+					case <-s.done:
+						return
+					case out <- e:
+						s.debug.Printf("channel %q: prepared scheduled event %q %q", s.name, e.Topic, e.ID)
+						cursor, _ = data.EventKey{
+							Topic:      e.Topic,
+							CreateTime: e.CreateTime,
+							ID:         e.ID,
+						}.Marshal(nil)
+					}
+					break
 				}
 			}
 		}
@@ -443,20 +446,26 @@ func (s *sharedChannel) catchUp(cursor []byte) ([]byte, error) {
 			continue
 		}
 
-		select {
-		case <-s.done:
-			return lastKey, nil
-		case s.out <- &deq.Event{
-			ID:           key.ID,
-			Topic:        key.Topic,
-			CreateTime:   key.CreateTime,
-			Payload:      e.Payload,
-			SendCount:    int(count.SendCount),
-			State:        data.EventStateFromProto(channel.EventState),
-			DefaultState: data.EventStateFromProto(e.DefaultEventState),
-			Indexes:      e.Indexes,
-		}:
-			s.debug.Printf("channel %q: read from disk: scheduled event %q %q", s.name, key.Topic, key.ID)
+		for out, t := range s.out {
+			if !t.IsZero() && t.Before(key.CreateTime) {
+				continue
+			}
+			select {
+			case <-s.done:
+				return lastKey, nil
+			case out <- &deq.Event{
+				ID:           key.ID,
+				Topic:        key.Topic,
+				CreateTime:   key.CreateTime,
+				Payload:      e.Payload,
+				SendCount:    int(count.SendCount),
+				State:        data.EventStateFromProto(channel.EventState),
+				DefaultState: data.EventStateFromProto(e.DefaultEventState),
+				Indexes:      e.Indexes,
+			}:
+				s.debug.Printf("channel %q: read from disk: scheduled event %q %q", s.name, key.Topic, key.ID)
+			}
+			break
 		}
 	}
 

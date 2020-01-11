@@ -55,6 +55,7 @@ func (key IndexKey) Marshal(buf []byte) ([]byte, error) {
 	return buf, nil
 }
 
+// NewValue returns a new IndexPayload
 func (key IndexKey) NewValue() proto.Message {
 	return new(IndexPayload)
 }

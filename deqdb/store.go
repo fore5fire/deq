@@ -27,6 +27,7 @@ import (
 	"gitlab.com/katcheCode/deq/deqdb/internal/data"
 	"gitlab.com/katcheCode/deq/deqdb/internal/upgrade"
 	"gitlab.com/katcheCode/deq/deqerr"
+	"gitlab.com/katcheCode/deq/deqopt"
 	"gitlab.com/katcheCode/deq/deqtype"
 )
 
@@ -38,8 +39,8 @@ func AsClient(s *Store) deq.Client {
 	return &storeClient{s}
 }
 
-func (c *storeClient) Channel(name, topic string) deq.Channel {
-	return c.Store.Channel(name, topic)
+func (c *storeClient) Channel(name, topic string, opts ...deqopt.ChannelOption) deq.Channel {
+	return c.Store.Channel(name, topic, opts...)
 }
 
 // func (c *storeClient) Channel(name, topic string) deq.Channel {

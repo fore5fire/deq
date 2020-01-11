@@ -252,8 +252,12 @@ Example usage:
 	}
 */
 type IndexIter struct {
-	txn      Txn
-	it       Iter
+	txn         Txn
+	it          Iter
+	topic       string
+	channelTime time.Time
+	// cit finds
+	cit      Iter
 	current  deq.Event
 	err      error
 	end      []byte
@@ -264,26 +268,28 @@ type IndexIter struct {
 
 // NewIndexIter creates a new IndexIter that iterates events on the topic and channel of c.
 //
+// txn must be read-only because IndexIters use multiple iterators. If txn is read-write,
+// NewIndexIter panics.
+//
 // opts.Min and opts.Max specify the range of event IDs to read from c's topic. EventIter only has
 // partial support for opts.PrefetchCount.
 //
 // Channel is optional - passing the empty string for channel causes results to have default values
 // as if they were read on a new channel. This can speed up the iterators performance in cases
 // where the channel specific details are not needed.
-func NewIndexIter(txn Txn, topic, channel string, opts *deq.IterOptions) (*IndexIter, error) {
-
+func NewIndexIter(txn Txn, topic, channel string, channelTime time.Time, opts *deq.IterOptions) (*IndexIter, error) {
 	if opts == nil {
 		opts = &deq.IterOptions{}
 	}
 
-	var prefetchCount int
-	if opts.PrefetchCount == -1 {
-		prefetchCount = 0
-	} else if opts.PrefetchCount == 0 {
-		prefetchCount = 20
-	} else {
-		prefetchCount = opts.PrefetchCount
-	}
+	// var prefetchCount int
+	// if opts.PrefetchCount == -1 {
+	// 	prefetchCount = 0
+	// } else if opts.PrefetchCount == 0 {
+	// 	prefetchCount = 20
+	// } else {
+	// 	prefetchCount = opts.PrefetchCount
+	// }
 
 	prefix, err := IndexPrefixTopic(topic)
 	if err != nil {
@@ -301,21 +307,28 @@ func NewIndexIter(txn Txn, topic, channel string, opts *deq.IterOptions) (*Index
 	}
 
 	it := txn.NewIterator(badger.IteratorOptions{
-		Reverse:        opts.Reversed,
-		PrefetchValues: prefetchCount > 0,
-		// TODO: prefetch other event data too
-		PrefetchSize: prefetchCount,
+		Reverse: opts.Reversed,
+		// All index data is stored in the key
+		PrefetchValues: false,
 	})
-
 	it.Seek(start)
 
+	cit := txn.NewIterator(badger.IteratorOptions{
+		Reverse: true,
+		// All index data is stored in the key
+		PrefetchValues: false,
+	})
+
 	return &IndexIter{
-		reversed: opts.Reversed,
-		txn:      txn,
-		it:       it,
-		end:      end,
-		channel:  channel,
-		err:      errors.New("iteration not started"),
+		topic:       topic,
+		channelTime: channelTime,
+		reversed:    opts.Reversed,
+		txn:         txn,
+		it:          it,
+		cit:         cit,
+		end:         end,
+		channel:     channel,
+		err:         errors.New("iteration not started"),
 	}, nil
 }
 
@@ -336,7 +349,7 @@ func (iter *IndexIter) Next(ctx context.Context) bool {
 	}
 
 	// Advance the iterator after we cache the current value.
-	defer iter.it.Next()
+	// defer iter.it.Seek()
 
 	item := iter.it.Item()
 
@@ -347,28 +360,28 @@ func (iter *IndexIter) Next(ctx context.Context) bool {
 		return false
 	}
 
-	// TODO: support index-only iteration to only lookup when needed.
-	var payload IndexPayload
-	err = item.Value(func(val []byte) error {
-		err = proto.Unmarshal(val, &payload)
-		if err != nil {
-			return deqerr.Errorf(deqerr.Internal, "unmarshal index payload: %v", err)
-		}
-		return nil
-	})
-	if err != nil {
-		iter.err = deqerr.Errorf(deqerr.Unavailable, "read index payload: %v", err)
+	buf, err := IndexKey{
+		Topic:      iter.topic,
+		Value:      key.Value,
+		CreateTime: iter.channelTime,
+		ID:         "\xff\xff\xff\xff",
+	}.Marshal(nil)
+
+	iter.cit.Seek(buf)
+	if !iter.cit.Valid() || bytes.Compare(iter.cit.Item().Key(), iter.end) == target {
 		return false
 	}
 
-	e, err := GetEvent(iter.txn, key.Topic, payload.EventId, iter.channel)
+	item = iter.cit.Item()
+
+	e, err := GetEvent(iter.txn, key.Topic, key.ID, iter.channel)
 	if err != nil {
-		iter.err = deqerr.Errorf(deqerr.Unavailable, "get event %q %q: %v", key.Topic, payload.EventId, err)
+		iter.err = deqerr.Errorf(deqerr.Unavailable, "get event %q %q: %v", key.Topic, key.ID, err)
 		return false
 	}
 
 	e.Selector = key.Value
-	e.SelectorVersion = payload.Version
+	// e.SelectorVersion = payload.Version
 	iter.current = *e
 
 	return true

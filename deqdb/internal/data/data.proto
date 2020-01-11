@@ -16,7 +16,7 @@ message EventTimePayload {
 
 message IndexPayload {
   string event_id = 1;
-  sfixed64 create_time = 2;
+  // sfixed64 create_time = 2;
   int64 version = 3;
 }
 

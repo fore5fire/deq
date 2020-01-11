@@ -157,16 +157,14 @@ func TestWriteEventWithIndexes(t *testing.T) {
 	}
 
 	// Verify the index payloads were created
-	expectPayload := &IndexPayload{
-		EventId:    expected.ID,
-		CreateTime: expected.CreateTime.UnixNano(),
-	}
+	expectPayload := &IndexPayload{}
 
 	for i, index := range expected.Indexes {
 		actualPayload := new(IndexPayload)
 		err = GetIndexPayload(txn, &IndexKey{
 			Topic: expected.Topic,
 			Value: index,
+			ID:    expected.ID,
 		}, actualPayload)
 		if err != nil {
 			t.Fatalf("get index payload %d: %v", i, err)

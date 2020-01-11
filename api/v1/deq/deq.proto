@@ -54,9 +54,6 @@ message Event {
   // The index for which the event was selected. -1 if the event was selected by ID.
   sint32 selected_index = 9;
 
-  // The version of the ID or index used to select the event.
-  int64 selector_version = 10;
-
   enum State {
     UNSPECIFIED_STATE = 0;
     // QUEUED indicates the event is queued on the channel with exponential backoff.
@@ -174,6 +171,10 @@ message GetRequest {
   bool await = 4;
   // If true, the event is looked up by index instead of ID. Cannot be true if await is true.
   bool use_index = 5;
+  // The selection candidate whose create_time is closest to this time but not after it is selected.
+  // If multiple candidates have the same create time, one is chosen deterministicly.
+  // Represented as a unix nanosecond timestamp.
+  sfixed64 request_time = 6;
 }
 
 message BatchGetRequest {
@@ -194,6 +195,11 @@ message BatchGetRequest {
   // If true, requesting events that have not been published does not return an error. Instead, all
   // published events are returned and all not found events are omitted from the results.
   bool allow_not_found = 6;
+  // The selection candidate whose create_time is closest to this time but not after it is selected
+  // for each selector. If multiple candidates have the same create time, one is chosen
+  // deterministicly.
+  // Represented as a unix nanosecond timestamp.
+  sfixed64 request_time = 7;
 }
 
 message BatchGetResponse {
@@ -220,6 +226,11 @@ message ListRequest {
   // By default, results are returned in lexigraphical order of event id. If reversed is true,
   // results will be sorted in reverse lexigraphical order of event id.
   bool reversed = 6;
+  // The selection candidates whose create_time fields are closest to this time but not after it are
+  // selected. For a given seelctor, if multiple candidates have the same create time, one is chosen
+  // deterministicly.
+  // Represented as a unix nanosecond timestamp.
+  sfixed64 request_time = 8;
 }
 
 message ListResponse {

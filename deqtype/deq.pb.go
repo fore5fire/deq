@@ -3,13 +3,11 @@
 
 package deqtype
 
-import (
-	fmt "fmt"
-	proto "github.com/gogo/protobuf/proto"
-	io "io"
-	math "math"
-	math_bits "math/bits"
-)
+import proto "github.com/gogo/protobuf/proto"
+import fmt "fmt"
+import math "math"
+
+import io "io"
 
 // Reference imports to suppress errors if they are not otherwise used.
 var _ = proto.Marshal
@@ -32,7 +30,7 @@ func (m *Topic) Reset()         { *m = Topic{} }
 func (m *Topic) String() string { return proto.CompactTextString(m) }
 func (*Topic) ProtoMessage()    {}
 func (*Topic) Descriptor() ([]byte, []int) {
-	return fileDescriptor_cc02b310faf1c402, []int{0}
+	return fileDescriptor_deq_051b887c5a10cf4b, []int{0}
 }
 func (m *Topic) XXX_Unmarshal(b []byte) error {
 	return m.Unmarshal(b)
@@ -49,8 +47,8 @@ func (m *Topic) XXX_Marshal(b []byte, deterministic bool) ([]byte, error) {
 		return b[:n], nil
 	}
 }
-func (m *Topic) XXX_Merge(src proto.Message) {
-	xxx_messageInfo_Topic.Merge(m, src)
+func (dst *Topic) XXX_Merge(src proto.Message) {
+	xxx_messageInfo_Topic.Merge(dst, src)
 }
 func (m *Topic) XXX_Size() int {
 	return m.Size()
@@ -71,20 +69,6 @@ func (m *Topic) GetTopic() string {
 func init() {
 	proto.RegisterType((*Topic)(nil), "deq.events.Topic")
 }
-
-func init() { proto.RegisterFile("deq.proto", fileDescriptor_cc02b310faf1c402) }
-
-var fileDescriptor_cc02b310faf1c402 = []byte{
-	// 111 bytes of a gzipped FileDescriptorProto
-	0x1f, 0x8b, 0x08, 0x00, 0x00, 0x00, 0x00, 0x00, 0x02, 0xff, 0xe2, 0xe2, 0x4c, 0x49, 0x2d, 0xd4,
-	0x2b, 0x28, 0xca, 0x2f, 0xc9, 0x17, 0xe2, 0x02, 0x31, 0x53, 0xcb, 0x52, 0xf3, 0x4a, 0x8a, 0x95,
-	0x64, 0xb9, 0x58, 0x43, 0xf2, 0x0b, 0x32, 0x93, 0x85, 0x44, 0xb8, 0x58, 0x4b, 0x40, 0x0c, 0x09,
-	0x46, 0x05, 0x46, 0x0d, 0xce, 0x20, 0x08, 0xc7, 0x49, 0xf1, 0xc4, 0x23, 0x39, 0xc6, 0x0b, 0x8f,
-	0xe4, 0x18, 0x1f, 0x3c, 0x92, 0x63, 0x9c, 0xf0, 0x58, 0x8e, 0xe1, 0xc2, 0x63, 0x39, 0x86, 0x1b,
-	0x8f, 0xe5, 0x18, 0xa2, 0xd8, 0x53, 0x52, 0x0b, 0x4b, 0x2a, 0x0b, 0x52, 0x93, 0xd8, 0xc0, 0x86,
-	0x1a, 0x03, 0x02, 0x00, 0x00, 0xff, 0xff, 0xf6, 0xc8, 0x34, 0x2c, 0x61, 0x00, 0x00, 0x00,
-}
-
 func (m *Topic) Marshal() (dAtA []byte, err error) {
 	size := m.Size()
 	dAtA = make([]byte, size)
@@ -132,7 +116,14 @@ func (m *Topic) Size() (n int) {
 }
 
 func sovDeq(x uint64) (n int) {
-	return (math_bits.Len64(x|1) + 6) / 7
+	for {
+		n++
+		x >>= 7
+		if x == 0 {
+			break
+		}
+	}
+	return n
 }
 func sozDeq(x uint64) (n int) {
 	return sovDeq(uint64((x << 1) ^ uint64((int64(x) >> 63))))
@@ -152,7 +143,7 @@ func (m *Topic) Unmarshal(dAtA []byte) error {
 			}
 			b := dAtA[iNdEx]
 			iNdEx++
-			wire |= uint64(b&0x7F) << shift
+			wire |= (uint64(b) & 0x7F) << shift
 			if b < 0x80 {
 				break
 			}
@@ -180,7 +171,7 @@ func (m *Topic) Unmarshal(dAtA []byte) error {
 				}
 				b := dAtA[iNdEx]
 				iNdEx++
-				stringLen |= uint64(b&0x7F) << shift
+				stringLen |= (uint64(b) & 0x7F) << shift
 				if b < 0x80 {
 					break
 				}
@@ -190,9 +181,6 @@ func (m *Topic) Unmarshal(dAtA []byte) error {
 				return ErrInvalidLengthDeq
 			}
 			postIndex := iNdEx + intStringLen
-			if postIndex < 0 {
-				return ErrInvalidLengthDeq
-			}
 			if postIndex > l {
 				return io.ErrUnexpectedEOF
 			}
@@ -205,9 +193,6 @@ func (m *Topic) Unmarshal(dAtA []byte) error {
 				return err
 			}
 			if skippy < 0 {
-				return ErrInvalidLengthDeq
-			}
-			if (iNdEx + skippy) < 0 {
 				return ErrInvalidLengthDeq
 			}
 			if (iNdEx + skippy) > l {
@@ -276,11 +261,8 @@ func skipDeq(dAtA []byte) (n int, err error) {
 					break
 				}
 			}
-			if length < 0 {
-				return 0, ErrInvalidLengthDeq
-			}
 			iNdEx += length
-			if iNdEx < 0 {
+			if length < 0 {
 				return 0, ErrInvalidLengthDeq
 			}
 			return iNdEx, nil
@@ -311,9 +293,6 @@ func skipDeq(dAtA []byte) (n int, err error) {
 					return 0, err
 				}
 				iNdEx = start + next
-				if iNdEx < 0 {
-					return 0, ErrInvalidLengthDeq
-				}
 			}
 			return iNdEx, nil
 		case 4:
@@ -332,3 +311,16 @@ var (
 	ErrInvalidLengthDeq = fmt.Errorf("proto: negative length found during unmarshaling")
 	ErrIntOverflowDeq   = fmt.Errorf("proto: integer overflow")
 )
+
+func init() { proto.RegisterFile("deq.proto", fileDescriptor_deq_051b887c5a10cf4b) }
+
+var fileDescriptor_deq_051b887c5a10cf4b = []byte{
+	// 111 bytes of a gzipped FileDescriptorProto
+	0x1f, 0x8b, 0x08, 0x00, 0x00, 0x00, 0x00, 0x00, 0x02, 0xff, 0xe2, 0xe2, 0x4c, 0x49, 0x2d, 0xd4,
+	0x2b, 0x28, 0xca, 0x2f, 0xc9, 0x17, 0xe2, 0x02, 0x31, 0x53, 0xcb, 0x52, 0xf3, 0x4a, 0x8a, 0x95,
+	0x64, 0xb9, 0x58, 0x43, 0xf2, 0x0b, 0x32, 0x93, 0x85, 0x44, 0xb8, 0x58, 0x4b, 0x40, 0x0c, 0x09,
+	0x46, 0x05, 0x46, 0x0d, 0xce, 0x20, 0x08, 0xc7, 0x49, 0xf1, 0xc4, 0x23, 0x39, 0xc6, 0x0b, 0x8f,
+	0xe4, 0x18, 0x1f, 0x3c, 0x92, 0x63, 0x9c, 0xf0, 0x58, 0x8e, 0xe1, 0xc2, 0x63, 0x39, 0x86, 0x1b,
+	0x8f, 0xe5, 0x18, 0xa2, 0xd8, 0x53, 0x52, 0x0b, 0x4b, 0x2a, 0x0b, 0x52, 0x93, 0xd8, 0xc0, 0x86,
+	0x1a, 0x03, 0x02, 0x00, 0x00, 0xff, 0xff, 0xf6, 0xc8, 0x34, 0x2c, 0x61, 0x00, 0x00, 0x00,
+}

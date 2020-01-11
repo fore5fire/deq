@@ -1,4 +1,4 @@
-//go:generate protoc -I=. -I=../../../ -I=$GOPATH/src/github.com/gogo/protobuf/protobuf --gogofaster_out=plugins=grpc,Mgoogle/protobuf/any.proto=github.com/gogo/protobuf/types,Mapi/v1/deq/deq.proto=gitlab.com/katcheCode/deq/api/v1/deq,Mgoogle/protobuf/empty.proto=github.com/gogo/protobuf/types:. data.proto
+//go:generate protoc --plugin=./protoc-gen-gogofaster -I=. -I=../../../ -I=$GOPATH/src/github.com/gogo/protobuf/protobuf --gogofaster_out=plugins=grpc,Mgoogle/protobuf/any.proto=github.com/gogo/protobuf/types,Mapi/v1/deq/deq.proto=gitlab.com/katcheCode/deq/api/v1/deq,Mgoogle/protobuf/empty.proto=github.com/gogo/protobuf/types:. data.proto
 
 // Package data provides keys and payloads for data stored in DEQ's internal key-value store.
 package data
@@ -21,12 +21,13 @@ const (
 	EventTag     = 'e'
 	EventV0Tag   = 'E'
 	EventTimeTag = 't'
-	IndexTag     = 'I'
 	SendCountTag = 'c'
+	IndexTag     = 'x'
 
 	Sep byte = 0
 
 	IndexTagV1_0_0 = 'i'
+	IndexV1_2_0Tag = 'I'
 
 	FirstTopic = "\x01"
 	LastTopic  = "\xff\xff\xff\xff"
