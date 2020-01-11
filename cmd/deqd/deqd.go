@@ -18,7 +18,10 @@ import (
 	"gitlab.com/katcheCode/deq/cmd/deqd/internal/handler"
 	"gitlab.com/katcheCode/deq/deqdb"
 	"google.golang.org/grpc"
+	"google.golang.org/grpc/codes"
 	"google.golang.org/grpc/credentials"
+	"google.golang.org/grpc/metadata"
+	"google.golang.org/grpc/status"
 )
 
 var (
@@ -49,6 +52,8 @@ var (
 
 	// keyFile is the path of the tls private key file. Required unless insecure is true.
 	keyFile = os.Getenv("DEQ_TLS_KEY_FILE")
+
+	authSharedSecret = os.Getenv("DEQ_AUTH_SHARED_SECRET")
 )
 
 func init() {
@@ -136,6 +141,44 @@ func run(dbDir, address, statsAddress, certFile, keyFile string, insecure bool) 
 	server := handler.New(store)
 
 	var grpcopts []grpc.ServerOption
+	if authSharedSecret != "" {
+		grpcopts = append(grpcopts,
+			grpc.UnaryInterceptor(func(ctx context.Context, req interface{}, info *grpc.UnaryServerInfo, handler grpc.UnaryHandler) (resp interface{}, err error) {
+				md, ok := metadata.FromIncomingContext(ctx)
+				if !ok {
+					return nil, status.Error(codes.PermissionDenied, "invalid authorization token")
+				}
+
+				authorization := md.Get("authorization")
+				if len(authorization) != 1 {
+					return nil, status.Error(codes.PermissionDenied, "invalid authorization token")
+				}
+
+				if authorization[0] != authSharedSecret {
+					return nil, status.Error(codes.PermissionDenied, "invalid authorization token")
+				}
+				return handler(ctx, req)
+			}),
+			grpc.StreamInterceptor(func(srv interface{}, ss grpc.ServerStream, info *grpc.StreamServerInfo, handler grpc.StreamHandler) error {
+				md, ok := metadata.FromIncomingContext(ctx)
+				if !ok {
+					return status.Error(codes.PermissionDenied, "invalid authorization token")
+				}
+
+				authorization := md.Get("authorization")
+				if len(authorization) != 1 {
+					return status.Error(codes.PermissionDenied, "invalid authorization token")
+				}
+
+				if authorization[0] != authSharedSecret {
+					return status.Error(codes.PermissionDenied, "invalid authorization token")
+				}
+				return handler(srv, ss)
+			}),
+		)
+	} else {
+		log.Printf("WARNING: You are running DEQ without user authentication")
+	}
 
 	if !insecure {
 		creds, err := credentials.NewServerTLSFromFile(certFile, keyFile)
