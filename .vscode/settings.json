@@ -1,0 +1,13 @@
+{
+  "cSpell.ignoreWords": [
+    "debugw",
+    "deqclient",
+    "deqdb",
+    "deqopt",
+    "grpc",
+    "grpcopts",
+    "memdb",
+    "printw",
+    "warningf"
+  ]
+}
