@@ -14,6 +14,7 @@ import (
 	"syscall"
 	"time"
 
+	"github.com/minio/minio-go"
 	pb "gitlab.com/katcheCode/deq/api/v1/deq"
 	"gitlab.com/katcheCode/deq/cmd/deqd/internal/handler"
 	"gitlab.com/katcheCode/deq/deqdb"
@@ -49,6 +50,30 @@ var (
 
 	// keyFile is the path of the tls private key file. Required unless insecure is true.
 	keyFile = os.Getenv("DEQ_TLS_KEY_FILE")
+
+	// region
+	backupRegion = os.Getenv("DEQ_BACKUP_INTERVAL")
+
+	// backupBucket
+	bucket = os.Getenv("DEQ_BACKUP_BUCKET")
+
+	// backupAccessKeyID
+	accessKeyID = os.Getenv("DEQ_BACKUP_ACCESS_KEY_ID")
+
+	// backupSecretAccessKey
+	secretAccessKey = os.Getenv("DEQ_SYNC_BUCKET_SECRET_ACCESS_KEY")
+
+	// restoreRegion
+	restoreRegion = os.Getenv("DEQ_RESTORE_REGION")
+
+	// restoreBucket
+	restoreBucket = os.Getenv("DEQ_RESTORE_BUCKET")
+
+	// restoreAccessKeyID
+	restoreAccessKeyID = os.Getenv("DEQ_RESTORE_ACCESS_KEY_ID")
+
+	// restoreSecretAccessKey
+	restoreSecretAccessKey = os.Getenv("DEQ_RESTORE_SECRET_ACCESS_KEY")
 )
 
 func init() {
@@ -176,4 +201,35 @@ func run(dbDir, address, statsAddress, certFile, keyFile string, insecure bool) 
 	}
 
 	return nil
+}
+
+func newDOBucket(region, bucket, accessKeyID, secretAccessKey string) Bucket {
+
+	endpoint := region + ".digitaloceanspaces.com"
+	client, err := minio.NewWithRegion(endpoint, accessKeyID, secretAccessKey, true, region)
+	if err != nil {
+		panic("invalid bucket parameters: " + err.Error())
+	}
+
+	return &minioBucket{client, bucket}
+}
+
+type Bucket interface {
+	FPutObject(ctx context.Context, name, file string, opts minio.PutObjectOptions) error
+	FGetObject(ctx context.Context, name, file string, opts minio.GetObjectOptions) error
+}
+
+type minioBucket struct {
+	client *minio.Client
+	bucket string
+}
+
+func (b *minioBucket) PutObject(ctx context.Context, name, file string, opts minio.PutObjectOptions) error {
+	_, err := b.client.FPutObjectWithContext(ctx, b.bucket, name, file, opts)
+	return err
+}
+
+func (b *minioBucket) GetObject(ctx context.Context, name, file string, opts minio.GetObjectOptions) error {
+	err := b.client.FGetObjectWithContext(ctx, b.bucket, name, file, opts)
+	return err
 }

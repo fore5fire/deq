@@ -13,6 +13,8 @@ import (
 	"bytes"
 	"context"
 	"errors"
+	"fmt"
+	"io"
 	"log"
 	"os"
 	"strings"
@@ -87,6 +89,10 @@ type Options struct {
 	// Debug is used to log debug information. It Defaults to disabled, and should usually only be set
 	// to provide details for debugging this package.
 	Debug Logger
+
+	// BackupLoaders is a list of readers from which backup data will be loaded into the
+	// database
+	BackupLoaders []io.Reader
 }
 
 // LoadingMode specifies how to load data into memory. Generally speaking, lower memory is slower
@@ -166,10 +172,10 @@ func Open(opts Options) (*Store, error) {
 		return nil, errFromBadger(err)
 	}
 
-	return open(data.DBFromBadger(db), requeueLimit, opts.UpgradeIfNeeded, info, debug)
+	return open(data.DBFromBadger(db), requeueLimit, opts.UpgradeIfNeeded, info, debug, opts.BackupLoaders)
 }
 
-func open(db data.DB, defaultRequeueLimit int, allowUpgrade bool, info, debug Logger) (*Store, error) {
+func open(db data.DB, defaultRequeueLimit int, allowUpgrade bool, info, debug Logger, backups []io.Reader) (*Store, error) {
 
 	s := &Store{
 		db:                  db,
@@ -208,6 +214,13 @@ func open(db data.DB, defaultRequeueLimit int, allowUpgrade bool, info, debug Lo
 		err = upgrade.DB(context.TODO(), s.db, version)
 		if err != nil {
 			return nil, deqerr.Errorf(deqerr.GetCode(err), "upgrade db: %v", err)
+		}
+	}
+
+	for i, r := range backups {
+		err := db.Load(r, 256)
+		if err != nil {
+			return nil, fmt.Errorf("error loading backup %d: %v", i, err)
 		}
 	}
 
@@ -558,6 +571,15 @@ func (s *Store) Del(ctx context.Context, topic, id string) error {
 	}
 
 	return nil
+}
+
+// Backup writes backup data to w more recent than since. It returns the time of
+// the last record written. To do incremental backups, pass the return value of
+// the previous call to Backup as the value for since. For a full backup, pass 0
+// for the value of since.
+func (s *Store) Backup(w io.Writer, since uint64) (uint64, error) {
+	w.Write([]byte("deqbackup0.0.1\n"))
+	return s.db.Backup(w, since)
 }
 
 func (s *Store) listenOut() {

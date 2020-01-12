@@ -2,6 +2,8 @@ package data
 
 import (
 	"bytes"
+	"errors"
+	io "io"
 	"sort"
 	"sync"
 
@@ -25,6 +27,14 @@ func (db *memDB) Close() error {
 
 func (db *memDB) RunValueLogGC(float64) error {
 	return nil
+}
+
+func (db *memDB) Backup(w io.Writer, since uint64) (uint64, error) {
+	return 0, errors.New("unimplemented")
+}
+
+func (db *memDB) Load(io.Reader, int) error {
+	return errors.New("unimplemented")
 }
 
 type memTxn struct {

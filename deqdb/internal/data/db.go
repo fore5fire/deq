@@ -3,6 +3,7 @@ package data
 import (
 	"fmt"
 	"hash/crc32"
+	io "io"
 	"reflect"
 	"time"
 
@@ -16,6 +17,8 @@ type DB interface {
 	NewTransaction(update bool) Txn
 	RunValueLogGC(float64) error
 	Close() error
+	Backup(w io.Writer, since uint64) (uint64, error)
+	Load(r io.Reader, maxPendingWrites int) error
 }
 
 type Txn interface {

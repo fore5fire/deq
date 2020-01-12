@@ -21,7 +21,7 @@ var _ = math.Inf
 // is compatible with the proto package it is being compiled against.
 // A compilation error at this line likely means your copy of the
 // proto package needs to be updated.
-const _ = proto.GoGoProtoPackageIsVersion2 // please upgrade the proto package
+const _ = proto.GoGoProtoPackageIsVersion3 // please upgrade the proto package
 
 type EventState int32
 
@@ -89,7 +89,7 @@ func (m *ChannelPayload) XXX_Marshal(b []byte, deterministic bool) ([]byte, erro
 		return xxx_messageInfo_ChannelPayload.Marshal(b, m, deterministic)
 	} else {
 		b = b[:cap(b)]
-		n, err := m.MarshalTo(b)
+		n, err := m.MarshalToSizedBuffer(b)
 		if err != nil {
 			return nil, err
 		}
@@ -140,7 +140,7 @@ func (m *SendCount) XXX_Marshal(b []byte, deterministic bool) ([]byte, error) {
 		return xxx_messageInfo_SendCount.Marshal(b, m, deterministic)
 	} else {
 		b = b[:cap(b)]
-		n, err := m.MarshalTo(b)
+		n, err := m.MarshalToSizedBuffer(b)
 		if err != nil {
 			return nil, err
 		}
@@ -184,7 +184,7 @@ func (m *EventTimePayload) XXX_Marshal(b []byte, deterministic bool) ([]byte, er
 		return xxx_messageInfo_EventTimePayload.Marshal(b, m, deterministic)
 	} else {
 		b = b[:cap(b)]
-		n, err := m.MarshalTo(b)
+		n, err := m.MarshalToSizedBuffer(b)
 		if err != nil {
 			return nil, err
 		}
@@ -230,7 +230,7 @@ func (m *IndexPayload) XXX_Marshal(b []byte, deterministic bool) ([]byte, error)
 		return xxx_messageInfo_IndexPayload.Marshal(b, m, deterministic)
 	} else {
 		b = b[:cap(b)]
-		n, err := m.MarshalTo(b)
+		n, err := m.MarshalToSizedBuffer(b)
 		if err != nil {
 			return nil, err
 		}
@@ -290,7 +290,7 @@ func (m *EventPayload) XXX_Marshal(b []byte, deterministic bool) ([]byte, error)
 		return xxx_messageInfo_EventPayload.Marshal(b, m, deterministic)
 	} else {
 		b = b[:cap(b)]
-		n, err := m.MarshalTo(b)
+		n, err := m.MarshalToSizedBuffer(b)
 		if err != nil {
 			return nil, err
 		}
@@ -376,7 +376,7 @@ var fileDescriptor_871986018790d2fd = []byte{
 func (m *ChannelPayload) Marshal() (dAtA []byte, err error) {
 	size := m.Size()
 	dAtA = make([]byte, size)
-	n, err := m.MarshalTo(dAtA)
+	n, err := m.MarshalToSizedBuffer(dAtA[:size])
 	if err != nil {
 		return nil, err
 	}
@@ -384,27 +384,32 @@ func (m *ChannelPayload) Marshal() (dAtA []byte, err error) {
 }
 
 func (m *ChannelPayload) MarshalTo(dAtA []byte) (int, error) {
-	var i int
+	size := m.Size()
+	return m.MarshalToSizedBuffer(dAtA[:size])
+}
+
+func (m *ChannelPayload) MarshalToSizedBuffer(dAtA []byte) (int, error) {
+	i := len(dAtA)
 	_ = i
 	var l int
 	_ = l
-	if m.EventState != 0 {
-		dAtA[i] = 0x8
-		i++
-		i = encodeVarintData(dAtA, i, uint64(m.EventState))
-	}
 	if m.DeprecatedSendCount != 0 {
-		dAtA[i] = 0x10
-		i++
 		i = encodeVarintData(dAtA, i, uint64(m.DeprecatedSendCount))
+		i--
+		dAtA[i] = 0x10
 	}
-	return i, nil
+	if m.EventState != 0 {
+		i = encodeVarintData(dAtA, i, uint64(m.EventState))
+		i--
+		dAtA[i] = 0x8
+	}
+	return len(dAtA) - i, nil
 }
 
 func (m *SendCount) Marshal() (dAtA []byte, err error) {
 	size := m.Size()
 	dAtA = make([]byte, size)
-	n, err := m.MarshalTo(dAtA)
+	n, err := m.MarshalToSizedBuffer(dAtA[:size])
 	if err != nil {
 		return nil, err
 	}
@@ -412,22 +417,27 @@ func (m *SendCount) Marshal() (dAtA []byte, err error) {
 }
 
 func (m *SendCount) MarshalTo(dAtA []byte) (int, error) {
-	var i int
+	size := m.Size()
+	return m.MarshalToSizedBuffer(dAtA[:size])
+}
+
+func (m *SendCount) MarshalToSizedBuffer(dAtA []byte) (int, error) {
+	i := len(dAtA)
 	_ = i
 	var l int
 	_ = l
 	if m.SendCount != 0 {
-		dAtA[i] = 0x8
-		i++
 		i = encodeVarintData(dAtA, i, uint64(m.SendCount))
+		i--
+		dAtA[i] = 0x8
 	}
-	return i, nil
+	return len(dAtA) - i, nil
 }
 
 func (m *EventTimePayload) Marshal() (dAtA []byte, err error) {
 	size := m.Size()
 	dAtA = make([]byte, size)
-	n, err := m.MarshalTo(dAtA)
+	n, err := m.MarshalToSizedBuffer(dAtA[:size])
 	if err != nil {
 		return nil, err
 	}
@@ -435,23 +445,28 @@ func (m *EventTimePayload) Marshal() (dAtA []byte, err error) {
 }
 
 func (m *EventTimePayload) MarshalTo(dAtA []byte) (int, error) {
-	var i int
+	size := m.Size()
+	return m.MarshalToSizedBuffer(dAtA[:size])
+}
+
+func (m *EventTimePayload) MarshalToSizedBuffer(dAtA []byte) (int, error) {
+	i := len(dAtA)
 	_ = i
 	var l int
 	_ = l
 	if m.CreateTime != 0 {
-		dAtA[i] = 0x9
-		i++
+		i -= 8
 		encoding_binary.LittleEndian.PutUint64(dAtA[i:], uint64(m.CreateTime))
-		i += 8
+		i--
+		dAtA[i] = 0x9
 	}
-	return i, nil
+	return len(dAtA) - i, nil
 }
 
 func (m *IndexPayload) Marshal() (dAtA []byte, err error) {
 	size := m.Size()
 	dAtA = make([]byte, size)
-	n, err := m.MarshalTo(dAtA)
+	n, err := m.MarshalToSizedBuffer(dAtA[:size])
 	if err != nil {
 		return nil, err
 	}
@@ -459,34 +474,40 @@ func (m *IndexPayload) Marshal() (dAtA []byte, err error) {
 }
 
 func (m *IndexPayload) MarshalTo(dAtA []byte) (int, error) {
-	var i int
+	size := m.Size()
+	return m.MarshalToSizedBuffer(dAtA[:size])
+}
+
+func (m *IndexPayload) MarshalToSizedBuffer(dAtA []byte) (int, error) {
+	i := len(dAtA)
 	_ = i
 	var l int
 	_ = l
-	if len(m.EventId) > 0 {
-		dAtA[i] = 0xa
-		i++
-		i = encodeVarintData(dAtA, i, uint64(len(m.EventId)))
-		i += copy(dAtA[i:], m.EventId)
+	if m.Version != 0 {
+		i = encodeVarintData(dAtA, i, uint64(m.Version))
+		i--
+		dAtA[i] = 0x18
 	}
 	if m.CreateTime != 0 {
-		dAtA[i] = 0x11
-		i++
+		i -= 8
 		encoding_binary.LittleEndian.PutUint64(dAtA[i:], uint64(m.CreateTime))
-		i += 8
+		i--
+		dAtA[i] = 0x11
 	}
-	if m.Version != 0 {
-		dAtA[i] = 0x18
-		i++
-		i = encodeVarintData(dAtA, i, uint64(m.Version))
+	if len(m.EventId) > 0 {
+		i -= len(m.EventId)
+		copy(dAtA[i:], m.EventId)
+		i = encodeVarintData(dAtA, i, uint64(len(m.EventId)))
+		i--
+		dAtA[i] = 0xa
 	}
-	return i, nil
+	return len(dAtA) - i, nil
 }
 
 func (m *EventPayload) Marshal() (dAtA []byte, err error) {
 	size := m.Size()
 	dAtA = make([]byte, size)
-	n, err := m.MarshalTo(dAtA)
+	n, err := m.MarshalToSizedBuffer(dAtA[:size])
 	if err != nil {
 		return nil, err
 	}
@@ -494,47 +515,49 @@ func (m *EventPayload) Marshal() (dAtA []byte, err error) {
 }
 
 func (m *EventPayload) MarshalTo(dAtA []byte) (int, error) {
-	var i int
+	size := m.Size()
+	return m.MarshalToSizedBuffer(dAtA[:size])
+}
+
+func (m *EventPayload) MarshalToSizedBuffer(dAtA []byte) (int, error) {
+	i := len(dAtA)
 	_ = i
 	var l int
 	_ = l
-	if len(m.Payload) > 0 {
-		dAtA[i] = 0xa
-		i++
-		i = encodeVarintData(dAtA, i, uint64(len(m.Payload)))
-		i += copy(dAtA[i:], m.Payload)
-	}
-	if m.DefaultEventState != 0 {
-		dAtA[i] = 0x10
-		i++
-		i = encodeVarintData(dAtA, i, uint64(m.DefaultEventState))
-	}
 	if len(m.Indexes) > 0 {
-		for _, s := range m.Indexes {
+		for iNdEx := len(m.Indexes) - 1; iNdEx >= 0; iNdEx-- {
+			i -= len(m.Indexes[iNdEx])
+			copy(dAtA[i:], m.Indexes[iNdEx])
+			i = encodeVarintData(dAtA, i, uint64(len(m.Indexes[iNdEx])))
+			i--
 			dAtA[i] = 0x1a
-			i++
-			l = len(s)
-			for l >= 1<<7 {
-				dAtA[i] = uint8(uint64(l)&0x7f | 0x80)
-				l >>= 7
-				i++
-			}
-			dAtA[i] = uint8(l)
-			i++
-			i += copy(dAtA[i:], s)
 		}
 	}
-	return i, nil
+	if m.DefaultEventState != 0 {
+		i = encodeVarintData(dAtA, i, uint64(m.DefaultEventState))
+		i--
+		dAtA[i] = 0x10
+	}
+	if len(m.Payload) > 0 {
+		i -= len(m.Payload)
+		copy(dAtA[i:], m.Payload)
+		i = encodeVarintData(dAtA, i, uint64(len(m.Payload)))
+		i--
+		dAtA[i] = 0xa
+	}
+	return len(dAtA) - i, nil
 }
 
 func encodeVarintData(dAtA []byte, offset int, v uint64) int {
+	offset -= sovData(v)
+	base := offset
 	for v >= 1<<7 {
 		dAtA[offset] = uint8(v&0x7f | 0x80)
 		v >>= 7
 		offset++
 	}
 	dAtA[offset] = uint8(v)
-	return offset + 1
+	return base
 }
 func (m *ChannelPayload) Size() (n int) {
 	if m == nil {
@@ -1103,6 +1126,7 @@ func (m *EventPayload) Unmarshal(dAtA []byte) error {
 func skipData(dAtA []byte) (n int, err error) {
 	l := len(dAtA)
 	iNdEx := 0
+	depth := 0
 	for iNdEx < l {
 		var wire uint64
 		for shift := uint(0); ; shift += 7 {
@@ -1134,10 +1158,8 @@ func skipData(dAtA []byte) (n int, err error) {
 					break
 				}
 			}
-			return iNdEx, nil
 		case 1:
 			iNdEx += 8
-			return iNdEx, nil
 		case 2:
 			var length int
 			for shift := uint(0); ; shift += 7 {
@@ -1158,55 +1180,30 @@ func skipData(dAtA []byte) (n int, err error) {
 				return 0, ErrInvalidLengthData
 			}
 			iNdEx += length
-			if iNdEx < 0 {
-				return 0, ErrInvalidLengthData
-			}
-			return iNdEx, nil
 		case 3:
-			for {
-				var innerWire uint64
-				var start int = iNdEx
-				for shift := uint(0); ; shift += 7 {
-					if shift >= 64 {
-						return 0, ErrIntOverflowData
-					}
-					if iNdEx >= l {
-						return 0, io.ErrUnexpectedEOF
-					}
-					b := dAtA[iNdEx]
-					iNdEx++
-					innerWire |= (uint64(b) & 0x7F) << shift
-					if b < 0x80 {
-						break
-					}
-				}
-				innerWireType := int(innerWire & 0x7)
-				if innerWireType == 4 {
-					break
-				}
-				next, err := skipData(dAtA[start:])
-				if err != nil {
-					return 0, err
-				}
-				iNdEx = start + next
-				if iNdEx < 0 {
-					return 0, ErrInvalidLengthData
-				}
-			}
-			return iNdEx, nil
+			depth++
 		case 4:
-			return iNdEx, nil
+			if depth == 0 {
+				return 0, ErrUnexpectedEndOfGroupData
+			}
+			depth--
 		case 5:
 			iNdEx += 4
-			return iNdEx, nil
 		default:
 			return 0, fmt.Errorf("proto: illegal wireType %d", wireType)
 		}
+		if iNdEx < 0 {
+			return 0, ErrInvalidLengthData
+		}
+		if depth == 0 {
+			return iNdEx, nil
+		}
 	}
-	panic("unreachable")
+	return 0, io.ErrUnexpectedEOF
 }
 
 var (
-	ErrInvalidLengthData = fmt.Errorf("proto: negative length found during unmarshaling")
-	ErrIntOverflowData   = fmt.Errorf("proto: integer overflow")
+	ErrInvalidLengthData        = fmt.Errorf("proto: negative length found during unmarshaling")
+	ErrIntOverflowData          = fmt.Errorf("proto: integer overflow")
+	ErrUnexpectedEndOfGroupData = fmt.Errorf("proto: unexpected end of group")
 )
