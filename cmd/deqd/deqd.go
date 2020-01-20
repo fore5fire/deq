@@ -155,6 +155,11 @@ func run(dbDir, address, statsAddress, certFile, keyFile string, insecure bool) 
 			if err != nil {
 				return fmt.Errorf("setup backup loader: %v", err)
 			}
+			// Allow backup object to get cleaned up after loading if we aren't using
+			// it
+			if !saveBackups {
+				b = nil
+			}
 		}
 	}
 
@@ -181,21 +186,23 @@ func run(dbDir, address, statsAddress, certFile, keyFile string, insecure bool) 
 	}
 	defer store.Close()
 
-	go func() {
-		for {
-			select {
-			case <-ctx.Done():
-				return
-			case <-time.After(backupInterval):
-			}
+	if saveBackups {
+		go func() {
+			for {
+				select {
+				case <-ctx.Done():
+					return
+				case <-time.After(backupInterval):
+				}
 
-			err := b.Run(ctx, store)
-			if err != nil {
-				log.Printf("run backup: %v", err)
-				continue
+				err := b.Run(ctx, store)
+				if err != nil {
+					log.Printf("run backup: %v", err)
+					continue
+				}
 			}
-		}
-	}()
+		}()
+	}
 
 	server := handler.New(store)
 
