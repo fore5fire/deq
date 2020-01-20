@@ -49,16 +49,17 @@ func TestNew(t *testing.T) {
 }
 
 type TestStore struct {
+	Step uint64
 }
 
 const dummyBackupContent = "dummy backup content\n"
 
-func (TestStore) Backup(w io.Writer, after uint64) (uint64, error) {
+func (s TestStore) Backup(w io.Writer, after uint64) (uint64, error) {
 	_, err := w.Write([]byte(dummyBackupContent))
 	if err != nil {
 		return 0, err
 	}
-	return after + 1, nil
+	return after + s.Step, nil
 }
 
 func TestRun(t *testing.T) {
@@ -74,12 +75,14 @@ func TestRun(t *testing.T) {
 	defer os.RemoveAll(dir)
 	conn := "file://" + dir
 
-	store := TestStore{}
+	store := TestStore{
+		Step: 5,
+	}
 
 	backup := &Backup{
 		connection: conn,
 		debug:      TestLogger{t},
-		version:    10,
+		version:    0x08,
 	}
 
 	// Run backup
@@ -88,24 +91,29 @@ func TestRun(t *testing.T) {
 		t.Fatalf("run backup: %v", err)
 	}
 
-	// Verify index file. Index file should have file named for version + 1 in
-	// hex.
+	// Verify index file. Index file should have file named for version (8) +
+	// store.Step (5) in hex.
 	indexData, err := ioutil.ReadFile(path.Join(dir, "index.deqbackup"))
 	if err != nil {
 		t.Fatalf("read index: %v", err)
 	}
-	if diff := cmp.Diff("000000000000000b.deqbackup", string(indexData)); diff != "" {
+	if diff := cmp.Diff("000000000000000d.deqbackup", string(indexData)); diff != "" {
 		t.Errorf("verify index file content:\n%s", diff)
 	}
 
 	// Verify the backup file. The backup file should be named for the starting
 	// version and contain "dummy backup content"
-	backupData, err := ioutil.ReadFile(path.Join(dir, "000000000000000a.deqbackup"))
+	backupData, err := ioutil.ReadFile(path.Join(dir, "0000000000000008.deqbackup"))
 	if err != nil {
 		t.Fatalf("read backup file: %v", err)
 	}
 	if diff := cmp.Diff(dummyBackupContent, string(backupData)); diff != "" {
 		t.Fatalf("verify backup file content:\n%s", err)
+	}
+
+	// Version should now be original version (8) + store step size (5).
+	if diff := cmp.Diff(uint64(0x0d), backup.version); diff != "" {
+		t.Errorf("verify next version:\n%s", diff)
 	}
 }
 

@@ -58,7 +58,7 @@ func (b *Backup) Run(ctx context.Context, store Store) error {
 	}
 	defer bucket.Close()
 
-	// Write to file named for its start time.
+	// Write to file named for its start version.
 	objectName := nameForVersion(b.version)
 	w, err := bucket.NewWriter(ctx, objectName, &blob.WriterOptions{
 		ContentDisposition: "attachment",

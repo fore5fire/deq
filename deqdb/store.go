@@ -597,7 +597,11 @@ func (s *Store) Del(ctx context.Context, topic, id string) error {
 // the previous call to Backup as the value for since. For a full backup, pass 0
 // for the value of since.
 func (s *Store) Backup(w io.Writer, since uint64) (uint64, error) {
-	return s.db.Backup(w, since)
+	v, err := s.db.Backup(w, since)
+	if err != nil {
+		return 0, err
+	}
+	return v + 1, nil
 }
 
 func (s *Store) listenOut() {
