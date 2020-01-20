@@ -1,5 +1,5 @@
 /*
-Package deq provides an embedded key-value event queue.
+Package deqdb provides an embedded key-value event queue.
 
 To use deq as a standalone server, see package gitlab.com/katcheCode/deq/cmd/deqd in this
 repository.
@@ -32,10 +32,15 @@ import (
 	"gitlab.com/katcheCode/deq/deqtype"
 )
 
+type Loader interface {
+	NextBackup(ctx context.Context) (io.ReadCloser, error)
+}
+
 type storeClient struct {
 	*Store
 }
 
+// AsClient returns a DEQ client for s.
 func AsClient(s *Store) deq.Client {
 	return &storeClient{s}
 }
@@ -90,9 +95,10 @@ type Options struct {
 	// to provide details for debugging this package.
 	Debug Logger
 
-	// BackupLoaders is a list of readers from which backup data will be loaded into the
-	// database
-	BackupLoaders []io.Reader
+	// BackupLoader is a list of readers from which backup data will be loaded into the
+	// database. This field is expiremental and maybe be changed in a backwards
+	// incompatible way without notice.
+	BackupLoader Loader
 }
 
 // LoadingMode specifies how to load data into memory. Generally speaking, lower memory is slower
@@ -172,10 +178,10 @@ func Open(opts Options) (*Store, error) {
 		return nil, errFromBadger(err)
 	}
 
-	return open(data.DBFromBadger(db), requeueLimit, opts.UpgradeIfNeeded, info, debug, opts.BackupLoaders)
+	return open(data.DBFromBadger(db), requeueLimit, opts.UpgradeIfNeeded, info, debug, opts.BackupLoader)
 }
 
-func open(db data.DB, defaultRequeueLimit int, allowUpgrade bool, info, debug Logger, backups []io.Reader) (*Store, error) {
+func open(db data.DB, defaultRequeueLimit int, allowUpgrade bool, info, debug Logger, loader Loader) (*Store, error) {
 
 	s := &Store{
 		db:                  db,
@@ -217,10 +223,23 @@ func open(db data.DB, defaultRequeueLimit int, allowUpgrade bool, info, debug Lo
 		}
 	}
 
-	for i, r := range backups {
-		err := db.Load(r, 256)
-		if err != nil {
-			return nil, fmt.Errorf("error loading backup %d: %v", i, err)
+	if loader != nil {
+		for {
+			r, err := loader.NextBackup(context.TODO())
+			if err == io.EOF {
+				break
+			}
+			if err != nil {
+				return nil, fmt.Errorf("get loader: %v", err)
+			}
+			err = db.Load(r, 256)
+			if err != nil {
+				return nil, fmt.Errorf("load backup: %v", err)
+			}
+			err = r.Close()
+			if err != nil {
+				return nil, fmt.Errorf("close backup reader: %v", err)
+			}
 		}
 	}
 
@@ -307,7 +326,7 @@ func (s *Store) Pub(ctx context.Context, e deq.Event) (deq.Event, error) {
 
 		// Publish a topic event if this is the first event on this topic.
 		var topicEvent *deq.Event
-		_, err = data.GetEvent(txn, "deq.events.Topic", e.Topic, "")
+		_, err = data.GetEvent(txn, deq.TopicsName, e.Topic, "")
 		if err != nil && err != deq.ErrNotFound {
 			return deq.Event{}, deqerr.Errorf(deqerr.Internal, "check existing topic: %v", err)
 		}
@@ -578,7 +597,6 @@ func (s *Store) Del(ctx context.Context, topic, id string) error {
 // the previous call to Backup as the value for since. For a full backup, pass 0
 // for the value of since.
 func (s *Store) Backup(w io.Writer, since uint64) (uint64, error) {
-	w.Write([]byte("deqbackup0.0.1\n"))
 	return s.db.Backup(w, since)
 }
 

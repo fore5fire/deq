@@ -14,8 +14,8 @@ import (
 	"syscall"
 	"time"
 
-	"github.com/minio/minio-go"
 	pb "gitlab.com/katcheCode/deq/api/v1/deq"
+	"gitlab.com/katcheCode/deq/cmd/deqd/internal/backup"
 	"gitlab.com/katcheCode/deq/cmd/deqd/internal/handler"
 	"gitlab.com/katcheCode/deq/deqdb"
 	"google.golang.org/grpc"
@@ -51,30 +51,21 @@ var (
 	// keyFile is the path of the tls private key file. Required unless insecure is true.
 	keyFile = os.Getenv("DEQ_TLS_KEY_FILE")
 
-	// region
-	backupRegion = os.Getenv("DEQ_BACKUP_INTERVAL")
+	// backupMode sets the deqd backup behavior. Valid options are "load_only",
+	// "backup_only", "sync", or "disabled". Defaults to "disabled".
+	backupMode = os.Getenv("DEQ_BACKUP_MODE")
 
-	// backupBucket
-	bucket = os.Getenv("DEQ_BACKUP_BUCKET")
+	// backupIntervalSeconds is the number of seconds to wait between writing
+	// backups if enabled. Backups are only read on startup if backup reading is
+	// enabled. Defaults to 5 minutes.
+	backupIntervalSeconds = os.Getenv("DEQ_BACKUP_INTERVAL_SECONDS")
 
-	// backupAccessKeyID
-	accessKeyID = os.Getenv("DEQ_BACKUP_ACCESS_KEY_ID")
-
-	// backupSecretAccessKey
-	secretAccessKey = os.Getenv("DEQ_SYNC_BUCKET_SECRET_ACCESS_KEY")
-
-	// restoreRegion
-	restoreRegion = os.Getenv("DEQ_RESTORE_REGION")
-
-	// restoreBucket
-	restoreBucket = os.Getenv("DEQ_RESTORE_BUCKET")
-
-	// restoreAccessKeyID
-	restoreAccessKeyID = os.Getenv("DEQ_RESTORE_ACCESS_KEY_ID")
-
-	// restoreSecretAccessKey
-	restoreSecretAccessKey = os.Getenv("DEQ_RESTORE_SECRET_ACCESS_KEY")
+	// backupURI is the cloud storage connection string or filesystem directory to
+	// write database backups.
+	backupURI = os.Getenv("DEQ_BACKUP_URI")
 )
+
+var backupInterval = time.Second * 300
 
 func init() {
 	log.SetFlags(log.Ldate | log.Ltime | log.Lshortfile | log.LUTC)
@@ -88,8 +79,16 @@ func main() {
 		var err error
 		requeueLimit, err = strconv.Atoi(limit)
 		if err != nil {
-			log.Fatalf("parse DEQ_REQUEUE_LIMIT from environment: %v", err)
+			log.Fatalf("parse DEQ_DEFAULT_REQUEUE_LIMIT from environment: %v", err)
 		}
+	}
+
+	if backupIntervalSeconds != "" {
+		seconds, err := strconv.ParseInt(backupIntervalSeconds, 10, 32)
+		if err != nil {
+			log.Fatalf("parse DEQ_BACKUP_INTERVAL_SECONDS: %v", err)
+		}
+		backupInterval = time.Duration(seconds) * time.Second
 	}
 
 	if dataDir == "" {
@@ -136,6 +135,29 @@ func run(dbDir, address, statsAddress, certFile, keyFile string, insecure bool) 
 		}()
 	}
 
+	var b *backup.Backup
+	var loader deqdb.Loader
+	loadBackups := strings.EqualFold(backupMode, "load_only") || strings.EqualFold(backupMode, "sync")
+	saveBackups := strings.EqualFold(backupMode, "backup_only") || strings.EqualFold(backupMode, "sync")
+	if loadBackups || saveBackups {
+		var logger backup.Logger
+		var err error
+		if debug {
+			logger = log.New(os.Stdout, "BACKUP DEBUG: ", log.Ltime|log.Lmicroseconds|log.LUTC)
+		}
+		b, err = backup.New(ctx, backupURI, logger)
+		if err != nil {
+			return fmt.Errorf("initialize backups: %v", err)
+		}
+
+		if loadBackups {
+			loader, err = b.NewLoader(ctx)
+			if err != nil {
+				return fmt.Errorf("setup backup loader: %v", err)
+			}
+		}
+	}
+
 	err := os.MkdirAll(dbDir, os.ModePerm)
 	if err != nil {
 		return fmt.Errorf("create data directory %s: %v", dbDir, err)
@@ -146,6 +168,7 @@ func run(dbDir, address, statsAddress, certFile, keyFile string, insecure bool) 
 		KeepCorrupt:         keepCorrupt,
 		DefaultRequeueLimit: requeueLimit,
 		UpgradeIfNeeded:     true,
+		BackupLoader:        loader,
 	}
 
 	if debug {
@@ -157,6 +180,22 @@ func run(dbDir, address, statsAddress, certFile, keyFile string, insecure bool) 
 		return fmt.Errorf("open database: %v", err)
 	}
 	defer store.Close()
+
+	go func() {
+		for {
+			select {
+			case <-ctx.Done():
+				return
+			case <-time.After(backupInterval):
+			}
+
+			err := b.Run(ctx, store)
+			if err != nil {
+				log.Printf("run backup: %v", err)
+				continue
+			}
+		}
+	}()
 
 	server := handler.New(store)
 
@@ -203,33 +242,32 @@ func run(dbDir, address, statsAddress, certFile, keyFile string, insecure bool) 
 	return nil
 }
 
-func newDOBucket(region, bucket, accessKeyID, secretAccessKey string) Bucket {
+// func newBucket(endpoint, bucket, accessKey, secretKey, objectPrefix string) (Bucket, error) {
 
-	endpoint := region + ".digitaloceanspaces.com"
-	client, err := minio.NewWithRegion(endpoint, accessKeyID, secretAccessKey, true, region)
-	if err != nil {
-		panic("invalid bucket parameters: " + err.Error())
-	}
+// 	client, err := minio.New(endpoint, accessKey, secretKey, true)
+// 	if err != nil {
+// 		return nil, err
+// 	}
 
-	return &minioBucket{client, bucket}
-}
+// 	return &minioBucket{client, bucket}
+// }
 
-type Bucket interface {
-	FPutObject(ctx context.Context, name, file string, opts minio.PutObjectOptions) error
-	FGetObject(ctx context.Context, name, file string, opts minio.GetObjectOptions) error
-}
+// type Bucket interface {
+// 	PutObject(ctx context.Context, name string, opts minio.PutObjectOptions) (io.WriteCloser, error)
+// 	GetObject(ctx context.Context, name, file string, opts minio.GetObjectOptions) (io.ReadCloser, error)
+// }
 
-type minioBucket struct {
-	client *minio.Client
-	bucket string
-}
+// type minioBucket struct {
+// 	client *minio.Client
+// 	bucket string
+// }
 
-func (b *minioBucket) PutObject(ctx context.Context, name, file string, opts minio.PutObjectOptions) error {
-	_, err := b.client.FPutObjectWithContext(ctx, b.bucket, name, file, opts)
-	return err
-}
+// func (b *minioBucket) PutObject(ctx context.Context, name, file string, opts minio.PutObjectOptions) error {
+// 	_, err := b.client.PutObjectWithContext(ctx, b.bucket, b.prefix + name, , )
+// 	return err
+// }
 
-func (b *minioBucket) GetObject(ctx context.Context, name, file string, opts minio.GetObjectOptions) error {
-	err := b.client.FGetObjectWithContext(ctx, b.bucket, name, file, opts)
-	return err
-}
+// func (b *minioBucket) GetObject(ctx context.Context, name, file string, opts minio.GetObjectOptions) error {
+// 	err := b.client.FGetObjectWithContext(ctx, b.bucket, name, file, opts)
+// 	return err
+// }

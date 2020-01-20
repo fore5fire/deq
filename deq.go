@@ -137,3 +137,9 @@ var (
 	// ErrIterationComplete is returned after an iterator has returned it's last element.
 	ErrIterationComplete = deqerr.New(deqerr.NotFound, "iteration complete")
 )
+
+const (
+	// TopicsName is the topic containing all topic events. This topic holds the
+	// names of all other topics published in the database.
+	TopicsName = "deq.events.Topic"
+)

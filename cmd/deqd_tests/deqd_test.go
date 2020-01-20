@@ -337,8 +337,8 @@ func TestNoTimeout(t *testing.T) {
 		t.Errorf("extra event %v", e)
 	}
 
-	// Allow one millisecond of lee-way
-	endTime := time.Now()
+	// Allow 5 milliseconds of lee-way
+	endTime := time.Now().Add(time.Millisecond * 5)
 
 	if grpc.Code(subErr) != codes.DeadlineExceeded {
 		t.Fatal(subErr)
