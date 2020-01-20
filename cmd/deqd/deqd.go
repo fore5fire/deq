@@ -52,7 +52,7 @@ var (
 	keyFile = os.Getenv("DEQ_TLS_KEY_FILE")
 
 	// backupMode sets the deqd backup behavior. Valid options are "load_only",
-	// "backup_only", "sync", or "disabled". Defaults to "disabled".
+	// "save_only", "sync", or "disabled". Defaults to "disabled".
 	backupMode = os.Getenv("DEQ_BACKUP_MODE")
 
 	// backupIntervalSeconds is the number of seconds to wait between writing
@@ -72,6 +72,13 @@ func init() {
 	log.SetPrefix("")
 }
 
+var (
+	BackupModeDisabled = "disabled"
+	BackupModeLoadOnly = "load_only"
+	BackupModeSaveOnly = "save_only"
+	BackupModeSync     = "sync"
+)
+
 func main() {
 	log.Println("Starting up")
 
@@ -89,6 +96,15 @@ func main() {
 			log.Fatalf("parse DEQ_BACKUP_INTERVAL_SECONDS: %v", err)
 		}
 		backupInterval = time.Duration(seconds) * time.Second
+	}
+
+	if backupMode == "" {
+		backupMode = BackupModeDisabled
+	}
+	backupMode = strings.ToLower(backupMode)
+	if backupMode != BackupModeDisabled && backupMode != BackupModeSaveOnly &&
+		backupMode != BackupModeLoadOnly && backupMode != BackupModeSync {
+		log.Fatalf("parse DEQ_BACKUP_MODE: invalid option, choose one of %q %q %q %q", BackupModeDisabled, BackupModeLoadOnly, BackupModeSaveOnly, BackupModeSync)
 	}
 
 	if dataDir == "" {
@@ -137,8 +153,8 @@ func run(dbDir, address, statsAddress, certFile, keyFile string, insecure bool) 
 
 	var b *backup.Backup
 	var loader deqdb.Loader
-	loadBackups := strings.EqualFold(backupMode, "load_only") || strings.EqualFold(backupMode, "sync")
-	saveBackups := strings.EqualFold(backupMode, "backup_only") || strings.EqualFold(backupMode, "sync")
+	loadBackups := backupMode == BackupModeLoadOnly || backupMode == BackupModeSync
+	saveBackups := backupMode == BackupModeSaveOnly || backupMode == BackupModeSync
 	if loadBackups || saveBackups {
 		var logger backup.Logger
 		var err error
