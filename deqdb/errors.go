@@ -1,7 +1,7 @@
 package deqdb
 
 import (
-	"github.com/dgraph-io/badger"
+	"github.com/dgraph-io/badger/v2"
 	"gitlab.com/katcheCode/deq/deqerr"
 )
 

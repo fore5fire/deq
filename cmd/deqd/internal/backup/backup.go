@@ -70,12 +70,17 @@ func (b *Backup) Run(ctx context.Context, store Store) error {
 	if err != ctx.Err() {
 		return fmt.Errorf("write backup %q: %v", objectName, err)
 	}
+	b.debug.Printf("got next latest version %d", newVersion)
 	err = w.Close()
 	if err != nil {
 		return fmt.Errorf("close backup %q: %v", objectName, err)
 	}
-
 	b.debug.Printf("backup object %q written", objectName)
+
+	if newVersion == b.version {
+		b.debug.Printf("no index update needed")
+		return nil
+	}
 
 	// Once backup is closed, update the index
 	nextObjectName := nameForVersion(newVersion)

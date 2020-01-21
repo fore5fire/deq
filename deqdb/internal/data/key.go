@@ -9,7 +9,7 @@ import (
 	fmt "fmt"
 	"io"
 
-	"github.com/dgraph-io/badger"
+	"github.com/dgraph-io/badger/v2"
 	"gitlab.com/katcheCode/deq"
 
 	"github.com/gogo/protobuf/proto"

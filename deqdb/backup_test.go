@@ -66,13 +66,13 @@ func TestBackupRestore(t *testing.T) {
 	expect[EventKey{e.Topic, e.ID}] = e
 
 	// Run backup
-	var bufs [2]CloseBuffer
+	var bufs [3]CloseBuffer
 	version, err := backupdb.Backup(&bufs[0], 0)
 	if err != nil {
-		t.Fatalf("run backup: %v", err)
+		t.Fatalf("run first backup: %v", err)
 	}
 	if version == 0 {
-		t.Errorf("run backup 1: no version change")
+		t.Errorf("run first backup: verify version changed: no change")
 	}
 
 	// Write more events to database
@@ -90,10 +90,22 @@ func TestBackupRestore(t *testing.T) {
 	// Backup new writes only
 	newVersion, err := backupdb.Backup(&bufs[1], version)
 	if err != nil {
-		t.Fatalf("run backup 2: %v", err)
+		t.Fatalf("run incremental backup: %v", err)
 	}
-	if newVersion == version {
-		t.Errorf("run backup 2: no version change")
+	if newVersion <= version {
+		t.Errorf("run incremental backup: new version %d is not greater than previous %d", newVersion, version)
+	}
+
+	// Backup with no new data
+	newVersion2, err := backupdb.Backup(&bufs[2], newVersion)
+	if err != nil {
+		t.Fatalf("run empty backup: %v", err)
+	}
+	if diff := cmp.Diff(newVersion, newVersion2); diff != "" {
+		t.Errorf("run empty backup: verify version didn't change\n%s", diff)
+	}
+	if diff := cmp.Diff(0, bufs[2].Len()); diff != "" {
+		t.Errorf("run empty backup: verify no bytes were written:\n%s", diff)
 	}
 
 	// Restore backup to a new database

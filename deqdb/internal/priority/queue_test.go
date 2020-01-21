@@ -35,7 +35,7 @@ func TestPush(t *testing.T) {
 	}
 	actual := NewQueue()
 
-	actual.Push(events[2], priority)
+	actual.Add(events[2], priority)
 
 	if !cmp.Equal(expect.head, actual.head) {
 		t.Errorf("push to empty: \n%v", cmp.Diff(expect.head, actual.head))
@@ -47,7 +47,7 @@ func TestPush(t *testing.T) {
 		Next:     expect.head,
 	}
 
-	actual.Push(events[0], now)
+	actual.Add(events[0], now)
 	if !cmp.Equal(expect.head, actual.head) {
 		t.Errorf("push before head: %v", cmp.Diff(expect.head, actual.head))
 	}
@@ -58,7 +58,7 @@ func TestPush(t *testing.T) {
 		Priority: priority,
 	}
 
-	actual.Push(events[3], priority)
+	actual.Add(events[3], priority)
 	if !cmp.Equal(expect.head, actual.head) {
 		t.Errorf("push to end: %v", cmp.Diff(expect.head, actual.head))
 	}
@@ -70,7 +70,7 @@ func TestPush(t *testing.T) {
 		Next:     expect.head.Next,
 	}
 
-	actual.Push(events[1], priority)
+	actual.Add(events[1], priority)
 	if !cmp.Equal(expect.head, actual.head) {
 		t.Errorf("push after head: %v", cmp.Diff(expect.head, actual.head))
 	}

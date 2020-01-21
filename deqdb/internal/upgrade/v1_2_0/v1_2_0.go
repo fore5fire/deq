@@ -5,7 +5,7 @@ import (
 	"fmt"
 	"time"
 
-	"github.com/dgraph-io/badger"
+	"github.com/dgraph-io/badger/v2"
 	"gitlab.com/katcheCode/deq"
 	"gitlab.com/katcheCode/deq/deqdb/internal/data"
 	"gitlab.com/katcheCode/deq/deqdb/internal/upgrade/batch"

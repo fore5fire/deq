@@ -23,8 +23,8 @@ import (
 	"unicode"
 	"unicode/utf8"
 
-	"github.com/dgraph-io/badger"
-	"github.com/dgraph-io/badger/options"
+	"github.com/dgraph-io/badger/v2"
+	"github.com/dgraph-io/badger/v2/options"
 	"gitlab.com/katcheCode/deq"
 	"gitlab.com/katcheCode/deq/deqdb/internal/data"
 	"gitlab.com/katcheCode/deq/deqdb/internal/upgrade"
@@ -592,14 +592,17 @@ func (s *Store) Del(ctx context.Context, topic, id string) error {
 	return nil
 }
 
-// Backup writes backup data to w more recent than since. It returns the time of
-// the last record written. To do incremental backups, pass the return value of
-// the previous call to Backup as the value for since. For a full backup, pass 0
-// for the value of since.
+// Backup writes backup data to w more recent than since. It returns the version
+// of the last record written. To do incremental backups, pass the return value
+// of the previous call to Backup as the value for since. For a full backup,
+// pass 0 for the value of since.
 func (s *Store) Backup(w io.Writer, since uint64) (uint64, error) {
 	v, err := s.db.Backup(w, since)
 	if err != nil {
 		return 0, err
+	}
+	if v == 0 {
+		return since, nil
 	}
 	return v + 1, nil
 }
