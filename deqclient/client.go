@@ -108,6 +108,10 @@ func (c *Client) Del(ctx context.Context, topic, id string) error {
 	return nil
 }
 
+func (c *Client) Close() error {
+	return nil
+}
+
 func eventStateFromProto(state api.Event_State) deq.State {
 	switch state {
 	case api.Event_OK:

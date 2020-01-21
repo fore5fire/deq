@@ -37,6 +37,10 @@ type Client interface {
 	// If an application needs to represent deletion of an event, it is reccomended to add a `deleted`
 	// field or some other application-level data to store the object's state.
 	Del(ctx context.Context, topic, id string) error
+
+	// Close must be called once the client is no longer needed. Using the client
+	// after Close is called results in undefined behavior.
+	Close() error
 }
 
 // Channel is an event channel in the database.
