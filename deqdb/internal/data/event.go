@@ -8,7 +8,7 @@ import (
 	"strings"
 	"time"
 
-	"github.com/dgraph-io/badger"
+	"github.com/dgraph-io/badger/v2"
 	proto "github.com/gogo/protobuf/proto"
 	"gitlab.com/katcheCode/deq"
 )

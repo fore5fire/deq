@@ -1,5 +1,5 @@
 /*
-Package deq provides an embedded key-value event queue.
+Package deqdb provides an embedded key-value event queue.
 
 To use deq as a standalone server, see package gitlab.com/katcheCode/deq/cmd/deqd in this
 repository.
@@ -13,6 +13,8 @@ import (
 	"bytes"
 	"context"
 	"errors"
+	"fmt"
+	"io"
 	"log"
 	"os"
 	"strings"
@@ -21,8 +23,8 @@ import (
 	"unicode"
 	"unicode/utf8"
 
-	"github.com/dgraph-io/badger"
-	"github.com/dgraph-io/badger/options"
+	"github.com/dgraph-io/badger/v2"
+	"github.com/dgraph-io/badger/v2/options"
 	"gitlab.com/katcheCode/deq"
 	"gitlab.com/katcheCode/deq/deqdb/internal/data"
 	"gitlab.com/katcheCode/deq/deqdb/internal/upgrade"
@@ -30,10 +32,15 @@ import (
 	"gitlab.com/katcheCode/deq/deqtype"
 )
 
+type Loader interface {
+	NextBackup(ctx context.Context) (io.ReadCloser, error)
+}
+
 type storeClient struct {
 	*Store
 }
 
+// AsClient returns a DEQ client for s.
 func AsClient(s *Store) deq.Client {
 	return &storeClient{s}
 }
@@ -87,6 +94,11 @@ type Options struct {
 	// Debug is used to log debug information. It Defaults to disabled, and should usually only be set
 	// to provide details for debugging this package.
 	Debug Logger
+
+	// BackupLoader is a list of readers from which backup data will be loaded into the
+	// database. This field is expiremental and maybe be changed in a backwards
+	// incompatible way without notice.
+	BackupLoader Loader
 }
 
 // LoadingMode specifies how to load data into memory. Generally speaking, lower memory is slower
@@ -166,10 +178,10 @@ func Open(opts Options) (*Store, error) {
 		return nil, errFromBadger(err)
 	}
 
-	return open(data.DBFromBadger(db), requeueLimit, opts.UpgradeIfNeeded, info, debug)
+	return open(data.DBFromBadger(db), requeueLimit, opts.UpgradeIfNeeded, info, debug, opts.BackupLoader)
 }
 
-func open(db data.DB, defaultRequeueLimit int, allowUpgrade bool, info, debug Logger) (*Store, error) {
+func open(db data.DB, defaultRequeueLimit int, allowUpgrade bool, info, debug Logger, loader Loader) (*Store, error) {
 
 	s := &Store{
 		db:                  db,
@@ -208,6 +220,26 @@ func open(db data.DB, defaultRequeueLimit int, allowUpgrade bool, info, debug Lo
 		err = upgrade.DB(context.TODO(), s.db, version)
 		if err != nil {
 			return nil, deqerr.Errorf(deqerr.GetCode(err), "upgrade db: %v", err)
+		}
+	}
+
+	if loader != nil {
+		for {
+			r, err := loader.NextBackup(context.TODO())
+			if err == io.EOF {
+				break
+			}
+			if err != nil {
+				return nil, fmt.Errorf("get loader: %v", err)
+			}
+			err = db.Load(r, 256)
+			if err != nil {
+				return nil, fmt.Errorf("load backup: %v", err)
+			}
+			err = r.Close()
+			if err != nil {
+				return nil, fmt.Errorf("close backup reader: %v", err)
+			}
 		}
 	}
 
@@ -294,7 +326,7 @@ func (s *Store) Pub(ctx context.Context, e deq.Event) (deq.Event, error) {
 
 		// Publish a topic event if this is the first event on this topic.
 		var topicEvent *deq.Event
-		_, err = data.GetEvent(txn, "deq.events.Topic", e.Topic, "")
+		_, err = data.GetEvent(txn, deq.TopicsName, e.Topic, "")
 		if err != nil && err != deq.ErrNotFound {
 			return deq.Event{}, deqerr.Errorf(deqerr.Internal, "check existing topic: %v", err)
 		}
@@ -558,6 +590,21 @@ func (s *Store) Del(ctx context.Context, topic, id string) error {
 	}
 
 	return nil
+}
+
+// Backup writes backup data to w more recent than since. It returns the version
+// of the last record written. To do incremental backups, pass the return value
+// of the previous call to Backup as the value for since. For a full backup,
+// pass 0 for the value of since.
+func (s *Store) Backup(w io.Writer, since uint64) (uint64, error) {
+	v, err := s.db.Backup(w, since)
+	if err != nil {
+		return 0, err
+	}
+	if v == 0 {
+		return since, nil
+	}
+	return v + 1, nil
 }
 
 func (s *Store) listenOut() {

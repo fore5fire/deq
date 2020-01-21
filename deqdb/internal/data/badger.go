@@ -1,7 +1,7 @@
 package data
 
 import (
-	"github.com/dgraph-io/badger"
+	"github.com/dgraph-io/badger/v2"
 )
 
 // DBFromBadger creates a DB using a badger DB as its data store.

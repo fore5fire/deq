@@ -7,7 +7,7 @@ import (
 	"testing"
 	"time"
 
-	"github.com/dgraph-io/badger"
+	"github.com/dgraph-io/badger/v2"
 	"github.com/gogo/protobuf/proto"
 
 	"github.com/google/go-cmp/cmp"
@@ -18,9 +18,10 @@ import (
 
 var long bool
 
-func init() {
+func TestMain(m *testing.M) {
 	flag.BoolVar(&long, "long", false, "run long tests")
 	flag.Parse()
+	m.Run()
 }
 
 type TestLogger struct {
@@ -41,7 +42,7 @@ func newTestDB(tb testing.TB) (*Store, func()) {
 	info := &TestLogger{tb, "INFO"}
 	debug := &TestLogger{tb, "DEBUG"}
 
-	db, err := open(memdb, 40, false, info, debug)
+	db, err := open(memdb, 40, false, info, debug, nil)
 	if err != nil {
 		tb.Fatalf("open db: %v", err)
 	}

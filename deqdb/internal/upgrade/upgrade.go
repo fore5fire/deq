@@ -6,7 +6,7 @@ import (
 	"fmt"
 	"log"
 
-	"github.com/dgraph-io/badger"
+	"github.com/dgraph-io/badger/v2"
 	"gitlab.com/katcheCode/deq/deqdb/internal/data"
 	"gitlab.com/katcheCode/deq/deqdb/internal/upgrade/v1_1_0"
 	"gitlab.com/katcheCode/deq/deqdb/internal/upgrade/v1_2_0"
