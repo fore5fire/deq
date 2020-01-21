@@ -1,4 +1,3 @@
-
 stages:
   - build
   - test
@@ -6,20 +5,20 @@ stages:
 
 build-server:
   stage: build
-  image: golang:1.12.7-alpine
+  image: golang:1.13.6-alpine
   variables:
-    CGO_ENABLED: '0'
+    CGO_ENABLED: "0"
     GOOS: linux
     GOARCH: amd64
-    GOMAXPROCS: '128'
+    GOMAXPROCS: "128"
   artifacts:
     paths:
-    - build/deqd
-    - build/deqctl
+      - build/deqd
+      - build/deqctl
   script:
-  - apk add --no-cache git
-  - go build -o build/deqd ./cmd/deqd
-  - go build -o build/deqctl ./cmd/deqctl
+    - apk add --no-cache git
+    - go build -o build/deqd ./cmd/deqd
+    - go build -o build/deqctl ./cmd/deqctl
 
 # api-tests:
 #   stage: test
@@ -40,9 +39,9 @@ deploy-deqd:
   services:
     - docker:dind
   script:
-  - echo "$CI_JOB_TOKEN" | docker login -u gitlab-ci-token --password-stdin $CI_REGISTRY
-  - docker build -t $CI_REGISTRY_IMAGE:$CI_COMMIT_REF_NAME build/
-  - docker push $CI_REGISTRY_IMAGE:$CI_COMMIT_REF_NAME
+    - echo "$CI_JOB_TOKEN" | docker login -u gitlab-ci-token --password-stdin $CI_REGISTRY
+    - docker build -t $CI_REGISTRY_IMAGE:$CI_COMMIT_REF_NAME build/
+    - docker push $CI_REGISTRY_IMAGE:$CI_COMMIT_REF_NAME
 
 deploy-deqctl:
   stage: deploy
@@ -52,6 +51,6 @@ deploy-deqctl:
   services:
     - docker:dind
   script:
-  - echo "$CI_JOB_TOKEN" | docker login -u gitlab-ci-token --password-stdin $CI_REGISTRY
-  - docker build -t $CI_REGISTRY_IMAGE/deqctl:$CI_COMMIT_REF_NAME -f build/Dockerfile-deqctl build/
-  - docker push $CI_REGISTRY_IMAGE/deqctl:$CI_COMMIT_REF_NAME
+    - echo "$CI_JOB_TOKEN" | docker login -u gitlab-ci-token --password-stdin $CI_REGISTRY
+    - docker build -t $CI_REGISTRY_IMAGE/deqctl:$CI_COMMIT_REF_NAME -f build/Dockerfile-deqctl build/
+    - docker push $CI_REGISTRY_IMAGE/deqctl:$CI_COMMIT_REF_NAME
