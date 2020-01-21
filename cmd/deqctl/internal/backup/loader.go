@@ -22,17 +22,16 @@ type loader struct {
 	debug  log.Logger
 }
 
-func (b *Backup) NewLoader(ctx context.Context) (deqdb.Loader, error) {
-
-	bucket, err := blob.OpenBucket(ctx, b.connection)
+func NewLoader(ctx context.Context, connection string, debug log.Logger) (deqdb.Loader, error) {
+	bucket, err := blob.OpenBucket(ctx, connection)
 	if err != nil {
 		return nil, fmt.Errorf("open bucket: %v", err)
 	}
 
 	return &loader{
 		bucket: bucket,
+		debug:  debug,
 		it:     bucket.List(nil),
-		debug:  b.debug,
 	}, nil
 }
 

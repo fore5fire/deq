@@ -15,7 +15,7 @@ import (
 	"encoding/base64"
 	"flag"
 	"fmt"
-	"log"
+	stdlog "log"
 	"math/rand"
 	"os"
 	"strconv"
@@ -23,11 +23,14 @@ import (
 	"sync"
 	"time"
 
+	"github.com/dgraph-io/badger/v2"
 	"gitlab.com/katcheCode/deq"
 	"gitlab.com/katcheCode/deq/ack"
+	"gitlab.com/katcheCode/deq/cmd/deqctl/internal/backup"
 	"gitlab.com/katcheCode/deq/deqclient"
 	"gitlab.com/katcheCode/deq/deqdb"
 	"gitlab.com/katcheCode/deq/deqopt"
+	"gitlab.com/katcheCode/deq/internal/log"
 	"google.golang.org/grpc"
 	"google.golang.org/grpc/credentials"
 )
@@ -46,12 +49,16 @@ func main() {
 		fmt.Fprintln(w, "get: Get an event.")
 		fmt.Fprintln(w, "delete: Delete an event.")
 		fmt.Fprintln(w, "verify: Verify the database integrity. Only valid when a local database is opened using -dir.")
+		fmt.Fprintln(w, "backup save: save a backup to a directory or bucket. Only valid when a local database is opened using -dir.")
+		fmt.Fprintln(w, "backup load: load a backup from a directory or bucket. Only valid when a local database is opened using -dir.")
+		fmt.Fprintln(w, "keys: Print the individual keys in the database for debugging. Only valid when a local database is opened using -dir.")
+		// fmt.Fprintln(w, "repair topics: Attempt to rebuild the topics list by iterating events in the database. Only valid when a local database is opened using -dir.")
 		fmt.Fprintln(w, "")
 		fmt.Fprintln(w, "Available Flags:")
 		flag.PrintDefaults()
 	}
 
-	var host, channel, nameOverride, dir, min, max string
+	var host, channel, nameOverride, dir, min, max, backupconn string
 	var insecure, useIndex, all, debug, reversed, deleteInvalid bool
 	var timeout, idle, workers int
 
@@ -70,6 +77,7 @@ func main() {
 	flag.StringVar(&max, "max", "", "Only list events with ID less than or equal to max.")
 	flag.BoolVar(&reversed, "reverse", false, "List events from highest to lowest ID.")
 	flag.BoolVar(&deleteInvalid, "delete-invalid", false, "Delete invalid events.")
+	flag.StringVar(&backupconn, "backupconn", "", "Backup directory or bucket connection string, parsed by the Go CDK blob package.")
 
 	flag.Parse()
 
@@ -95,7 +103,7 @@ func main() {
 			KeepCorrupt: true,
 		}
 		if debug {
-			opts.Debug = log.New(os.Stdout, "DEBUG: ", log.LstdFlags)
+			opts.Debug = stdlog.New(os.Stdout, "DEBUG: ", stdlog.LstdFlags)
 		}
 		db, err := deqdb.Open(opts)
 		if err != nil {
@@ -302,6 +310,105 @@ func main() {
 			fmt.Printf("deleted %d events on topic %q\n", delCounts[topic], topic)
 		}
 
+	case "backup":
+		switch flag.Arg(1) {
+		case "save":
+			fmt.Fprintf(os.Stderr, "Not implemented\n")
+			os.Exit(1)
+			// opts := deqdb.Options{
+			// 	Dir:         dir,
+			// 	KeepCorrupt: true,
+			// }
+			// if debug {
+			// 	opts.Debug = stdlog.New(os.Stdout, "DEBUG: ", stdlog.LstdFlags)
+			// }
+			// db, err := deqdb.Open(opts)
+			// if err != nil {
+			// 	fmt.Printf("open database: %v\n", err)
+			// 	os.Exit(1)
+			// }
+
+			// db.Backup()
+
+		case "load":
+			if backupconn == "" {
+				fmt.Fprintf(os.Stderr, "-backupconn is required\n")
+			}
+			if dir == "" {
+				fmt.Fprintf(os.Stderr, "-dir is required\n")
+			}
+			var logger log.Logger
+			if debug {
+				logger = stdlog.New(os.Stdout, "DEBUG: ", stdlog.LstdFlags)
+			}
+
+			loader, err := backup.NewLoader(ctx, backupconn, logger)
+			if err != nil {
+				fmt.Fprintf(os.Stderr, "create backup loader: %v\n", err)
+			}
+
+			opts := deqdb.Options{
+				Dir:          dir,
+				KeepCorrupt:  true,
+				BackupLoader: loader,
+			}
+			if debug {
+				opts.Debug = stdlog.New(os.Stdout, "DEBUG: ", stdlog.LstdFlags)
+			}
+			db, err := deqdb.Open(opts)
+			if err != nil {
+				fmt.Fprintf(os.Stderr, "open database: %v\n", err)
+				os.Exit(1)
+			}
+			err = db.Close()
+			if err != nil {
+				fmt.Fprintf(os.Stderr, "close database: %v\n", err)
+				os.Exit(1)
+			}
+
+		default:
+			fmt.Fprintf(os.Stderr, "Error: unknown command %s\n\n", cmd)
+			flag.Usage()
+		}
+
+	case "keys":
+		if dir == "" {
+			fmt.Fprintf(os.Stderr, "-dir is required\n")
+		}
+		opts := badger.DefaultOptions(dir).WithReadOnly(true)
+		db, err := badger.Open(opts)
+		if err != nil {
+			fmt.Fprintf(os.Stderr, "open badger db: %v\n", err)
+			os.Exit(1)
+		}
+		txn := db.NewTransaction(false)
+		it := txn.NewIterator(badger.DefaultIteratorOptions)
+		defer it.Close()
+
+		var count uint64
+		for it.Rewind(); it.Valid(); it.Next() {
+			count++
+			item := it.Item()
+			err := item.Value(func(val []byte) error {
+				fmt.Printf("key: %q\nval: %q\nversion: %x\n\n", item.Key(), val, item.Version())
+				return nil
+			})
+			if err != nil {
+				fmt.Printf("get value for key %q: %v\n", item.Key(), err)
+			}
+		}
+
+		fmt.Printf("got %d items\n", count)
+
+	// case "repair":
+	// 	switch flag.Arg(1) {
+	// 	case "topics":
+
+	// 	default:
+	// 		fmt.Fprintf(os.Stderr, "Error: unknown command %s\n\n", cmd)
+	// 		flag.Usage()
+	// 	}
+
 	case "help", "":
 		flag.CommandLine.SetOutput(os.Stdout)
 		flag.Usage()
@@ -319,7 +426,7 @@ func open(dir, host, nameOverride string, insecure, debug bool) (deq.Client, err
 			KeepCorrupt: true,
 		}
 		if debug {
-			opts.Debug = log.New(os.Stdout, "DEBUG: ", log.LstdFlags)
+			opts.Debug = stdlog.New(os.Stdout, "DEBUG: ", stdlog.LstdFlags)
 		}
 		db, err := deqdb.Open(opts)
 		if err != nil {

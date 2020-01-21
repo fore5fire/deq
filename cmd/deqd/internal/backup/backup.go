@@ -3,28 +3,27 @@ package backup
 import (
 	"context"
 	"fmt"
-	"log"
 
+	"gitlab.com/katcheCode/deq/internal/backup"
+	"gitlab.com/katcheCode/deq/internal/log"
 	"gocloud.dev/blob"
 	_ "gocloud.dev/blob/azureblob"
 	_ "gocloud.dev/blob/fileblob"
 	_ "gocloud.dev/blob/gcsblob"
 	_ "gocloud.dev/blob/s3blob"
+	"gocloud.dev/gcerrors"
 )
-
-const backupExtension = ".deqbackup"
-const indexName = "index" + backupExtension
 
 type Backup struct {
 	version    uint64
 	connection string
-	debug      Logger
+	debug      log.Logger
 }
 
-func New(ctx context.Context, connection string, debug Logger) (*Backup, error) {
+func New(ctx context.Context, connection string, debug log.Logger) (*Backup, error) {
 
 	if debug == nil {
-		debug = noopLogger{}
+		debug = log.NoOpLogger{}
 	}
 
 	b := &Backup{
@@ -37,13 +36,19 @@ func New(ctx context.Context, connection string, debug Logger) (*Backup, error) 
 	}
 	defer bucket.Close()
 
-	// Read current version from index
-	versionBuf, err := bucket.ReadAll(ctx, indexName)
+	// Read current version from index if it exists
+	versionBuf, err := bucket.ReadAll(ctx, backup.IndexName)
+	if gcerrors.Code(err) == gcerrors.NotFound {
+		return b, nil
+	}
+	if err != nil {
+		return nil, fmt.Errorf("read index: %v", err)
+	}
 	versionStr := string(versionBuf)
 
-	version, err := versionForName(versionStr)
+	version, err := backup.VersionForName(versionStr)
 	if err != nil {
-		log.Printf("parse \".deqbackup\" object %q: %v - skipping", versionStr, err)
+		return nil, fmt.Errorf("parse index content: %v", err)
 	}
 
 	b.version = version
@@ -51,7 +56,7 @@ func New(ctx context.Context, connection string, debug Logger) (*Backup, error) 
 	return b, nil
 }
 
-func (b *Backup) Run(ctx context.Context, store Store) error {
+func (b *Backup) Run(ctx context.Context, store backup.Store) error {
 	bucket, err := blob.OpenBucket(ctx, b.connection)
 	if err != nil {
 		return fmt.Errorf("open bucket: %v", err)
@@ -59,7 +64,7 @@ func (b *Backup) Run(ctx context.Context, store Store) error {
 	defer bucket.Close()
 
 	// Write to file named for its start version.
-	objectName := nameForVersion(b.version)
+	objectName := backup.NameForVersion(b.version)
 	w, err := bucket.NewWriter(ctx, objectName, &blob.WriterOptions{
 		ContentDisposition: "attachment",
 	})
@@ -83,15 +88,15 @@ func (b *Backup) Run(ctx context.Context, store Store) error {
 	}
 
 	// Once backup is closed, update the index
-	nextObjectName := nameForVersion(newVersion)
-	err = bucket.WriteAll(ctx, indexName, []byte(nextObjectName), nil)
+	nextObjectName := backup.NameForVersion(newVersion)
+	err = bucket.WriteAll(ctx, backup.IndexName, []byte(nextObjectName), nil)
 	if err != nil {
 		return fmt.Errorf("write index: %w", err)
 	}
 
 	b.version = newVersion
 
-	b.debug.Printf("%q written to index file %q", nextObjectName, indexName)
+	b.debug.Printf("%q written to index file %q", nextObjectName, backup.IndexName)
 
 	return nil
 }
