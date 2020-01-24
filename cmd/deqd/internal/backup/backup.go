@@ -57,9 +57,11 @@ func New(ctx context.Context, connection string, debug log.Logger) (*Backup, err
 }
 
 func (b *Backup) Run(ctx context.Context, store backup.Store) error {
+	b.debug.Printf("starting backup to %", b.connection)
+
 	bucket, err := blob.OpenBucket(ctx, b.connection)
 	if err != nil {
-		return fmt.Errorf("open bucket: %v", err)
+		return fmt.Errorf("open bucket %q: %v", b.connection, err)
 	}
 	defer bucket.Close()
 

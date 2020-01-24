@@ -248,6 +248,7 @@ func run(dbDir, address, statsAddress, certFile, keyFile string, insecure bool) 
 				return handler(ctx, req)
 			}),
 			grpc.StreamInterceptor(func(srv interface{}, ss grpc.ServerStream, info *grpc.StreamServerInfo, handler grpc.StreamHandler) error {
+				ctx := ss.Context()
 				md, ok := metadata.FromIncomingContext(ctx)
 				if !ok {
 					return status.Error(codes.PermissionDenied, "no authorization token")
