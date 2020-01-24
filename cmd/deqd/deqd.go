@@ -120,7 +120,7 @@ func main() {
 		listenAddress = ":8080"
 	}
 
-	// run start code in seperate function so we can both defer and os.Exit
+	// run start code in separate function so we can both defer and os.Exit
 	err := run(dataDir, listenAddress, statsAddress, certFile, keyFile, insecure)
 	if err != nil {
 		stdlog.Fatal(err)
@@ -234,7 +234,7 @@ func run(dbDir, address, statsAddress, certFile, keyFile string, insecure bool) 
 			grpc.UnaryInterceptor(func(ctx context.Context, req interface{}, info *grpc.UnaryServerInfo, handler grpc.UnaryHandler) (resp interface{}, err error) {
 				md, ok := metadata.FromIncomingContext(ctx)
 				if !ok {
-					return nil, status.Error(codes.PermissionDenied, "invalid authorization token")
+					return nil, status.Error(codes.PermissionDenied, "no authorization token")
 				}
 
 				authorization := md.Get("authorization")
@@ -243,14 +243,14 @@ func run(dbDir, address, statsAddress, certFile, keyFile string, insecure bool) 
 				}
 
 				if authorization[0] != authSharedSecret {
-					return nil, status.Error(codes.PermissionDenied, "invalid authorization token")
+					return nil, status.Error(codes.PermissionDenied, "failed to validate authorization token")
 				}
 				return handler(ctx, req)
 			}),
 			grpc.StreamInterceptor(func(srv interface{}, ss grpc.ServerStream, info *grpc.StreamServerInfo, handler grpc.StreamHandler) error {
 				md, ok := metadata.FromIncomingContext(ctx)
 				if !ok {
-					return status.Error(codes.PermissionDenied, "invalid authorization token")
+					return status.Error(codes.PermissionDenied, "no authorization token")
 				}
 
 				authorization := md.Get("authorization")
@@ -259,7 +259,7 @@ func run(dbDir, address, statsAddress, certFile, keyFile string, insecure bool) 
 				}
 
 				if authorization[0] != authSharedSecret {
-					return status.Error(codes.PermissionDenied, "invalid authorization token")
+					return status.Error(codes.PermissionDenied, "failed to validate authorization token")
 				}
 				return handler(srv, ss)
 			}),
