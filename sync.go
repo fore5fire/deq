@@ -56,12 +56,7 @@ func SyncTo(ctx context.Context, dst Client, src Channel) error {
 
 func syncWorker(ctx context.Context, dst Client, queue <-chan Event) error {
 	for e := range queue {
-		_, err := dst.Pub(ctx, Event{
-			ID:         e.ID,
-			CreateTime: e.CreateTime,
-			Topic:      e.Topic,
-			Payload:    e.Payload,
-		})
+		_, err := dst.Pub(ctx, e)
 		if err != nil {
 			return err
 		}
