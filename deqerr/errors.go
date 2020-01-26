@@ -26,6 +26,11 @@ const (
 	NotFound
 	// Canceled indicates the request was canceled before it completed.
 	Canceled
+	// PermissionDenied indicates the requestor does not have permission to
+	// perform the request.
+	PermissionDenied
+	// Unauthenticated indicates the client could not be authenticated.
+	Unauthenticated
 )
 
 // String returns the string representation of c.

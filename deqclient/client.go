@@ -227,6 +227,10 @@ func errFromGRPC(ctx context.Context, err error) error {
 		code = deqerr.Invalid
 	case codes.Canceled, codes.DeadlineExceeded:
 		code = deqerr.Canceled
+	case codes.PermissionDenied:
+		code = deqerr.PermissionDenied
+	case codes.Unauthenticated:
+		code = deqerr.Unauthenticated
 	default:
 		code = deqerr.Unknown
 	}

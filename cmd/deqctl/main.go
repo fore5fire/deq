@@ -23,6 +23,7 @@ import (
 	"strconv"
 	"strings"
 	"sync"
+	"syscall"
 	"time"
 
 	"github.com/dgraph-io/badger/v2"
@@ -33,6 +34,7 @@ import (
 	"gitlab.com/katcheCode/deq/deqdb"
 	"gitlab.com/katcheCode/deq/deqopt"
 	"gitlab.com/katcheCode/deq/internal/log"
+	"golang.org/x/crypto/ssh/terminal"
 	"google.golang.org/grpc"
 	"google.golang.org/grpc/credentials"
 )
@@ -616,15 +618,26 @@ func OpenRemote(uri string, debug bool) (deq.Client, error) {
 	if err != nil {
 		return nil, fmt.Errorf("parse connection URI: %v", err)
 	}
-	if u.Scheme != "http" && u.Scheme != "https" {
+	if u.Scheme != "h2c" && u.Scheme != "https" {
 		return nil, fmt.Errorf("parse connection URI: remote client requires scheme h2c:// or https://")
 	}
 	if u.Path != "" {
 		return nil, fmt.Errorf("parse connection URI: path is not permitted with scheme h2c:// or https://")
 	}
 
+	fmt.Print("Enter shared secret: ")
+	rawSecret, err := terminal.ReadPassword(int(syscall.Stdin))
+	if err != nil {
+		return nil, fmt.Errorf("read password from terminal: %v", err)
+	}
+	secret := string(rawSecret)
+	fmt.Println()
+
 	var opts []grpc.DialOption
-	if u.Scheme == "http" {
+	if secret != "" {
+		opts = append(opts, grpc.WithPerRPCCredentials(&sharedSecretCredentials{secret}))
+	}
+	if u.Scheme == "h2c" {
 		opts = append(opts, grpc.WithInsecure())
 	} else {
 		creds := credentials.NewTLS(&tls.Config{
@@ -658,4 +671,18 @@ func OpenRemote(uri string, debug bool) (deq.Client, error) {
 
 func printEvent(e deq.Event) {
 	fmt.Printf("id: %v\n topic: %s\nstate: %v\nsend count: %d\nselector: %s\nselector version: %d\nindexes: %v\npayload: %s\n\n", e.ID, e.Topic, e.State, e.SendCount, e.Selector, e.SelectorVersion, e.Indexes, base64.StdEncoding.EncodeToString(e.Payload))
+}
+
+type sharedSecretCredentials struct {
+	Secret string
+}
+
+func (c *sharedSecretCredentials) GetRequestMetadata(ctx context.Context, uri ...string) (map[string]string, error) {
+	return map[string]string{
+		"authorization": c.Secret,
+	}, nil
+}
+
+func (*sharedSecretCredentials) RequireTransportSecurity() bool {
+	return false
 }

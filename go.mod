@@ -10,7 +10,7 @@ require (
 	github.com/google/go-cmp v0.3.0
 	github.com/minio/minio-go v6.0.14+incompatible // indirect
 	gocloud.dev v0.18.0
-	golang.org/x/crypto v0.0.0-20200109152110-61a87790db17 // indirect
+	golang.org/x/crypto v0.0.0-20200109152110-61a87790db17
 	google.golang.org/grpc v1.21.1
 )
 
