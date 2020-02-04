@@ -4,6 +4,7 @@ import (
 	"context"
 	"flag"
 	"fmt"
+	"os"
 	"testing"
 	"time"
 
@@ -21,7 +22,7 @@ var long bool
 func TestMain(m *testing.M) {
 	flag.BoolVar(&long, "long", false, "run long tests")
 	flag.Parse()
-	m.Run()
+	os.Exit(m.Run())
 }
 
 type TestLogger struct {

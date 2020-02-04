@@ -11,32 +11,25 @@ package main
 
 import (
 	"context"
-	"crypto/tls"
 	"encoding/base64"
-	"errors"
 	"flag"
 	"fmt"
 	stdlog "log"
 	"math/rand"
-	"net/url"
 	"os"
 	"strconv"
 	"strings"
 	"sync"
-	"syscall"
 	"time"
 
 	"github.com/dgraph-io/badger/v2"
 	"gitlab.com/katcheCode/deq"
 	"gitlab.com/katcheCode/deq/ack"
 	"gitlab.com/katcheCode/deq/cmd/deqctl/internal/backup"
-	"gitlab.com/katcheCode/deq/deqclient"
+	_ "gitlab.com/katcheCode/deq/deqclient"
 	"gitlab.com/katcheCode/deq/deqdb"
 	"gitlab.com/katcheCode/deq/deqopt"
 	"gitlab.com/katcheCode/deq/internal/log"
-	"golang.org/x/crypto/ssh/terminal"
-	"google.golang.org/grpc"
-	"google.golang.org/grpc/credentials"
 )
 
 func main() {
@@ -76,7 +69,6 @@ func main() {
 	flag.BoolVar(&insecure, "insecure", false, "Disables tls.")
 	flag.BoolVar(&useIndex, "index", false, "Use the index instead of IDs for getting events.")
 	flag.BoolVar(&all, "all", false, "Sync or delete all events of the topic.")
-	flag.BoolVar(&debug, "debug", false, "Enable debug logging.")
 	flag.StringVar(&min, "min", "", "Only list events with ID greater than or equal to min.")
 	flag.StringVar(&max, "max", "", "Only list events with ID less than or equal to max.")
 	flag.BoolVar(&reversed, "reverse", false, "List events from highest to lowest ID.")
@@ -105,7 +97,11 @@ func main() {
 				return fmt.Errorf("-uri is required")
 			}
 
-			db, err := OpenLocal(uri, debug, nil)
+			opts, err := deqdb.ParseConnectionString(uri)
+			if err != nil {
+				return fmt.Errorf("parse connection string: %v", err)
+			}
+			db, err := deqdb.Open(opts)
 			if err != nil {
 				return fmt.Errorf("open database: %v", err)
 			}
@@ -121,7 +117,7 @@ func main() {
 				return fmt.Errorf("topic is required")
 			}
 
-			deqc, err := Open(uri, debug)
+			deqc, err := deq.Open(uri)
 			if err != nil {
 				return fmt.Errorf("open client: %v", err)
 			}
@@ -154,7 +150,7 @@ func main() {
 				return fmt.Errorf("topic is required")
 			}
 
-			deqc, err := Open(uri, debug)
+			deqc, err := deq.Open(uri)
 			if err != nil {
 				return fmt.Errorf("open client: %v", err)
 			}
@@ -202,7 +198,7 @@ func main() {
 				return fmt.Errorf("event is required")
 			}
 
-			deqc, err := Open(uri, debug)
+			deqc, err := deq.Open(uri)
 			if err != nil {
 				return fmt.Errorf("open client: %v", err)
 			}
@@ -238,7 +234,7 @@ func main() {
 				return fmt.Errorf("exactly one of argument <id> or flag -all is required")
 			}
 
-			deqc, err := Open(uri, debug)
+			deqc, err := deq.Open(uri)
 			if err != nil {
 				return fmt.Errorf("open client: %v", err)
 			}
@@ -360,7 +356,15 @@ func main() {
 					return fmt.Errorf("create backup loader: %v", err)
 				}
 
-				db, err := OpenLocal(uri, debug, loader)
+				opts, err := deqdb.ParseConnectionString(uri)
+				if err != nil {
+					return fmt.Errorf("parse connection string: %v", err)
+				}
+				opts.BackupLoader = loader
+				db, err := deqdb.Open(opts)
+				if err != nil {
+					return fmt.Errorf("open db: %v", err)
+				}
 				err = db.Close()
 				if err != nil {
 					return fmt.Errorf("close database: %v", err)
@@ -375,7 +379,7 @@ func main() {
 			if uri == "" {
 				fmt.Fprintf(os.Stderr, "-uri is required\n")
 			}
-			params, err := ParseLocal(uri)
+			deqOptions, err := deqdb.ParseConnectionString(uri)
 			if err != nil {
 				return fmt.Errorf("%v", err)
 			}
@@ -383,13 +387,11 @@ func main() {
 			logger := &log.BadgerLogger{
 				Error: stdlog.New(os.Stderr, "", stdlog.LstdFlags),
 				Warn:  stdlog.New(os.Stderr, "WARN: ", stdlog.LstdFlags),
-			}
-			if debug {
-				logger.Info = stdlog.New(os.Stdout, "INFO: ", stdlog.LstdFlags)
-				logger.Debug = stdlog.New(os.Stdout, "DEBUG: ", stdlog.LstdFlags)
+				Info:  deqOptions.Info,
+				Debug: deqOptions.Debug,
 			}
 			opts := badger.
-				DefaultOptions(params.Dir).
+				DefaultOptions(deqOptions.Dir).
 				WithReadOnly(true).
 				WithLogger(logger)
 
@@ -428,7 +430,7 @@ func main() {
 				return fmt.Errorf("-target is required")
 			}
 
-			source, err := Open(uri, debug)
+			source, err := deq.Open(uri)
 			if err != nil {
 				return fmt.Errorf("open source client: %v", err)
 			}
@@ -439,7 +441,7 @@ func main() {
 				}
 			}()
 
-			target, err := Open(syncTarget, debug)
+			target, err := deq.Open(syncTarget)
 			if err != nil {
 				fmt.Fprintf(os.Stderr, "open target client: %v\n", err)
 			}
@@ -544,145 +546,6 @@ func syncTopic(ctx context.Context, source, target deq.Client, topic, channel st
 	}
 }
 
-func Open(uri string, debug bool) (deq.Client, error) {
-	u, err := url.Parse(uri)
-	if err != nil {
-		return nil, fmt.Errorf("parse connection URI: %v", err)
-	}
-
-	switch u.Scheme {
-	case "file":
-		if u.Host != "" {
-			return nil, fmt.Errorf("parse connection URI: host is not valid with scheme file://")
-		}
-		db, err := OpenLocal(uri, debug, nil)
-		if err != nil {
-			return nil, err
-		}
-		return deqdb.AsClient(db), nil
-
-	case "h2c", "https":
-		if u.Path != "" {
-			return nil, fmt.Errorf("parse connection URI: path is not permitted with scheme h2c:// or https://")
-		}
-		return OpenRemote(uri, true)
-
-	default:
-		return nil, fmt.Errorf("parse connection URI: scheme %q is not supported", u.Scheme)
-	}
-}
-
-func OpenLocal(uri string, debug bool, loader deqdb.Loader) (*deqdb.Store, error) {
-	params, err := ParseLocal(uri)
-	if err != nil {
-		return nil, fmt.Errorf("parse connection URI: %v", err)
-	}
-
-	opts := deqdb.Options{
-		Dir:         params.Dir,
-		KeepCorrupt: true,
-	}
-	if debug {
-		opts.Debug = stdlog.New(os.Stdout, "DEBUG: ", stdlog.LstdFlags)
-	}
-	db, err := deqdb.Open(opts)
-	if err != nil {
-		return nil, err
-	}
-	return db, nil
-}
-
-type LocalParams struct {
-	Dir string
-}
-
-func ParseLocal(uri string) (params LocalParams, err error) {
-	u, err := url.Parse(uri)
-	if err != nil {
-		return params, err
-	}
-	if u.Scheme != "file" {
-		return params, errors.New("local client requires scheme file://")
-	}
-	if u.Host != "" {
-		return params, errors.New("host is not valid with scheme file://")
-	}
-
-	return LocalParams{
-		Dir: u.Path,
-	}, nil
-}
-
-func OpenRemote(uri string, debug bool) (deq.Client, error) {
-	u, err := url.Parse(uri)
-	if err != nil {
-		return nil, fmt.Errorf("parse connection URI: %v", err)
-	}
-	if u.Scheme != "h2c" && u.Scheme != "https" {
-		return nil, fmt.Errorf("parse connection URI: remote client requires scheme h2c:// or https://")
-	}
-	if u.Path != "" {
-		return nil, fmt.Errorf("parse connection URI: path is not permitted with scheme h2c:// or https://")
-	}
-
-	fmt.Print("Enter shared secret: ")
-	rawSecret, err := terminal.ReadPassword(int(syscall.Stdin))
-	if err != nil {
-		return nil, fmt.Errorf("read password from terminal: %v", err)
-	}
-	secret := string(rawSecret)
-	fmt.Println()
-
-	var opts []grpc.DialOption
-	if secret != "" {
-		opts = append(opts, grpc.WithPerRPCCredentials(&sharedSecretCredentials{secret}))
-	}
-	if u.Scheme == "h2c" {
-		opts = append(opts, grpc.WithInsecure())
-	} else {
-		creds := credentials.NewTLS(&tls.Config{
-			ServerName: u.Query().Get("san_override"),
-		})
-		opts = append(opts, grpc.WithTransportCredentials(creds))
-	}
-
-	// opts = append(opts, grpc.WithUnaryInterceptor(func(ctx context.Context, method string, req, reply interface{}, cc *grpc.ClientConn, invoker grpc.UnaryInvoker, opts ...grpc.CallOption) error {
-	// 	log.Println(req)
-
-	// 	err := invoker(ctx, method, req, reply, cc, opts...)
-	// 	if err != nil {
-	// 		status, ok := status.FromError(err)
-	// 		if ok {
-
-	// 		}
-	// 		log.Println(err)
-	// 		return err
-	// 	}
-	// 	log.Println(reply)
-	// 	return nil
-	// }))
-
-	conn, err := grpc.Dial(u.Host, opts...)
-	if err != nil {
-		return nil, fmt.Errorf("dial host %q: %v", u.Host, err)
-	}
-	return deqclient.New(conn), nil
-}
-
 func printEvent(e deq.Event) {
-	fmt.Printf("id: %v\n topic: %s\nstate: %v\nsend count: %d\nselector: %s\nselector version: %d\nindexes: %v\npayload: %s\n\n", e.ID, e.Topic, e.State, e.SendCount, e.Selector, e.SelectorVersion, e.Indexes, base64.StdEncoding.EncodeToString(e.Payload))
-}
-
-type sharedSecretCredentials struct {
-	Secret string
-}
-
-func (c *sharedSecretCredentials) GetRequestMetadata(ctx context.Context, uri ...string) (map[string]string, error) {
-	return map[string]string{
-		"authorization": c.Secret,
-	}, nil
-}
-
-func (*sharedSecretCredentials) RequireTransportSecurity() bool {
-	return false
+	fmt.Printf("id: %v\n topic: %s\ncreate time: %v\nstate: %v\nsend count: %d\nselector: %s\nselector version: %d\nindexes: %v\npayload: %s\n\n", e.ID, e.Topic, e.CreateTime, e.State, e.SendCount, e.Selector, e.SelectorVersion, e.Indexes, base64.StdEncoding.EncodeToString(e.Payload))
 }
