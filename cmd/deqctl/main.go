@@ -30,6 +30,7 @@ import (
 	"gitlab.com/katcheCode/deq/ack"
 	"gitlab.com/katcheCode/deq/cmd/deqctl/internal/backup"
 	"gitlab.com/katcheCode/deq/deqclient"
+	_ "gitlab.com/katcheCode/deq/deqclient"
 	"gitlab.com/katcheCode/deq/deqdb"
 	"gitlab.com/katcheCode/deq/deqopt"
 	"gitlab.com/katcheCode/deq/internal/log"
@@ -74,7 +75,6 @@ func main() {
 	flag.BoolVar(&insecure, "insecure", false, "Disables tls.")
 	flag.BoolVar(&useIndex, "index", false, "Use the index instead of IDs for getting events.")
 	flag.BoolVar(&all, "all", false, "Sync or delete all events of the topic.")
-	flag.BoolVar(&debug, "debug", false, "Enable debug logging.")
 	flag.StringVar(&min, "min", "", "Only list events with ID greater than or equal to min.")
 	flag.StringVar(&max, "max", "", "Only list events with ID less than or equal to max.")
 	flag.BoolVar(&reversed, "reverse", false, "List events from highest to lowest ID.")
@@ -103,7 +103,11 @@ func main() {
 				return fmt.Errorf("-uri is required")
 			}
 
-			db, err := OpenLocal(uri, debug, nil)
+			opts, err := deqdb.ParseConnectionString(uri)
+			if err != nil {
+				return fmt.Errorf("parse connection string: %v", err)
+			}
+			db, err := deqdb.Open(opts)
 			if err != nil {
 				return fmt.Errorf("open database: %v", err)
 			}
@@ -119,7 +123,7 @@ func main() {
 				return fmt.Errorf("topic is required")
 			}
 
-			deqc, err := Open(uri, debug)
+			deqc, err := deq.Open(uri)
 			if err != nil {
 				return fmt.Errorf("open client: %v", err)
 			}
@@ -152,7 +156,7 @@ func main() {
 				return fmt.Errorf("topic is required")
 			}
 
-			deqc, err := Open(uri, debug)
+			deqc, err := deq.Open(uri)
 			if err != nil {
 				return fmt.Errorf("open client: %v", err)
 			}
@@ -200,7 +204,7 @@ func main() {
 				return fmt.Errorf("event is required")
 			}
 
-			deqc, err := Open(uri, debug)
+			deqc, err := deq.Open(uri)
 			if err != nil {
 				return fmt.Errorf("open client: %v", err)
 			}
@@ -236,7 +240,7 @@ func main() {
 				return fmt.Errorf("exactly one of argument <id> or flag -all is required")
 			}
 
-			deqc, err := Open(uri, debug)
+			deqc, err := deq.Open(uri)
 			if err != nil {
 				return fmt.Errorf("open client: %v", err)
 			}
@@ -358,7 +362,15 @@ func main() {
 					return fmt.Errorf("create backup loader: %v", err)
 				}
 
-				db, err := OpenLocal(uri, debug, loader)
+				opts, err := deqdb.ParseConnectionString(uri)
+				if err != nil {
+					return fmt.Errorf("parse connection string: %v", err)
+				}
+				opts.BackupLoader = loader
+				db, err := deqdb.Open(opts)
+				if err != nil {
+					return fmt.Errorf("open db: %v", err)
+				}
 				err = db.Close()
 				if err != nil {
 					return fmt.Errorf("close database: %v", err)
@@ -373,7 +385,7 @@ func main() {
 			if uri == "" {
 				fmt.Fprintf(os.Stderr, "-uri is required\n")
 			}
-			params, err := ParseLocal(uri)
+			deqOptions, err := deqdb.ParseConnectionString(uri)
 			if err != nil {
 				return fmt.Errorf("%v", err)
 			}
@@ -381,13 +393,11 @@ func main() {
 			logger := &log.BadgerLogger{
 				Error: stdlog.New(os.Stderr, "", stdlog.LstdFlags),
 				Warn:  stdlog.New(os.Stderr, "WARN: ", stdlog.LstdFlags),
-			}
-			if debug {
-				logger.Info = stdlog.New(os.Stdout, "INFO: ", stdlog.LstdFlags)
-				logger.Debug = stdlog.New(os.Stdout, "DEBUG: ", stdlog.LstdFlags)
+				Info:  deqOptions.Info,
+				Debug: deqOptions.Debug,
 			}
 			opts := badger.
-				DefaultOptions(params.Dir).
+				DefaultOptions(deqOptions.Dir).
 				WithReadOnly(true).
 				WithLogger(logger)
 
@@ -426,7 +436,7 @@ func main() {
 				return fmt.Errorf("-target is required")
 			}
 
-			source, err := Open(uri, debug)
+			source, err := deq.Open(uri)
 			if err != nil {
 				return fmt.Errorf("open source client: %v", err)
 			}
@@ -437,7 +447,7 @@ func main() {
 				}
 			}()
 
-			target, err := Open(syncTarget, debug)
+			target, err := deq.Open(syncTarget)
 			if err != nil {
 				fmt.Fprintf(os.Stderr, "open target client: %v\n", err)
 			}
@@ -657,5 +667,5 @@ func OpenRemote(uri string, debug bool) (deq.Client, error) {
 }
 
 func printEvent(e deq.Event) {
-	fmt.Printf("id: %v\n topic: %s\nstate: %v\nsend count: %d\nselector: %s\nselector version: %d\nindexes: %v\npayload: %s\n\n", e.ID, e.Topic, e.State, e.SendCount, e.Selector, e.SelectorVersion, e.Indexes, base64.StdEncoding.EncodeToString(e.Payload))
+	fmt.Printf("id: %v\n topic: %s\ncreate time: %v\nstate: %v\nsend count: %d\nselector: %s\nselector version: %d\nindexes: %v\npayload: %s\n\n", e.ID, e.Topic, e.CreateTime, e.State, e.SendCount, e.Selector, e.SelectorVersion, e.Indexes, base64.StdEncoding.EncodeToString(e.Payload))
 }
