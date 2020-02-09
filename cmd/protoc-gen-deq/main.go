@@ -1,5 +1,5 @@
-//go:generate go-bindata -pkg main -o out.go out.go.tpl
-//go:generate protoc --gogofaster_out=. example/greeter/greeter.proto example/greeter/greeter2.proto
+//go:generate go run github.com/shuLhan/go-bindata/cmd/go-bindata -pkg main -o out.go out.go.tpl
+//go:generate protoc --plugin=protoc-gen-gogofaster=./gogofaster.sh --gogofaster_out=. example/greeter/greeter.proto example/greeter/greeter2.proto
 //go:generate protoc --plugin=protoc-gen-deq=./run.sh --deq_out=. example/greeter/greeter.proto example/greeter/greeter2.proto
 
 package main
