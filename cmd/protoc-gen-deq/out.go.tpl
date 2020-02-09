@@ -203,10 +203,7 @@ func (c *_{{.Name}}Client) SyncAllTo(ctx context.Context, remote deq.Client) err
 	go func() {
 		defer wg.Done()
 
-		channel := c.db.Channel(c.channel, c.config.{{.GoName}}Topic())
-		defer channel.Close()
-
-		err := deq.SyncTo(ctx, remote, channel)
+		err := c.Sync{{ .GoName }}EventsTo(ctx, remote)
 		if err != nil {
 			select {
 			default:
@@ -229,6 +226,14 @@ func (c *_{{.Name}}Client) SyncAllTo(ctx context.Context, remote deq.Client) err
 } 
 
 {{- range .Types }}
+func (c *_{{ $ServiceName }}Client) Sync{{ .GoName }}EventsTo(ctx context.Context, remote deq.Client) error {
+
+	channel := c.db.Channel(c.channel, c.config.{{.GoName}}Topic())
+	defer channel.Close()
+
+	return deq.SyncTo(ctx, remote, channel)
+} 
+
 func (c *_{{ $ServiceName }}Client) Get{{ .GoName }}Event(ctx context.Context, id string, options ...deqopt.GetOption) (*{{ .GoEventRef }}Event, error) {
 	
 	channel := c.db.Channel(c.channel, c.config.{{.GoName}}Topic())

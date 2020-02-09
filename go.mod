@@ -9,8 +9,10 @@ require (
 	github.com/golang/protobuf v1.3.1
 	github.com/google/go-cmp v0.3.0
 	github.com/minio/minio-go v6.0.14+incompatible // indirect
+	github.com/shuLhan/go-bindata v3.4.0+incompatible // indirect
 	gocloud.dev v0.18.0
 	golang.org/x/crypto v0.0.0-20200109152110-61a87790db17 // indirect
+	google.golang.org/genproto v0.0.0-20190620144150-6af8c5fc6601
 	google.golang.org/grpc v1.21.1
 )
 
