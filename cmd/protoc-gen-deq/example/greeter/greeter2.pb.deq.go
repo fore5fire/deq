@@ -215,13 +215,14 @@ func (c *Greeter2TopicConfig) SetEmptyTopic(topic string) {
 
 
 type Greeter2Client interface {
-	SyncAllTo(ctx context.Context, remote deq.Client) error
+	SyncAllTo(ctx context.Context, dest deq.Client) error
 	GetHelloRequestEvent(ctx context.Context, id string, options ...deqopt.GetOption) (*HelloRequestEvent, error)
 	BatchGetHelloRequestEvents(ctx context.Context, ids []string, options ...deqopt.BatchGetOption) (map[string]*HelloRequestEvent, error)
 	SubHelloRequestEvent(ctx context.Context, handler func(context.Context, *HelloRequestEvent) error) error
 	NewHelloRequestEventIter(opts *deq.IterOptions) HelloRequestEventIter
 	NewHelloRequestIndexIter(opts *deq.IterOptions) HelloRequestEventIter
 	PubHelloRequestEvent(ctx context.Context, e *HelloRequestEvent) (*HelloRequestEvent, error)
+	SyncHelloRequestEventsTo(ctx context.Context, dest deq.Client) error
 	
 	GetHelloReplyEvent(ctx context.Context, id string, options ...deqopt.GetOption) (*HelloReplyEvent, error)
 	BatchGetHelloReplyEvents(ctx context.Context, ids []string, options ...deqopt.BatchGetOption) (map[string]*HelloReplyEvent, error)
@@ -229,6 +230,7 @@ type Greeter2Client interface {
 	NewHelloReplyEventIter(opts *deq.IterOptions) HelloReplyEventIter
 	NewHelloReplyIndexIter(opts *deq.IterOptions) HelloReplyEventIter
 	PubHelloReplyEvent(ctx context.Context, e *HelloReplyEvent) (*HelloReplyEvent, error)
+	SyncHelloReplyEventsTo(ctx context.Context, dest deq.Client) error
 	
 	GetEmptyEvent(ctx context.Context, id string, options ...deqopt.GetOption) (*deqtype.EmptyEvent, error)
 	BatchGetEmptyEvents(ctx context.Context, ids []string, options ...deqopt.BatchGetOption) (map[string]*deqtype.EmptyEvent, error)
@@ -236,6 +238,7 @@ type Greeter2Client interface {
 	NewEmptyEventIter(opts *deq.IterOptions) deqtype.EmptyEventIter
 	NewEmptyIndexIter(opts *deq.IterOptions) deqtype.EmptyEventIter
 	PubEmptyEvent(ctx context.Context, e *deqtype.EmptyEvent) (*deqtype.EmptyEvent, error)
+	SyncEmptyEventsTo(ctx context.Context, dest deq.Client) error
 	
 	SayHello(ctx context.Context, e *HelloRequestEvent) (*HelloReplyEvent, error)
 	

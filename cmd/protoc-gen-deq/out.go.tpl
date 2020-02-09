@@ -161,14 +161,15 @@ func (c *{{$ServiceName}}TopicConfig) Set{{.GoName}}Topic(topic string) {
 {{ define "client" }}
 {{- $ServiceName := .Name -}}
 type {{ .Name }}Client interface {
-	SyncAllTo(ctx context.Context, remote deq.Client) error
+	SyncAllTo(ctx context.Context, dest deq.Client) error
 	{{- range .Types }}
 	Get{{ .GoName }}Event(ctx context.Context, id string, options ...deqopt.GetOption) (*{{ .GoEventRef }}Event, error)
 	BatchGet{{ .GoName }}Events(ctx context.Context, ids []string, options ...deqopt.BatchGetOption) (map[string]*{{ .GoEventRef }}Event, error)
 	Sub{{ .GoName }}Event(ctx context.Context, handler func(context.Context, *{{.GoEventRef}}Event) error) error
 	New{{ .GoName }}EventIter(opts *deq.IterOptions) {{ .GoEventRef }}EventIter
 	New{{ .GoName }}IndexIter(opts *deq.IterOptions) {{ .GoEventRef }}EventIter
-	Pub{{.GoName}}Event(ctx context.Context, e *{{.GoEventRef}}Event) (*{{.GoEventRef}}Event, error)
+	Pub{{ .GoName }}Event(ctx context.Context, e *{{.GoEventRef}}Event) (*{{.GoEventRef}}Event, error)
+	Sync{{ .GoName }}EventsTo(ctx context.Context, dest deq.Client) error
 	{{ end -}}
 	{{ range .Methods }}
 	{{ .Name }}(ctx context.Context, e *{{.InType.GoEventRef}}Event) (*{{.OutType.GoEventRef}}Event, error)
