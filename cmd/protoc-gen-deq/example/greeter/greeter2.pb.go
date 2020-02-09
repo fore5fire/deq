@@ -3,12 +3,10 @@
 
 package greeter
 
-import (
-	fmt "fmt"
-	proto "github.com/gogo/protobuf/proto"
-	_ "github.com/golang/protobuf/ptypes/empty"
-	math "math"
-)
+import proto "github.com/gogo/protobuf/proto"
+import fmt "fmt"
+import math "math"
+import _ "github.com/golang/protobuf/ptypes/empty"
 
 // Reference imports to suppress errors if they are not otherwise used.
 var _ = proto.Marshal
@@ -21,9 +19,11 @@ var _ = math.Inf
 // proto package needs to be updated.
 const _ = proto.GoGoProtoPackageIsVersion2 // please upgrade the proto package
 
-func init() { proto.RegisterFile("example/greeter/greeter2.proto", fileDescriptor_64fc0c3ea5bdc8c9) }
+func init() {
+	proto.RegisterFile("example/greeter/greeter2.proto", fileDescriptor_greeter2_8dac2ba8918f34d6)
+}
 
-var fileDescriptor_64fc0c3ea5bdc8c9 = []byte{
+var fileDescriptor_greeter2_8dac2ba8918f34d6 = []byte{
 	// 191 bytes of a gzipped FileDescriptorProto
 	0x1f, 0x8b, 0x08, 0x00, 0x00, 0x00, 0x00, 0x00, 0x02, 0xff, 0xe2, 0x92, 0x4b, 0xad, 0x48, 0xcc,
 	0x2d, 0xc8, 0x49, 0xd5, 0x4f, 0x2f, 0x4a, 0x4d, 0x2d, 0x49, 0x2d, 0x82, 0xd1, 0x46, 0x7a, 0x05,

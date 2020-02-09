@@ -270,10 +270,7 @@ func (c *_Greeter2Client) SyncAllTo(ctx context.Context, remote deq.Client) erro
 	go func() {
 		defer wg.Done()
 
-		channel := c.db.Channel(c.channel, c.config.HelloRequestTopic())
-		defer channel.Close()
-
-		err := deq.SyncTo(ctx, remote, channel)
+		err := c.SyncHelloRequestEventsTo(ctx, remote)
 		if err != nil {
 			select {
 			default:
@@ -286,10 +283,7 @@ func (c *_Greeter2Client) SyncAllTo(ctx context.Context, remote deq.Client) erro
 	go func() {
 		defer wg.Done()
 
-		channel := c.db.Channel(c.channel, c.config.HelloReplyTopic())
-		defer channel.Close()
-
-		err := deq.SyncTo(ctx, remote, channel)
+		err := c.SyncHelloReplyEventsTo(ctx, remote)
 		if err != nil {
 			select {
 			default:
@@ -302,10 +296,7 @@ func (c *_Greeter2Client) SyncAllTo(ctx context.Context, remote deq.Client) erro
 	go func() {
 		defer wg.Done()
 
-		channel := c.db.Channel(c.channel, c.config.EmptyTopic())
-		defer channel.Close()
-
-		err := deq.SyncTo(ctx, remote, channel)
+		err := c.SyncEmptyEventsTo(ctx, remote)
 		if err != nil {
 			select {
 			default:
@@ -326,6 +317,14 @@ func (c *_Greeter2Client) SyncAllTo(ctx context.Context, remote deq.Client) erro
 
 	return err
 }
+func (c *_Greeter2Client) SyncHelloRequestEventsTo(ctx context.Context, remote deq.Client) error {
+
+	channel := c.db.Channel(c.channel, c.config.HelloRequestTopic())
+	defer channel.Close()
+
+	return deq.SyncTo(ctx, remote, channel)
+} 
+
 func (c *_Greeter2Client) GetHelloRequestEvent(ctx context.Context, id string, options ...deqopt.GetOption) (*HelloRequestEvent, error) {
 	
 	channel := c.db.Channel(c.channel, c.config.HelloRequestTopic())
@@ -422,6 +421,14 @@ func (c *_Greeter2Client) PubHelloRequestEvent(ctx context.Context, e *HelloRequ
 }
 
 
+func (c *_Greeter2Client) SyncHelloReplyEventsTo(ctx context.Context, remote deq.Client) error {
+
+	channel := c.db.Channel(c.channel, c.config.HelloReplyTopic())
+	defer channel.Close()
+
+	return deq.SyncTo(ctx, remote, channel)
+} 
+
 func (c *_Greeter2Client) GetHelloReplyEvent(ctx context.Context, id string, options ...deqopt.GetOption) (*HelloReplyEvent, error) {
 	
 	channel := c.db.Channel(c.channel, c.config.HelloReplyTopic())
@@ -517,6 +524,14 @@ func (c *_Greeter2Client) PubHelloReplyEvent(ctx context.Context, e *HelloReplyE
 	return e, nil
 }
 
+
+func (c *_Greeter2Client) SyncEmptyEventsTo(ctx context.Context, remote deq.Client) error {
+
+	channel := c.db.Channel(c.channel, c.config.EmptyTopic())
+	defer channel.Close()
+
+	return deq.SyncTo(ctx, remote, channel)
+} 
 
 func (c *_Greeter2Client) GetEmptyEvent(ctx context.Context, id string, options ...deqopt.GetOption) (*deqtype.EmptyEvent, error) {
 	
