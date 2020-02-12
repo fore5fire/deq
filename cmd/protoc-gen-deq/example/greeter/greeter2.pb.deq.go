@@ -215,14 +215,14 @@ func (c *Greeter2TopicConfig) SetEmptyTopic(topic string) {
 
 
 type Greeter2Client interface {
-	SyncAllTo(ctx context.Context, dest deq.Client) error
+	SyncAllTo(ctx context.Context, dest deq.Client, opts ...deqopt.SyncOption) error
 	GetHelloRequestEvent(ctx context.Context, id string, options ...deqopt.GetOption) (*HelloRequestEvent, error)
 	BatchGetHelloRequestEvents(ctx context.Context, ids []string, options ...deqopt.BatchGetOption) (map[string]*HelloRequestEvent, error)
 	SubHelloRequestEvent(ctx context.Context, handler func(context.Context, *HelloRequestEvent) error) error
 	NewHelloRequestEventIter(opts *deq.IterOptions) HelloRequestEventIter
 	NewHelloRequestIndexIter(opts *deq.IterOptions) HelloRequestEventIter
 	PubHelloRequestEvent(ctx context.Context, e *HelloRequestEvent) (*HelloRequestEvent, error)
-	SyncHelloRequestEventsTo(ctx context.Context, dest deq.Client) error
+	SyncHelloRequestEventsTo(ctx context.Context, dest deq.Client, opts ...deqopt.SyncOption) error
 	
 	GetHelloReplyEvent(ctx context.Context, id string, options ...deqopt.GetOption) (*HelloReplyEvent, error)
 	BatchGetHelloReplyEvents(ctx context.Context, ids []string, options ...deqopt.BatchGetOption) (map[string]*HelloReplyEvent, error)
@@ -230,7 +230,7 @@ type Greeter2Client interface {
 	NewHelloReplyEventIter(opts *deq.IterOptions) HelloReplyEventIter
 	NewHelloReplyIndexIter(opts *deq.IterOptions) HelloReplyEventIter
 	PubHelloReplyEvent(ctx context.Context, e *HelloReplyEvent) (*HelloReplyEvent, error)
-	SyncHelloReplyEventsTo(ctx context.Context, dest deq.Client) error
+	SyncHelloReplyEventsTo(ctx context.Context, dest deq.Client, opts ...deqopt.SyncOption) error
 	
 	GetEmptyEvent(ctx context.Context, id string, options ...deqopt.GetOption) (*deqtype.EmptyEvent, error)
 	BatchGetEmptyEvents(ctx context.Context, ids []string, options ...deqopt.BatchGetOption) (map[string]*deqtype.EmptyEvent, error)
@@ -238,7 +238,7 @@ type Greeter2Client interface {
 	NewEmptyEventIter(opts *deq.IterOptions) deqtype.EmptyEventIter
 	NewEmptyIndexIter(opts *deq.IterOptions) deqtype.EmptyEventIter
 	PubEmptyEvent(ctx context.Context, e *deqtype.EmptyEvent) (*deqtype.EmptyEvent, error)
-	SyncEmptyEventsTo(ctx context.Context, dest deq.Client) error
+	SyncEmptyEventsTo(ctx context.Context, dest deq.Client, opts ...deqopt.SyncOption) error
 	
 	SayHello(ctx context.Context, e *HelloRequestEvent) (*HelloReplyEvent, error)
 	
@@ -263,7 +263,7 @@ func NewGreeter2Client(db deq.Client, channel string, config *Greeter2TopicConfi
 	}
 }
 
-func (c *_Greeter2Client) SyncAllTo(ctx context.Context, remote deq.Client) error {
+func (c *_Greeter2Client) SyncAllTo(ctx context.Context, remote deq.Client, opts ...deqopt.SyncOption) error {
 	errc := make(chan error, 1)
 	wg := sync.WaitGroup{}
 	ctx, cancel := context.WithCancel(ctx)
@@ -273,7 +273,7 @@ func (c *_Greeter2Client) SyncAllTo(ctx context.Context, remote deq.Client) erro
 	go func() {
 		defer wg.Done()
 
-		err := c.SyncHelloRequestEventsTo(ctx, remote)
+		err := c.SyncHelloRequestEventsTo(ctx, remote, opts...)
 		if err != nil {
 			select {
 			default:
@@ -286,7 +286,7 @@ func (c *_Greeter2Client) SyncAllTo(ctx context.Context, remote deq.Client) erro
 	go func() {
 		defer wg.Done()
 
-		err := c.SyncHelloReplyEventsTo(ctx, remote)
+		err := c.SyncHelloReplyEventsTo(ctx, remote, opts...)
 		if err != nil {
 			select {
 			default:
@@ -299,7 +299,7 @@ func (c *_Greeter2Client) SyncAllTo(ctx context.Context, remote deq.Client) erro
 	go func() {
 		defer wg.Done()
 
-		err := c.SyncEmptyEventsTo(ctx, remote)
+		err := c.SyncEmptyEventsTo(ctx, remote, opts...)
 		if err != nil {
 			select {
 			default:
@@ -320,10 +320,16 @@ func (c *_Greeter2Client) SyncAllTo(ctx context.Context, remote deq.Client) erro
 
 	return err
 }
-func (c *_Greeter2Client) SyncHelloRequestEventsTo(ctx context.Context, remote deq.Client) error {
+func (c *_Greeter2Client) SyncHelloRequestEventsTo(ctx context.Context, remote deq.Client, opts ...deqopt.SyncOption) error {
+
+	optsSet := deqopt.NewSyncOptionSet(opts)
 
 	channel := c.db.Channel(c.channel, c.config.HelloRequestTopic())
 	defer channel.Close()
+
+	if optsSet.IdleTimeout != 0 {
+		channel.SetIdleTimeout(optsSet.IdleTimeout)
+	}
 
 	return deq.SyncTo(ctx, remote, channel)
 } 
@@ -424,10 +430,16 @@ func (c *_Greeter2Client) PubHelloRequestEvent(ctx context.Context, e *HelloRequ
 }
 
 
-func (c *_Greeter2Client) SyncHelloReplyEventsTo(ctx context.Context, remote deq.Client) error {
+func (c *_Greeter2Client) SyncHelloReplyEventsTo(ctx context.Context, remote deq.Client, opts ...deqopt.SyncOption) error {
+
+	optsSet := deqopt.NewSyncOptionSet(opts)
 
 	channel := c.db.Channel(c.channel, c.config.HelloReplyTopic())
 	defer channel.Close()
+
+	if optsSet.IdleTimeout != 0 {
+		channel.SetIdleTimeout(optsSet.IdleTimeout)
+	}
 
 	return deq.SyncTo(ctx, remote, channel)
 } 
@@ -528,10 +540,16 @@ func (c *_Greeter2Client) PubHelloReplyEvent(ctx context.Context, e *HelloReplyE
 }
 
 
-func (c *_Greeter2Client) SyncEmptyEventsTo(ctx context.Context, remote deq.Client) error {
+func (c *_Greeter2Client) SyncEmptyEventsTo(ctx context.Context, remote deq.Client, opts ...deqopt.SyncOption) error {
+
+	optsSet := deqopt.NewSyncOptionSet(opts)
 
 	channel := c.db.Channel(c.channel, c.config.EmptyTopic())
 	defer channel.Close()
+
+	if optsSet.IdleTimeout != 0 {
+		channel.SetIdleTimeout(optsSet.IdleTimeout)
+	}
 
 	return deq.SyncTo(ctx, remote, channel)
 } 
