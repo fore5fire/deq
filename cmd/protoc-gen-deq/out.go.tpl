@@ -161,7 +161,7 @@ func (c *{{$ServiceName}}TopicConfig) Set{{.GoName}}Topic(topic string) {
 {{ define "client" }}
 {{- $ServiceName := .Name -}}
 type {{ .Name }}Client interface {
-	SyncAllTo(ctx context.Context, dest deq.Client) error
+	SyncAllTo(ctx context.Context, dest deq.Client, opts ...deqopt.SyncOption) error
 	{{- range .Types }}
 	Get{{ .GoName }}Event(ctx context.Context, id string, options ...deqopt.GetOption) (*{{ .GoEventRef }}Event, error)
 	BatchGet{{ .GoName }}Events(ctx context.Context, ids []string, options ...deqopt.BatchGetOption) (map[string]*{{ .GoEventRef }}Event, error)
@@ -169,7 +169,7 @@ type {{ .Name }}Client interface {
 	New{{ .GoName }}EventIter(opts *deq.IterOptions) {{ .GoEventRef }}EventIter
 	New{{ .GoName }}IndexIter(opts *deq.IterOptions) {{ .GoEventRef }}EventIter
 	Pub{{ .GoName }}Event(ctx context.Context, e *{{.GoEventRef}}Event) (*{{.GoEventRef}}Event, error)
-	Sync{{ .GoName }}EventsTo(ctx context.Context, dest deq.Client) error
+	Sync{{ .GoName }}EventsTo(ctx context.Context, dest deq.Client, opts ...deqopt.SyncOption) error
 	{{ end -}}
 	{{ range .Methods }}
 	{{ .Name }}(ctx context.Context, e *{{.InType.GoEventRef}}Event) (*{{.OutType.GoEventRef}}Event, error)
@@ -194,7 +194,7 @@ func New{{ .Name }}Client(db deq.Client, channel string, config *{{$ServiceName}
 	}
 }
 
-func (c *_{{.Name}}Client) SyncAllTo(ctx context.Context, remote deq.Client) error {
+func (c *_{{.Name}}Client) SyncAllTo(ctx context.Context, remote deq.Client, opts ...deqopt.SyncOption) error {
 	errc := make(chan error, 1)
 	wg := sync.WaitGroup{}
 	ctx, cancel := context.WithCancel(ctx)
@@ -204,7 +204,7 @@ func (c *_{{.Name}}Client) SyncAllTo(ctx context.Context, remote deq.Client) err
 	go func() {
 		defer wg.Done()
 
-		err := c.Sync{{ .GoName }}EventsTo(ctx, remote)
+		err := c.Sync{{ .GoName }}EventsTo(ctx, remote, opts...)
 		if err != nil {
 			select {
 			default:
@@ -227,10 +227,16 @@ func (c *_{{.Name}}Client) SyncAllTo(ctx context.Context, remote deq.Client) err
 } 
 
 {{- range .Types }}
-func (c *_{{ $ServiceName }}Client) Sync{{ .GoName }}EventsTo(ctx context.Context, remote deq.Client) error {
+func (c *_{{ $ServiceName }}Client) Sync{{ .GoName }}EventsTo(ctx context.Context, remote deq.Client, opts ...deqopt.SyncOption) error {
+
+	optsSet := deqopt.NewSyncOptionSet(opts)
 
 	channel := c.db.Channel(c.channel, c.config.{{.GoName}}Topic())
 	defer channel.Close()
+
+	if optsSet.IdleTimeout != 0 {
+		channel.SetIdleTimeout(optsSet.IdleTimeout)
+	}
 
 	return deq.SyncTo(ctx, remote, channel)
 } 
