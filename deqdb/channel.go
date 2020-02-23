@@ -188,7 +188,6 @@ func (c *Channel) Sub(ctx context.Context, handler deq.SubHandler) error {
 	defer wg.Wait()
 
 	results := make(chan Result, 30)
-	defer close(results)
 
 	ctx, cancel := context.WithCancel(ctx)
 	defer cancel()
@@ -278,6 +277,7 @@ func (c *Channel) Sub(ctx context.Context, handler deq.SubHandler) error {
 	wg.Add(1)
 	go func() {
 		defer wg.Done()
+		defer close(results)
 		nextCtx, nextCancel := ctx, func() {}
 		for {
 			err := func() error {
