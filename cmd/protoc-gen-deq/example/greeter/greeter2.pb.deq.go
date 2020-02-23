@@ -712,11 +712,13 @@ func NewGreeter2Server(db deq.Client, handlers Greeter2Handlers, channelPrefix s
 func (s *_Greeter2Server) Listen(ctx context.Context) error {
 	errc := make(chan error, 1)
 	wg := sync.WaitGroup{}
+	defer wg.Wait()
+
 	ctx, cancel := context.WithCancel(ctx)
 	defer cancel()
 	
 	wg.Add(1)
-  go func() {
+  	go func() {
 		defer wg.Done()
 		
 		channel := s.db.Channel(strings.TrimSuffix(s.channel, ".") + ".SayHello", s.config.HelloRequestTopic())
@@ -751,7 +753,7 @@ func (s *_Greeter2Server) Listen(ctx context.Context) error {
 		}
 	}()
 	wg.Add(1)
-  go func() {
+  	go func() {
 		defer wg.Done()
 		
 		channel := s.db.Channel(strings.TrimSuffix(s.channel, ".") + ".SayNothing", s.config.HelloRequestTopic())

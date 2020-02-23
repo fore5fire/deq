@@ -390,11 +390,13 @@ func New{{ .Name }}Server(db deq.Client, handlers {{ .Name }}Handlers, channelPr
 func (s *_{{ .Name }}Server) Listen(ctx context.Context) error {
 	errc := make(chan error, 1)
 	wg := sync.WaitGroup{}
+	defer wg.Wait()
+
 	ctx, cancel := context.WithCancel(ctx)
 	defer cancel()
 	{{ range .Methods }}
 	wg.Add(1)
-  go func() {
+  	go func() {
 		defer wg.Done()
 		
 		channel := s.db.Channel(strings.TrimSuffix(s.channel, ".") + ".{{.Name}}", s.config.{{.InType}}Topic())

@@ -609,11 +609,13 @@ func NewGreeterServer(db deq.Client, handlers GreeterHandlers, channelPrefix str
 func (s *_GreeterServer) Listen(ctx context.Context) error {
 	errc := make(chan error, 1)
 	wg := sync.WaitGroup{}
+	defer wg.Wait()
+
 	ctx, cancel := context.WithCancel(ctx)
 	defer cancel()
 	
 	wg.Add(1)
-  go func() {
+  	go func() {
 		defer wg.Done()
 		
 		channel := s.db.Channel(strings.TrimSuffix(s.channel, ".") + ".SayHello", s.config.HelloRequestTopic())
