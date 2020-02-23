@@ -3,6 +3,7 @@ package deqdb
 import (
 	"context"
 	"errors"
+	"io"
 	"log"
 	"sync"
 	"time"
@@ -198,7 +199,6 @@ func (c *Channel) Sub(ctx context.Context, handler deq.SubHandler) error {
 	for i := 0; i < numWorkers; i++ {
 		go func() {
 			defer wg.Done()
-			defer cancel()
 
 			for result := range results {
 
@@ -275,52 +275,68 @@ func (c *Channel) Sub(ctx context.Context, handler deq.SubHandler) error {
 		}()
 	}
 
-	// If we're using idle timeout, setup a separate context so we can periodically check on the idle
-	// state.
-	nextCtx, nextCancel := ctx, func() {}
-	defer nextCancel()
+	wg.Add(1)
+	go func() {
+		defer wg.Done()
+		nextCtx, nextCancel := ctx, func() {}
+		for {
+			err := func() error {
+				// If we're using idle timeout, setup a separate context so we can periodically check on the idle
+				// state.
+				if c.idleTimeout > 0 {
+					nextCtx, nextCancel = context.WithTimeout(ctx, c.idleTimeout)
+					defer nextCancel()
+				}
 
-	for {
-		if c.idleTimeout > 0 {
-			nextCancel()
-			nextCtx, nextCancel = context.WithTimeout(ctx, c.idleTimeout)
-		}
+				e, err := c.Next(nextCtx)
+				ctxErr := deqerr.Unwrap(err)
+				if err != nil && ctxErr == ctx.Err() {
+					// Original context was cancelled.
+					return deqerr.FromContext(ctx)
+				}
+				if err != nil && ctxErr == nextCtx.Err() {
+					// The idle timeout triggered, so if the channel is idle (not just slow) then we're done.
+					if c.Idle() {
+						return io.EOF
+					}
+					// We're not idle, so try again.
+					return nil
+				}
+				if err != nil {
+					// Some non-context error occurred.
+					return err
+				}
 
-		e, err := c.Next(nextCtx)
-		ctxErr := deqerr.Unwrap(err)
-		if err != nil && ctxErr == ctx.Err() {
-			// Original context was cancelled.
-			nextCancel()
-			return deqerr.FromContext(ctx)
-		}
-		if err != nil && ctxErr == nextCtx.Err() {
-			// The idle timeout triggered, so if the channel is idle (not just slow) then we're done.
-			if c.Idle() {
-				nextCancel()
-				return nil
+				// Invoke the handler, then pass on the result.
+				response, err := handler(ctx, e)
+				select {
+				case results <- Result{e, response, err}:
+					return nil
+				case <-ctx.Done():
+					return deqerr.FromContext(ctx)
+				}
+			}()
+			if err != nil {
+				// EOF means clean shutdown, return a nil to the caller.
+				if err == io.EOF {
+					err = nil
+				}
+				select {
+				case errc <- err:
+				default:
+				}
+				break
 			}
-			// We're not idle, so try again.
-			continue
 		}
-		if err != nil {
-			// Some non-context error occurred.
-			nextCancel()
-			return err
-		}
+	}()
 
-		response, err := handler(ctx, e)
-		select {
-		case results <- Result{e, response, err}:
-		case err := <-errc:
-			nextCancel()
-			return err
-		case <-ctx.Done():
-			nextCancel()
-			return deqerr.FromContext(ctx)
-		case <-c.done:
-			nextCancel()
-			return ErrChannelClosed
-		}
+	select {
+	case err := <-errc:
+		return err
+	case <-ctx.Done():
+		return deqerr.FromContext(ctx)
+	case <-c.done:
+		return ErrChannelClosed
 	}
 }
 

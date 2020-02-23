@@ -15,9 +15,9 @@ docker build --tag=deqd:local build
 echo starting server
 docker run -itd --rm --name=deqd -p 8080:8080 -e PORT=8080 -e DEQ_DEBUG=true -e DEQ_LISTEN_INSECURE=true deqd:local
 
-docker logs deqd -f | sed -e 's/^/SERVER: /;' &
-LOGS_PID=$!
-disown
+# docker logs deqd -f | sed -e 's/^/SERVER: /;' &
+# LOGS_PID=$!
+# disown
 
 echo running tests
 TEST_TARGET_URL=localhost:8080 DEQ_HOST=localhost:80 \
