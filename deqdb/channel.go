@@ -199,67 +199,72 @@ func (c *Channel) Sub(ctx context.Context, handler deq.SubHandler) error {
 		go func() {
 			defer wg.Done()
 
-			for result := range results {
-
-				ackCode := ack.ErrorCode(result.err)
-
+			for {
 				err := func() error {
+					select {
+					case <-c.done:
+						return ErrChannelClosed
+					case <-ctx.Done():
+						return ctx.Err()
+					case result := <-results:
 
-					reachedLimit := result.req.SendCount >= sendLimit
+						ackCode := ack.ErrorCode(result.err)
+						reachedLimit := result.req.SendCount >= sendLimit
 
-					if result.resp != nil {
-						_, err := c.store.Pub(ctx, *result.resp)
-						if err != nil {
-							// Log the error and compensating action
-							action := "will retry"
-							if reachedLimit {
-								action = "send limit exceeded, not retrying"
+						if result.resp != nil {
+							_, err := c.store.Pub(ctx, *result.resp)
+							if err != nil {
+								// Log the error and compensating action
+								action := "will retry"
+								if reachedLimit {
+									action = "send limit exceeded, not retrying"
+								}
+								log.Printf("publish response %q %q to %q %q on channel %q: %v - %s", result.resp.Topic, result.resp.ID, result.req.Topic, result.req.ID, c.name, err, action)
+								// Make sure the event is queued unless it has reached its resend limit.
+								ackCode = ack.Requeue
 							}
-							log.Printf("publish response %q %q to %q %q on channel %q: %v - %s", result.resp.Topic, result.resp.ID, result.req.Topic, result.req.ID, c.name, err, action)
-							// Make sure the event is queued unless it has reached its resend limit.
-							ackCode = ack.Requeue
 						}
-					}
 
-					if result.err != nil && ackCode != ack.NoOp {
-						// TODO: post error value back to DEQ.
-						c.info.Printf("handle channel %q topic %q event %q: %v", c.name, c.topic, result.req.ID, result.err)
-					}
+						if result.err != nil && ackCode != ack.NoOp {
+							// TODO: post error value back to DEQ.
+							c.info.Printf("handle channel %q topic %q event %q: %v", c.name, c.topic, result.req.ID, result.err)
+						}
 
-					// TODO: figure out a better way to avoid requeue looping (maybe requeue differentiate on the server between requeuing and resetting the send count? Or allow raising the requeue limit per event?)
-					// If the send limit has been reached, don't requeue it.
-					if reachedLimit && (ackCode == ack.Requeue || ackCode == ack.RequeueLinear || ackCode == ack.RequeueConstant) {
+						// TODO: figure out a better way to avoid requeue looping (maybe requeue differentiate on the server between requeuing and resetting the send count? Or allow raising the requeue limit per event?)
+						// If the send limit has been reached, don't requeue it.
+						if reachedLimit && (ackCode == ack.Requeue || ackCode == ack.RequeueLinear || ackCode == ack.RequeueConstant) {
+							return nil
+						}
+
+						var state deq.State
+						switch ackCode {
+						case ack.DequeueOK:
+							state = deq.StateOK
+						case ack.Invalid:
+							state = deq.StateInvalid
+						case ack.Internal:
+							state = deq.StateInternal
+						case ack.DequeueError:
+							state = deq.StateDequeuedError
+						case ack.RequeueConstant:
+							state = deq.StateQueuedConstant
+						case ack.RequeueLinear:
+							state = deq.StateQueuedLinear
+						case ack.Requeue:
+							state = deq.StateQueued
+						case ack.NoOp:
+							return nil
+						default:
+							return deqerr.Errorf(deqerr.Invalid, "handler returned unrecognized ack.Code")
+						}
+
+						err := c.SetEventState(ctx, result.req.ID, state)
+						if err != nil {
+							return deqerr.Errorf(deqerr.GetCode(err), "set event state: %v", err)
+						}
+
 						return nil
 					}
-
-					var state deq.State
-					switch ackCode {
-					case ack.DequeueOK:
-						state = deq.StateOK
-					case ack.Invalid:
-						state = deq.StateInvalid
-					case ack.Internal:
-						state = deq.StateInternal
-					case ack.DequeueError:
-						state = deq.StateDequeuedError
-					case ack.RequeueConstant:
-						state = deq.StateQueuedConstant
-					case ack.RequeueLinear:
-						state = deq.StateQueuedLinear
-					case ack.Requeue:
-						state = deq.StateQueued
-					case ack.NoOp:
-						return nil
-					default:
-						return deqerr.Errorf(deqerr.Invalid, "handler returned unrecognized ack.Code")
-					}
-
-					err := c.SetEventState(ctx, result.req.ID, state)
-					if err != nil {
-						return deqerr.Errorf(deqerr.GetCode(err), "set event state: %v", err)
-					}
-
-					return nil
 				}()
 				if err != nil {
 					select {

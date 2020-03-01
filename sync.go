@@ -37,7 +37,11 @@ func SyncTo(ctx context.Context, dst Client, src Channel) error {
 	}
 
 	err := src.Sub(ctx, func(ctx context.Context, e Event) (*Event, error) {
-		queue <- e
+		select {
+		case <-ctx.Done():
+			return nil, ctx.Err()
+		case queue <- e:
+		}
 		return nil, nil
 	})
 	select {
