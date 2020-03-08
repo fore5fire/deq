@@ -2,6 +2,7 @@ package main
 
 import (
 	"context"
+	"crypto/subtle"
 	"fmt"
 	stdlog "log"
 	"net"
@@ -55,7 +56,7 @@ var (
 	// keyFile is the path of the tls private key file. Required unless insecure is true.
 	keyFile = os.Getenv("DEQ_TLS_KEY_FILE")
 
-	authSharedSecret = os.Getenv("DEQ_AUTH_SHARED_SECRET")
+	authSharedSecret = []byte(os.Getenv("DEQ_AUTH_SHARED_SECRET"))
 
 	// backupMode sets the deqd backup behavior. Valid options are "load_only",
 	// "save_only", "sync", or "disabled". Defaults to "disabled".
@@ -229,7 +230,7 @@ func run(dbDir, address, statsAddress, certFile, keyFile string, insecure bool) 
 	server := handler.New(store)
 
 	var grpcopts []grpc.ServerOption
-	if authSharedSecret != "" {
+	if len(authSharedSecret) > 0 {
 		grpcopts = append(grpcopts,
 			grpc.UnaryInterceptor(func(ctx context.Context, req interface{}, info *grpc.UnaryServerInfo, handler grpc.UnaryHandler) (resp interface{}, err error) {
 				md, ok := metadata.FromIncomingContext(ctx)
@@ -242,7 +243,7 @@ func run(dbDir, address, statsAddress, certFile, keyFile string, insecure bool) 
 					return nil, status.Error(codes.PermissionDenied, "invalid authorization token")
 				}
 
-				if authorization[0] != authSharedSecret {
+				if subtle.ConstantTimeCompare([]byte(authorization[0]), authSharedSecret) != 1 {
 					return nil, status.Error(codes.PermissionDenied, "failed to validate authorization token")
 				}
 				return handler(ctx, req)
@@ -259,7 +260,7 @@ func run(dbDir, address, statsAddress, certFile, keyFile string, insecure bool) 
 					return status.Error(codes.PermissionDenied, "invalid authorization token")
 				}
 
-				if authorization[0] != authSharedSecret {
+				if subtle.ConstantTimeCompare([]byte(authorization[0]), authSharedSecret) != 1 {
 					return status.Error(codes.PermissionDenied, "failed to validate authorization token")
 				}
 				return handler(srv, ss)
