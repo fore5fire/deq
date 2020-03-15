@@ -1,6 +1,7 @@
 package deqdb
 
 import (
+	"context"
 	"errors"
 	"fmt"
 	"log"
@@ -17,7 +18,7 @@ func init() {
 
 type localProvider struct{}
 
-func (localProvider) Open(uri *url.URL) (deq.Client, error) {
+func (localProvider) Open(ctx context.Context, uri *url.URL) (deq.Client, error) {
 	opts, err := parseConnectionString(uri)
 	if err != nil {
 		return nil, fmt.Errorf("parse connection string")
