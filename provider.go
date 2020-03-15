@@ -1,13 +1,14 @@
 package deq
 
 import (
+	"context"
 	"fmt"
 	"net/url"
 )
 
 // Provider is the interface used to register a DEQ connection string protocol.
 type Provider interface {
-	Open(uri *url.URL) (Client, error)
+	Open(ctx context.Context, uri *url.URL) (Client, error)
 }
 
 var providers = make(map[string]Provider)
@@ -24,7 +25,7 @@ func RegisterProvider(scheme string, provider Provider) {
 }
 
 // Open opens a new client with the given connection string.
-func Open(uri string) (Client, error) {
+func Open(ctx context.Context, uri string) (Client, error) {
 	u, err := url.Parse(uri)
 	if err != nil {
 		return nil, fmt.Errorf("parse connection URI: %v", err)
@@ -35,7 +36,7 @@ func Open(uri string) (Client, error) {
 		return nil, fmt.Errorf("parse connection URI: scheme %q is not supported", u.Scheme)
 	}
 
-	db, err := p.Open(u)
+	db, err := p.Open(ctx, u)
 	if err != nil {
 		return nil, err
 	}

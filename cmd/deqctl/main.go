@@ -117,7 +117,7 @@ func main() {
 				return fmt.Errorf("topic is required")
 			}
 
-			deqc, err := deq.Open(uri)
+			deqc, err := deq.Open(ctx, uri)
 			if err != nil {
 				return fmt.Errorf("open client: %v", err)
 			}
@@ -150,7 +150,7 @@ func main() {
 				return fmt.Errorf("topic is required")
 			}
 
-			deqc, err := deq.Open(uri)
+			deqc, err := deq.Open(ctx, uri)
 			if err != nil {
 				return fmt.Errorf("open client: %v", err)
 			}
@@ -198,7 +198,7 @@ func main() {
 				return fmt.Errorf("event is required")
 			}
 
-			deqc, err := deq.Open(uri)
+			deqc, err := deq.Open(ctx, uri)
 			if err != nil {
 				return fmt.Errorf("open client: %v", err)
 			}
@@ -234,7 +234,7 @@ func main() {
 				return fmt.Errorf("exactly one of argument <id> or flag -all is required")
 			}
 
-			deqc, err := deq.Open(uri)
+			deqc, err := deq.Open(ctx, uri)
 			if err != nil {
 				return fmt.Errorf("open client: %v", err)
 			}
@@ -430,7 +430,7 @@ func main() {
 				return fmt.Errorf("-target is required")
 			}
 
-			source, err := deq.Open(uri)
+			source, err := deq.Open(ctx, uri)
 			if err != nil {
 				return fmt.Errorf("open source client: %v", err)
 			}
@@ -441,7 +441,7 @@ func main() {
 				}
 			}()
 
-			target, err := deq.Open(syncTarget)
+			target, err := deq.Open(ctx, syncTarget)
 			if err != nil {
 				fmt.Fprintf(os.Stderr, "open target client: %v\n", err)
 			}

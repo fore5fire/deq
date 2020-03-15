@@ -21,7 +21,7 @@ var provider remoteProvider
 
 type remoteProvider struct{}
 
-func (remoteProvider) Open(u *url.URL) (deq.Client, error) {
+func (remoteProvider) Open(ctx context.Context, u *url.URL) (deq.Client, error) {
 	if u.Scheme != "h2c" && u.Scheme != "https" {
 		return nil, fmt.Errorf("parse connection URI: remote client requires scheme h2c or https")
 	}
@@ -44,7 +44,7 @@ func (remoteProvider) Open(u *url.URL) (deq.Client, error) {
 		opts = append(opts, grpc.WithTransportCredentials(creds))
 	}
 
-	conn, err := grpc.Dial(u.Host, opts...)
+	conn, err := grpc.DialContext(ctx, u.Host, opts...)
 	if err != nil {
 		return nil, fmt.Errorf("dial host %q: %v", u.Host, err)
 	}
