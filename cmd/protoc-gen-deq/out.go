@@ -195,7 +195,7 @@ func bindataOutgotpl() (*asset, error) {
 		size: 11338,
 		md5checksum: "",
 		mode: os.FileMode(420),
-		modTime: time.Unix(1594355170, 0),
+		modTime: time.Unix(1594355581, 0),
 	}
 
 	a := &asset{bytes: bytes, info: info}
