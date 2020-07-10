@@ -308,27 +308,13 @@ func (c *_GreeterClient) SyncAllTo(ctx context.Context, remote deq.Client) error
 	wg.Add(1)
 	go func() {
 		defer wg.Done()
-
-		err := c.SyncHelloRequestEventsTo(ctx, remote)
-		if err != nil {
-			select {
-			default:
-			case errc <- err:
-			}
-		}
+		errc <- c.SyncHelloRequestEventsTo(ctx, remote)
 	}()
 	
 	wg.Add(1)
 	go func() {
 		defer wg.Done()
-
-		err := c.SyncHelloReplyEventsTo(ctx, remote)
-		if err != nil {
-			select {
-			default:
-			case errc <- err:
-			}
-		}
+		errc <- c.SyncHelloReplyEventsTo(ctx, remote)
 	}()
 	
 
@@ -337,11 +323,15 @@ func (c *_GreeterClient) SyncAllTo(ctx context.Context, remote deq.Client) error
 		close(errc)
 	}()
 
-	err := <-errc
-	cancel()
-	wg.Wait()
+	var firstErr error
+	for err := range errc {
+		cancel()
+		if err != nil && firstErr == nil {
+			firstErr = err
+		}
+	}
 
-	return err
+	return firstErr
 }
 func (c *_GreeterClient) SyncHelloRequestEventsTo(ctx context.Context, remote deq.Client) error {
 

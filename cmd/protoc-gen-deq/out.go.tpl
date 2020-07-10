@@ -203,14 +203,7 @@ func (c *_{{.Name}}Client) SyncAllTo(ctx context.Context, remote deq.Client) err
 	wg.Add(1)
 	go func() {
 		defer wg.Done()
-
-		err := c.Sync{{ .GoName }}EventsTo(ctx, remote)
-		if err != nil {
-			select {
-			default:
-			case errc <- err:
-			}
-		}
+		errc <- c.Sync{{ .GoName }}EventsTo(ctx, remote)
 	}()
 	{{ end }}
 
@@ -219,11 +212,15 @@ func (c *_{{.Name}}Client) SyncAllTo(ctx context.Context, remote deq.Client) err
 		close(errc)
 	}()
 
-	err := <-errc
-	cancel()
-	wg.Wait()
+	var firstErr error
+	for err := range errc {
+		cancel()
+		if err != nil && firstErr == nil {
+			firstErr = err
+		}
+	}
 
-	return err
+	return firstErr
 } 
 
 {{- range .Types }}
