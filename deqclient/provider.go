@@ -5,6 +5,7 @@ import (
 	"crypto/tls"
 	"fmt"
 	"net/url"
+	"os"
 
 	"gitlab.com/katcheCode/deq"
 	"google.golang.org/grpc"
@@ -28,7 +29,12 @@ func (remoteProvider) Open(ctx context.Context, u *url.URL) (deq.Client, error) 
 		return nil, fmt.Errorf("parse connection URI: path is not permitted with scheme h2c or https")
 	}
 
+	secret := os.Getenv("DEQ_CLIENT_SIMPLE_TOKEN")
+
 	var opts []grpc.DialOption
+	if secret != "" {
+		opts = append(opts, grpc.WithPerRPCCredentials(&sharedSecretCredentials{secret}))
+	}
 	if u.Scheme == "h2c" {
 		opts = append(opts, grpc.WithInsecure())
 	} else {
@@ -43,4 +49,18 @@ func (remoteProvider) Open(ctx context.Context, u *url.URL) (deq.Client, error) 
 		return nil, fmt.Errorf("dial host %q: %v", u.Host, err)
 	}
 	return New(conn), nil
+}
+
+type sharedSecretCredentials struct {
+	Secret string
+}
+
+func (c *sharedSecretCredentials) GetRequestMetadata(ctx context.Context, uri ...string) (map[string]string, error) {
+	return map[string]string{
+		"authorization": c.Secret,
+	}, nil
+}
+
+func (*sharedSecretCredentials) RequireTransportSecurity() bool {
+	return false
 }
