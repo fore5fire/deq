@@ -1,6 +1,7 @@
 package deqclient
 
 import (
+	"context"
 	"crypto/tls"
 	"fmt"
 	"net/url"
