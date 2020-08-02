@@ -42,6 +42,9 @@ type Client interface {
 	// default channel, it returns empty string.
 	DefaultChannel() string
 
+	// SetDefaultChannel Sets the client's default channel.
+	SetDefaultChannel(defaultChannel string)
+
 	// Close must be called once the client is no longer needed. Using the client
 	// after Close is called results in undefined behavior.
 	Close() error
