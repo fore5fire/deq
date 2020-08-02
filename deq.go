@@ -38,6 +38,10 @@ type Client interface {
 	// field or some other application-level data to store the object's state.
 	Del(ctx context.Context, topic, id string) error
 
+	// DefaultChannel returns the default channel of the client. If it has no
+	// default channel, it returns empty string.
+	DefaultChannel() string
+
 	// Close must be called once the client is no longer needed. Using the client
 	// after Close is called results in undefined behavior.
 	Close() error

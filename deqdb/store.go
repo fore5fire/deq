@@ -46,6 +46,9 @@ func AsClient(s *Store) deq.Client {
 }
 
 func (c *storeClient) Channel(name, topic string) deq.Channel {
+	if name == "" {
+		name = c.defaultChannel
+	}
 	return c.Store.Channel(name, topic)
 }
 
@@ -67,6 +70,9 @@ type Store struct {
 
 	info  Logger
 	debug Logger
+
+	defaultChannelMux sync.RWMutex
+	defaultChannel    string
 }
 
 // Options are parameters for opening a store
@@ -99,6 +105,9 @@ type Options struct {
 	// database. This field is expiremental and maybe be changed in a backwards
 	// incompatible way without notice.
 	BackupLoader Loader
+
+	// DefaultChannel is the channel to use if none is specified.
+	DefaultChannel string
 }
 
 // LoadingMode specifies how to load data into memory. Generally speaking, lower memory is slower
@@ -759,4 +768,18 @@ func (s *Store) VerifyEvents(ctx context.Context, deleteInvalid bool) error {
 	}
 
 	return nil
+}
+
+// SetDefaultChannel sets the store's default channel.
+func (s *Store) SetDefaultChannel(defaultChannel string) {
+	s.defaultChannelMux.Lock()
+	s.defaultChannel = defaultChannel
+	s.defaultChannelMux.Unlock()
+}
+
+// DefaultChannel returns the store's default channel
+func (s *Store) DefaultChannel() string {
+	s.defaultChannelMux.RLock()
+	defer s.defaultChannelMux.RUnlock()
+	return s.defaultChannel
 }

@@ -48,7 +48,9 @@ func (remoteProvider) Open(ctx context.Context, u *url.URL) (deq.Client, error) 
 	if err != nil {
 		return nil, fmt.Errorf("dial host %q: %v", u.Host, err)
 	}
-	return New(conn), nil
+	client := New(conn)
+	client.SetDefaultChannel(u.Query().Get("channel"))
+	return client, nil
 }
 
 type sharedSecretCredentials struct {

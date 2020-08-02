@@ -287,9 +287,14 @@ type _GreeterClient struct {
 	config *GreeterTopicConfig
 }
 
+// NewGreeterClient creates a GreeterClient, optionally overriding the default channel and topic config.
+// If db's default channel is not set then channel is required.
 func NewGreeterClient(db deq.Client, channel string, config *GreeterTopicConfig) GreeterClient {
 	if channel == "" {
-		panic("channel is required")
+		channel = db.DefaultChannel()
+		if channel == "" {
+			panic("channel is required")
+		}
 	}
 	
 	return &_GreeterClient{

@@ -63,7 +63,8 @@ import (
 )
 
 type Client struct {
-	client api.DEQClient
+	client         api.DEQClient
+	defaultChannel string
 }
 
 // New constructs a new client.
@@ -108,6 +109,17 @@ func (c *Client) Del(ctx context.Context, topic, id string) error {
 	return nil
 }
 
+// DefaultChannel returns c's default channel.
+func (c *Client) DefaultChannel() string {
+	return c.defaultChannel
+}
+
+// SetDefaultChannel sets c's default channel.
+func (c *Client) SetDefaultChannel(channel string) {
+	c.defaultChannel = channel
+}
+
+// Close cleans up resources used by c.
 func (c *Client) Close() error {
 	return nil
 }

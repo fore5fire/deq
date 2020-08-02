@@ -27,68 +27,6 @@ func NewGreeter2TopicConfig() *Greeter2TopicConfig {
 	}
 }
 
-func (c *Greeter2TopicConfig) EventToHelloRequestEvent(e deq.Event) (*HelloRequestEvent, error) {
-
-	if e.Topic != c.HelloRequestTopic() {
-		return nil, fmt.Errorf("incorrect topic %s", e.Topic)
-	}
-
-	msg := new(HelloRequest)
-	err := msg.Unmarshal(e.Payload)
-	if err != nil {
-		return nil, fmt.Errorf("unmarshal payload: %v", err)
-	}
-
-	return &HelloRequestEvent{
-		ID:           e.ID,
-		HelloRequest:  msg,
-		CreateTime:   e.CreateTime,
-		DefaultState: e.DefaultState,
-		State:        e.State,
-		Indexes:      e.Indexes,
-		
-		Selector:        e.Selector,
-		SelectorVersion: e.SelectorVersion,
-	}, nil
-}
-
-func (c *Greeter2TopicConfig) HelloRequestEventToEvent(e *HelloRequestEvent) (deq.Event, error) {
-
-	buf, err := e.HelloRequest.Marshal()
-	if err != nil {
-		return deq.Event{}, err
-	}
-
-	return deq.Event{
-		ID:           e.ID,
-		Payload:      buf,
-		CreateTime:   e.CreateTime,
-		DefaultState: e.DefaultState,
-		State:        e.State,
-		Topic:        c.HelloRequestTopic(),
-		Indexes:      e.Indexes,
-
-		Selector:        e.Selector,
-		SelectorVersion: e.SelectorVersion,
-	}, nil
-}
-
-func (c *Greeter2TopicConfig) HelloRequestTopic() string {
-	if c == nil {
-		return "greeter.HelloRequest"
-	}
-
-	topic, ok := c.topics["greeter.HelloRequest"]
-	if ok {
-		return topic
-	}
-	return "greeter.HelloRequest"
-}
-
-func (c *Greeter2TopicConfig) SetHelloRequestTopic(topic string) {
-	c.topics["greeter.HelloRequest"] = topic
-}
-
 func (c *Greeter2TopicConfig) EventToHelloReplyEvent(e deq.Event) (*HelloReplyEvent, error) {
 
 	if e.Topic != c.HelloReplyTopic() {
@@ -213,17 +151,71 @@ func (c *Greeter2TopicConfig) SetEmptyTopic(topic string) {
 	c.topics["google.protobuf.Empty"] = topic
 }
 
+func (c *Greeter2TopicConfig) EventToHelloRequestEvent(e deq.Event) (*HelloRequestEvent, error) {
+
+	if e.Topic != c.HelloRequestTopic() {
+		return nil, fmt.Errorf("incorrect topic %s", e.Topic)
+	}
+
+	msg := new(HelloRequest)
+	err := msg.Unmarshal(e.Payload)
+	if err != nil {
+		return nil, fmt.Errorf("unmarshal payload: %v", err)
+	}
+
+	return &HelloRequestEvent{
+		ID:           e.ID,
+		HelloRequest:  msg,
+		CreateTime:   e.CreateTime,
+		DefaultState: e.DefaultState,
+		State:        e.State,
+		Indexes:      e.Indexes,
+		
+		Selector:        e.Selector,
+		SelectorVersion: e.SelectorVersion,
+	}, nil
+}
+
+func (c *Greeter2TopicConfig) HelloRequestEventToEvent(e *HelloRequestEvent) (deq.Event, error) {
+
+	buf, err := e.HelloRequest.Marshal()
+	if err != nil {
+		return deq.Event{}, err
+	}
+
+	return deq.Event{
+		ID:           e.ID,
+		Payload:      buf,
+		CreateTime:   e.CreateTime,
+		DefaultState: e.DefaultState,
+		State:        e.State,
+		Topic:        c.HelloRequestTopic(),
+		Indexes:      e.Indexes,
+
+		Selector:        e.Selector,
+		SelectorVersion: e.SelectorVersion,
+	}, nil
+}
+
+func (c *Greeter2TopicConfig) HelloRequestTopic() string {
+	if c == nil {
+		return "greeter.HelloRequest"
+	}
+
+	topic, ok := c.topics["greeter.HelloRequest"]
+	if ok {
+		return topic
+	}
+	return "greeter.HelloRequest"
+}
+
+func (c *Greeter2TopicConfig) SetHelloRequestTopic(topic string) {
+	c.topics["greeter.HelloRequest"] = topic
+}
+
 
 type Greeter2Client interface {
 	SyncAllTo(ctx context.Context, dest deq.Client, opts ...deqopt.SyncOption) error
-	GetHelloRequestEvent(ctx context.Context, id string, options ...deqopt.GetOption) (*HelloRequestEvent, error)
-	BatchGetHelloRequestEvents(ctx context.Context, ids []string, options ...deqopt.BatchGetOption) (map[string]*HelloRequestEvent, error)
-	SubHelloRequestEvent(ctx context.Context, handler func(context.Context, *HelloRequestEvent) error) error
-	NewHelloRequestEventIter(opts *deq.IterOptions) HelloRequestEventIter
-	NewHelloRequestIndexIter(opts *deq.IterOptions) HelloRequestEventIter
-	PubHelloRequestEvent(ctx context.Context, e *HelloRequestEvent) (*HelloRequestEvent, error)
-	SyncHelloRequestEventsTo(ctx context.Context, dest deq.Client, opts ...deqopt.SyncOption) error
-	
 	GetHelloReplyEvent(ctx context.Context, id string, options ...deqopt.GetOption) (*HelloReplyEvent, error)
 	BatchGetHelloReplyEvents(ctx context.Context, ids []string, options ...deqopt.BatchGetOption) (map[string]*HelloReplyEvent, error)
 	SubHelloReplyEvent(ctx context.Context, handler func(context.Context, *HelloReplyEvent) error) error
@@ -240,6 +232,14 @@ type Greeter2Client interface {
 	PubEmptyEvent(ctx context.Context, e *deqtype.EmptyEvent) (*deqtype.EmptyEvent, error)
 	SyncEmptyEventsTo(ctx context.Context, dest deq.Client, opts ...deqopt.SyncOption) error
 	
+	GetHelloRequestEvent(ctx context.Context, id string, options ...deqopt.GetOption) (*HelloRequestEvent, error)
+	BatchGetHelloRequestEvents(ctx context.Context, ids []string, options ...deqopt.BatchGetOption) (map[string]*HelloRequestEvent, error)
+	SubHelloRequestEvent(ctx context.Context, handler func(context.Context, *HelloRequestEvent) error) error
+	NewHelloRequestEventIter(opts *deq.IterOptions) HelloRequestEventIter
+	NewHelloRequestIndexIter(opts *deq.IterOptions) HelloRequestEventIter
+	PubHelloRequestEvent(ctx context.Context, e *HelloRequestEvent) (*HelloRequestEvent, error)
+	SyncHelloRequestEventsTo(ctx context.Context, dest deq.Client, opts ...deqopt.SyncOption) error
+	
 	SayHello(ctx context.Context, e *HelloRequestEvent) (*HelloReplyEvent, error)
 	
 	SayNothing(ctx context.Context, e *HelloRequestEvent) (*deqtype.EmptyEvent, error)
@@ -251,9 +251,14 @@ type _Greeter2Client struct {
 	config *Greeter2TopicConfig
 }
 
+// NewGreeter2Client creates a Greeter2Client, optionally overriding the default channel and topic config.
+// If db's default channel is not set then channel is required.
 func NewGreeter2Client(db deq.Client, channel string, config *Greeter2TopicConfig) Greeter2Client {
 	if channel == "" {
-		panic("channel is required")
+		channel = db.DefaultChannel()
+		if channel == "" {
+			panic("channel is required")
+		}
 	}
 	
 	return &_Greeter2Client{
@@ -272,12 +277,6 @@ func (c *_Greeter2Client) SyncAllTo(ctx context.Context, remote deq.Client, opts
 	wg.Add(1)
 	go func() {
 		defer wg.Done()
-		errc <- c.SyncHelloRequestEventsTo(ctx, remote)
-	}()
-	
-	wg.Add(1)
-	go func() {
-		defer wg.Done()
 		errc <- c.SyncHelloReplyEventsTo(ctx, remote)
 	}()
 	
@@ -285,6 +284,12 @@ func (c *_Greeter2Client) SyncAllTo(ctx context.Context, remote deq.Client, opts
 	go func() {
 		defer wg.Done()
 		errc <- c.SyncEmptyEventsTo(ctx, remote)
+	}()
+	
+	wg.Add(1)
+	go func() {
+		defer wg.Done()
+		errc <- c.SyncHelloRequestEventsTo(ctx, remote)
 	}()
 	
 
@@ -303,116 +308,6 @@ func (c *_Greeter2Client) SyncAllTo(ctx context.Context, remote deq.Client, opts
 
 	return firstErr
 }
-func (c *_Greeter2Client) SyncHelloRequestEventsTo(ctx context.Context, remote deq.Client, opts ...deqopt.SyncOption) error {
-
-	optsSet := deqopt.NewSyncOptionSet(opts)
-
-	channel := c.db.Channel(c.channel, c.config.HelloRequestTopic())
-	defer channel.Close()
-
-	if optsSet.IdleTimeout != 0 {
-		channel.SetIdleTimeout(optsSet.IdleTimeout)
-	}
-
-	return deq.SyncTo(ctx, remote, channel)
-} 
-
-func (c *_Greeter2Client) GetHelloRequestEvent(ctx context.Context, id string, options ...deqopt.GetOption) (*HelloRequestEvent, error) {
-	
-	channel := c.db.Channel(c.channel, c.config.HelloRequestTopic())
-	defer channel.Close()
-
-	deqEvent, err := channel.Get(ctx, id, options...)
-	if err != nil {
-		return nil, err
-	}
-
-	event, err := c.config.EventToHelloRequestEvent(deqEvent)
-	if err != nil {
-		return nil, fmt.Errorf("convert deq.Event to HelloRequestEvent: %v", err)
-	}
-
-	return event, nil
-}
-
-func (c *_Greeter2Client) BatchGetHelloRequestEvents(ctx context.Context, ids []string, options ...deqopt.BatchGetOption) (map[string]*HelloRequestEvent, error) {
-	
-	channel := c.db.Channel(c.channel, c.config.HelloRequestTopic())
-	defer channel.Close()
-
-	deqEvents, err := channel.BatchGet(ctx, ids, options...)
-	if err != nil {
-		return nil, err
-	}
-
-	events := make(map[string]*HelloRequestEvent, len(deqEvents))
-	for a, e := range deqEvents {
-		event, err := c.config.EventToHelloRequestEvent(e)
-		if err != nil {
-			return nil, fmt.Errorf("convert deq.Event to HelloRequestEvent: %v", err)
-		}
-		events[a] = event 
-	}
-
-	return events, nil
-}
-
-func (c *_Greeter2Client) SubHelloRequestEvent(ctx context.Context, handler func(context.Context, *HelloRequestEvent) error) error {
-	channel := c.db.Channel(c.channel, c.config.HelloRequestTopic())
-	defer channel.Close()
-
-	return channel.Sub(ctx, func(ctx context.Context, e deq.Event) (*deq.Event, error) {
-			event, err := c.config.EventToHelloRequestEvent(e)
-			if err != nil {
-				panic("convert deq.Event to HelloRequestEvent: " + err.Error())
-			}
-
-			return nil, handler(ctx, event)
-	})
-}
-
-func (c *_Greeter2Client) NewHelloRequestEventIter(opts *deq.IterOptions) HelloRequestEventIter {
-	
-	channel := c.db.Channel(c.channel, c.config.HelloRequestTopic())
-	defer channel.Close()
-	
-	return &XXX_HelloRequestEventIter{
-		Iter:   channel.NewEventIter(opts),
-		Config: c.config,
-	}
-}
-
-func (c *_Greeter2Client) NewHelloRequestIndexIter(opts *deq.IterOptions) HelloRequestEventIter {
-	
-	channel := c.db.Channel(c.channel, c.config.HelloRequestTopic())
-	defer channel.Close()
-	
-	return &XXX_HelloRequestEventIter{
-		Iter:   channel.NewIndexIter(opts),
-		Config: c.config,
-	}
-}
-
-func (c *_Greeter2Client) PubHelloRequestEvent(ctx context.Context, e *HelloRequestEvent) (*HelloRequestEvent, error) {
-	deqEvent, err := c.config.HelloRequestEventToEvent(e)
-	if err != nil {
-		return nil, fmt.Errorf("convert HelloRequestEvent to deq.Event: %v", err)
-	}
-
-	deqEvent, err = c.db.Pub(ctx, deqEvent)
-	if err != nil {
-		return nil, err
-	}
-
-	e, err = c.config.EventToHelloRequestEvent(deqEvent)
-	if err != nil {
-		return nil, fmt.Errorf("convert deq.Event to HelloRequestEvent: %v", err)
-	}
-
-	return e, nil
-}
-
-
 func (c *_Greeter2Client) SyncHelloReplyEventsTo(ctx context.Context, remote deq.Client, opts ...deqopt.SyncOption) error {
 
 	optsSet := deqopt.NewSyncOptionSet(opts)
@@ -627,6 +522,116 @@ func (c *_Greeter2Client) PubEmptyEvent(ctx context.Context, e *deqtype.EmptyEve
 	e, err = c.config.EventToEmptyEvent(deqEvent)
 	if err != nil {
 		return nil, fmt.Errorf("convert deq.Event to deqtype.EmptyEvent: %v", err)
+	}
+
+	return e, nil
+}
+
+
+func (c *_Greeter2Client) SyncHelloRequestEventsTo(ctx context.Context, remote deq.Client, opts ...deqopt.SyncOption) error {
+
+	optsSet := deqopt.NewSyncOptionSet(opts)
+
+	channel := c.db.Channel(c.channel, c.config.HelloRequestTopic())
+	defer channel.Close()
+
+	if optsSet.IdleTimeout != 0 {
+		channel.SetIdleTimeout(optsSet.IdleTimeout)
+	}
+
+	return deq.SyncTo(ctx, remote, channel)
+} 
+
+func (c *_Greeter2Client) GetHelloRequestEvent(ctx context.Context, id string, options ...deqopt.GetOption) (*HelloRequestEvent, error) {
+	
+	channel := c.db.Channel(c.channel, c.config.HelloRequestTopic())
+	defer channel.Close()
+
+	deqEvent, err := channel.Get(ctx, id, options...)
+	if err != nil {
+		return nil, err
+	}
+
+	event, err := c.config.EventToHelloRequestEvent(deqEvent)
+	if err != nil {
+		return nil, fmt.Errorf("convert deq.Event to HelloRequestEvent: %v", err)
+	}
+
+	return event, nil
+}
+
+func (c *_Greeter2Client) BatchGetHelloRequestEvents(ctx context.Context, ids []string, options ...deqopt.BatchGetOption) (map[string]*HelloRequestEvent, error) {
+	
+	channel := c.db.Channel(c.channel, c.config.HelloRequestTopic())
+	defer channel.Close()
+
+	deqEvents, err := channel.BatchGet(ctx, ids, options...)
+	if err != nil {
+		return nil, err
+	}
+
+	events := make(map[string]*HelloRequestEvent, len(deqEvents))
+	for a, e := range deqEvents {
+		event, err := c.config.EventToHelloRequestEvent(e)
+		if err != nil {
+			return nil, fmt.Errorf("convert deq.Event to HelloRequestEvent: %v", err)
+		}
+		events[a] = event 
+	}
+
+	return events, nil
+}
+
+func (c *_Greeter2Client) SubHelloRequestEvent(ctx context.Context, handler func(context.Context, *HelloRequestEvent) error) error {
+	channel := c.db.Channel(c.channel, c.config.HelloRequestTopic())
+	defer channel.Close()
+
+	return channel.Sub(ctx, func(ctx context.Context, e deq.Event) (*deq.Event, error) {
+			event, err := c.config.EventToHelloRequestEvent(e)
+			if err != nil {
+				panic("convert deq.Event to HelloRequestEvent: " + err.Error())
+			}
+
+			return nil, handler(ctx, event)
+	})
+}
+
+func (c *_Greeter2Client) NewHelloRequestEventIter(opts *deq.IterOptions) HelloRequestEventIter {
+	
+	channel := c.db.Channel(c.channel, c.config.HelloRequestTopic())
+	defer channel.Close()
+	
+	return &XXX_HelloRequestEventIter{
+		Iter:   channel.NewEventIter(opts),
+		Config: c.config,
+	}
+}
+
+func (c *_Greeter2Client) NewHelloRequestIndexIter(opts *deq.IterOptions) HelloRequestEventIter {
+	
+	channel := c.db.Channel(c.channel, c.config.HelloRequestTopic())
+	defer channel.Close()
+	
+	return &XXX_HelloRequestEventIter{
+		Iter:   channel.NewIndexIter(opts),
+		Config: c.config,
+	}
+}
+
+func (c *_Greeter2Client) PubHelloRequestEvent(ctx context.Context, e *HelloRequestEvent) (*HelloRequestEvent, error) {
+	deqEvent, err := c.config.HelloRequestEventToEvent(e)
+	if err != nil {
+		return nil, fmt.Errorf("convert HelloRequestEvent to deq.Event: %v", err)
+	}
+
+	deqEvent, err = c.db.Pub(ctx, deqEvent)
+	if err != nil {
+		return nil, err
+	}
+
+	e, err = c.config.EventToHelloRequestEvent(deqEvent)
+	if err != nil {
+		return nil, fmt.Errorf("convert deq.Event to HelloRequestEvent: %v", err)
 	}
 
 	return e, nil

@@ -39,6 +39,15 @@ type Channel struct {
 
 // Channel returns the channel for a given name
 func (s *Store) Channel(name, topic string) *Channel {
+	if name == "" {
+		name = s.DefaultChannel()
+		if name == "" {
+			panic("no channel name provided and no default channel is set")
+		}
+	}
+	if topic == "" {
+		panic("topic is required")
+	}
 	shared, sharedDone := s.listenSharedChannel(name, topic)
 
 	// DON'T FORGET TO ADD CHECK FOR FAILED CHANNEL

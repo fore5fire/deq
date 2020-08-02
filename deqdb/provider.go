@@ -34,6 +34,13 @@ func (localProvider) Open(ctx context.Context, uri *url.URL) (deq.Client, error)
 // ParseConnectionString parses a connection string with scheme file:// and
 // returns corresponding options.
 //
+// Options available through the query string of uri are:
+//   debug=true:           Enable debug logging
+//   keepCorrupt=true:     return an error when opening an improperly closed
+//                         database
+//   upgradeIfNeeded=true: Allow database disk format upgrades
+//   channel=example:      Set the default channel to "example"
+//
 // Debug logging, returning an error when opening an improperly closed database,
 // and allowing database disk format upgrades can be enabled in the returned
 // options object by adding debug=true, keepCorrupt=true, or
@@ -61,6 +68,7 @@ func parseConnectionString(u *url.URL) (opts Options, err error) {
 	opts.KeepCorrupt = u.Query().Get("keepCorrupt") == "true"
 	opts.UpgradeIfNeeded = u.Query().Get("upgradeIfNeeded") == "true"
 	opts.Info = log.New(os.Stderr, "", log.LstdFlags)
+	opts.DefaultChannel = u.Query().Get("defaultChannel")
 
 	if u.Query().Get("debug") == "true" {
 		opts.Debug = log.New(os.Stdout, "DEBUG: ", log.LstdFlags)

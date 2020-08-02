@@ -28,7 +28,10 @@ const sendLimit = 40
 
 func (c *Client) Channel(name, topic string) deq.Channel {
 	if name == "" {
-		panic("name is required")
+		name = c.defaultChannel
+		if name == "" {
+			panic("name is required")
+		}
 	}
 	if topic == "" {
 		panic("topic is required")

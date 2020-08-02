@@ -182,9 +182,14 @@ type _{{ .Name }}Client struct {
 	config *{{$ServiceName}}TopicConfig
 }
 
+// New{{ .Name }}Client creates a {{ .Name }}Client, optionally overriding the default channel and topic config.
+// If db's default channel is not set then channel is required.
 func New{{ .Name }}Client(db deq.Client, channel string, config *{{$ServiceName}}TopicConfig) {{.Name}}Client {
 	if channel == "" {
-		panic("channel is required")
+		channel = db.DefaultChannel()
+		if channel == "" {
+			panic("channel is required")
+		}
 	}
 	
 	return &_{{.Name}}Client{
